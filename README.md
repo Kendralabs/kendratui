@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <strong>One-Stop, Cost-Effective CLI-based Coding Agent for Modern Software Engineering</strong>
+  <strong>An Open, Terminal-Native Coding Agent for Autonomous Software Engineering</strong>
 </p>
 
 <p align="center">
-  Interactive TUI • MCP Integration • Multi-Provider Support • SOLID Architecture
+  Compound AI System • Multi-Model Routing • Context Engineering • MCP Integration • Defense-in-Depth Safety
 </p>
 
 <p align="center">
@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="#overview"><strong>Overview</strong></a> •
+  <a href="#why-opendev"><strong>Why OpenDev?</strong></a> •
   <a href="#installation"><strong>Installation</strong></a> •
   <a href="#quick-start"><strong>Quick Start</strong></a> •
   <a href="#key-components"><strong>Key Components</strong></a>
@@ -31,7 +32,22 @@
 
 ## Overview
 
-**OpenDev** is a one-stop, cost-effective CLI-based coding agent designed to democratize how coding agents are built. It supports **MCP (Model Context Protocol)**, **multi-provider LLMs** (Fireworks, OpenAI, Anthropic), and deep **codebase understanding** through a modular, SOLID-based architecture.
+**OpenDev** is an open-source, terminal-native coding agent built as a **compound AI system** — not a single monolithic LLM, but a structured ensemble of agents and workflows, each independently bound to a user-configured model. Work is organized into concurrent sessions composed of specialized sub-agents; each agent executes typed workflows (Execution, Thinking, Compaction) that independently bind to an LLM, enabling fine-grained cost, latency, and capability trade-offs per workflow.
+
+<p align="center">
+  <img src="figures/top.png" alt="OpenDev Compound AI Architecture" width="700"/>
+</p>
+<p align="center"><em>Figure 1: OpenDev's four-level hierarchy (Session → Agent → Workflow → LLM) enables per-workflow model selection across any supported provider.</em></p>
+
+### Why OpenDev?
+
+The terminal is the operational heart of software development — source control, build systems, SSH sessions, and deployment all live here. Yet realizing effective autonomous assistance in this environment is non-trivial: agents must manage finite context windows over long sessions, prevent destructive operations when executing arbitrary commands, and extend capabilities without overwhelming the prompt budget. OpenDev addresses these challenges through:
+
+- **Per-workflow LLM routing** — Different cognitive tasks (planning, execution, compaction) bind to different models, optimizing cost and capability independently.
+- **Extended ReAct pipeline** — Explicit thinking and self-critique phases separate deliberation from action, with adaptive context compaction integrated directly into the reasoning loop.
+- **Context engineering as a first-class concern** — Adaptive compaction progressively reduces older observations, event-driven system reminders counteract instruction fade-out, and an automated memory system accumulates project knowledge across sessions.
+- **Defense-in-depth safety** — Five independent layers (prompt guardrails, schema-level tool gating, runtime approval, tool-level validation, lifecycle hooks) enforce constraints at progressively lower levels of abstraction.
+- **Token-efficient extensibility** — A registry-based tool architecture with lazy MCP discovery keeps the prompt budget lean while supporting arbitrary external tools.
 
 ## Installation
 
@@ -111,11 +127,11 @@ uv venv && uv pip install -e ".[dev]" && uv run pytest
 
 ## Key Components
 
-*   **Interactive TUI**: A full-screen, Textual-based terminal interface for seamless interaction.
-*   **MCP Support**: Extensible architecture using the Model Context Protocol to connect with external tools and data.
-*   **Multi-Provider**: Native support for Fireworks, OpenAI, and Anthropic models.
-*   **Session Management**: Persistent conversation history and context management.
-*   **SOLID Architecture**: Built with clean, maintainable code using dependency injection and interface-driven design.
+- **Dual Frontends** — A Textual-based TUI for terminal use and a FastAPI + React Web UI, both sharing a common agent layer.
+- **Multi-Provider Support** — Native support for OpenAI, Anthropic, Fireworks, Google, and any OpenAI-compatible endpoint, with model capabilities cached from a shared registry.
+- **MCP Integration** — Dynamic tool discovery via the Model Context Protocol for connecting to external tools and data sources.
+- **Session Persistence** — Full conversation histories saved as JSON with project-scoped sessions and cross-session memory.
+- **Modular Prompt Composition** — System prompts assembled from independent, priority-ordered markdown sections that load only when contextually relevant.
 
 ## License
 
