@@ -67,6 +67,9 @@ class TextualUICallback(
         """Called when the agent starts thinking."""
         self._current_thinking = True
         self._interrupt_shown = False  # Reset guard for new run (Fix 3)
+        # Reset chat_app flag so next interrupt can show a message
+        if self.chat_app:
+            self.chat_app._interrupt_message_written = False
         # Reset tool_renderer interrupt flag for new run
         if hasattr(self.conversation, "reset_interrupt"):
             self._run_on_ui(self.conversation.reset_interrupt)
@@ -154,9 +157,22 @@ class TextualUICallback(
         if not content or not content.strip():
             return
 
+        # Stop spinner BEFORE displaying critique trace (so it appears above, not below)
+        if self.chat_app and hasattr(self.chat_app, "_stop_local_spinner"):
+            self._run_on_ui(self.chat_app._stop_local_spinner)
+
         # Display critique block with special styling (reuse thinking block with prefix)
         if hasattr(self.conversation, "add_thinking_block"):
             self._run_on_ui(self.conversation.add_thinking_block, f"[Critique]\n{content}")
+
+        # Restart spinner for the next phase — but NOT if interrupted
+        should_restart = True
+        if self.chat_app and hasattr(self.chat_app, "_interrupt_manager"):
+            token = self.chat_app._interrupt_manager._active_interrupt_token
+            if token and token.is_requested():
+                should_restart = False
+        if should_restart and self.chat_app and hasattr(self.chat_app, "_start_local_spinner"):
+            self._run_on_ui(self.chat_app._start_local_spinner)
 
     def get_and_clear_nested_calls(self) -> list[ToolCall]:
         """Return collected nested calls and clear the buffer.
@@ -291,6 +307,11 @@ class TextualUICallback(
             return
         self._interrupt_shown = True
 
+        # Guard: if UI thread already wrote the interrupt message, just clean up spinners
+        if self.chat_app and getattr(self.chat_app, "_interrupt_message_written", False):
+            self._cleanup_spinners()
+            return
+
         try:
             self._cleanup_spinners()
             self._show_interrupt_message(context)
@@ -335,6 +356,9 @@ class TextualUICallback(
                 STANDARD_INTERRUPT_MESSAGE,
             )
 
+            # Mark on chat_app so UI thread's _show_interrupt_feedback() won't duplicate
+            if self.chat_app:
+                self.chat_app._interrupt_message_written = True
             strip_trailing_blanks(self.conversation)
             self.conversation.write(create_interrupt_text(STANDARD_INTERRUPT_MESSAGE))
 
