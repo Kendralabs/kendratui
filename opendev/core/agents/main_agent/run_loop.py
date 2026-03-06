@@ -3,10 +3,30 @@
 import json
 import logging
 import queue as queue_mod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
 from opendev.core.agents.prompts import get_reminder
 from opendev.core.utils.sound import play_finish_sound
+
+
+PARALLELIZABLE_TOOLS = frozenset(
+    {
+        "read_file",
+        "list_files",
+        "search",
+        "fetch_url",
+        "web_search",
+        "capture_web_screenshot",
+        "analyze_image",
+        "list_processes",
+        "get_process_output",
+        "list_todos",
+        "search_tools",
+        "find_symbol",
+        "find_referencing_symbols",
+    }
+)
 
 
 class RunLoopMixin:
@@ -82,6 +102,82 @@ class RunLoopMixin:
             except queue_mod.Empty:
                 break
         self._run_session_manager = None
+
+    @staticmethod
+    def _format_tool_result(tool_name: str, result: dict) -> str:
+        """Format a tool execution result into a string for the message history."""
+        separate_response = result.get("separate_response")
+        if result["success"]:
+            tool_result = separate_response if separate_response else result.get("output", "")
+            completion_status = result.get("completion_status")
+            if completion_status:
+                tool_result = f"[completion_status={completion_status}]\n{tool_result}"
+        else:
+            tool_result = (
+                f"Error in {tool_name}: " f"{result.get('error', 'Tool execution failed')}"
+            )
+        if result.get("_llm_suffix"):
+            tool_result += result["_llm_suffix"]
+        return tool_result
+
+    def _execute_tools_parallel(
+        self,
+        tool_calls: list,
+        deps: Any,
+        task_monitor: Any,
+        ui_callback: Any,
+        is_subagent: bool,
+    ) -> dict[str, dict]:
+        """Execute read-only tools in parallel using a thread pool.
+
+        Returns:
+            Dict mapping tool_call_id to result dict.
+        """
+        _logger = logging.getLogger(__name__)
+        results_by_id: dict[str, dict] = {}
+
+        # Check interrupt before launching
+        if task_monitor is not None and task_monitor.should_interrupt():
+            for tc in tool_calls:
+                results_by_id[tc["id"]] = {
+                    "success": False,
+                    "error": "Interrupted by user",
+                    "output": None,
+                    "interrupted": True,
+                }
+            return results_by_id
+
+        def _run_one(tc: dict) -> tuple[str, dict]:
+            name = tc["function"]["name"]
+            try:
+                args = json.loads(tc["function"]["arguments"])
+                _logger.info(f"MainAgent parallel executing tool: {name}")
+                result = self.tool_registry.execute_tool(
+                    name,
+                    args,
+                    mode_manager=deps.mode_manager,
+                    approval_manager=deps.approval_manager,
+                    undo_manager=deps.undo_manager,
+                    task_monitor=task_monitor,
+                    is_subagent=is_subagent,
+                    ui_callback=ui_callback,
+                )
+            except Exception as e:
+                result = {"success": False, "error": str(e)}
+            return tc["id"], result
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_tc = {executor.submit(_run_one, tc): tc for tc in tool_calls}
+            for future in as_completed(future_to_tc):
+                tc = future_to_tc[future]
+                try:
+                    call_id, result = future.result()
+                except Exception as e:
+                    call_id = tc["id"]
+                    result = {"success": False, "error": str(e)}
+                results_by_id[call_id] = result
+
+        return results_by_id
 
     def run_sync(
         self,
@@ -210,9 +306,7 @@ class RunLoopMixin:
                     if response.status_code == 200:
                         break  # Success
                     elif response.status_code in (429, 500, 502, 503, 504):
-                        last_api_error = (
-                            f"API Error {response.status_code}: {response.text}"
-                        )
+                        last_api_error = f"API Error {response.status_code}: {response.text}"
                         if api_attempt < MAX_API_RETRIES - 1:
                             import time as _time_mod
 
@@ -236,9 +330,7 @@ class RunLoopMixin:
                 message_data = choice["message"]
 
                 raw_content = message_data.get("content")
-                cleaned_content = (
-                    self._response_cleaner.clean(raw_content) if raw_content else None
-                )
+                cleaned_content = self._response_cleaner.clean(raw_content) if raw_content else None
 
                 assistant_msg: dict[str, Any] = {
                     "role": "assistant",
@@ -285,9 +377,7 @@ class RunLoopMixin:
                                 messages.append(
                                     {
                                         "role": "user",
-                                        "content": get_reminder(
-                                            "completion_summary_nudge"
-                                        ),
+                                        "content": get_reminder("completion_summary_nudge"),
                                     }
                                 )
                                 continue
@@ -341,7 +431,61 @@ class RunLoopMixin:
                 # Reset counter when we have tool calls
                 consecutive_no_tool_calls = 0
 
-                for tool_call in message_data["tool_calls"]:
+                tool_calls = message_data["tool_calls"]
+
+                # Check if this is a subagent (has overridden system prompt)
+                is_subagent = (
+                    hasattr(self, "_subagent_system_prompt")
+                    and self._subagent_system_prompt is not None
+                )
+
+                # Detect if all tools are parallelizable (no task_complete, >1 call)
+                has_task_complete = any(
+                    tc["function"]["name"] == "task_complete" for tc in tool_calls
+                )
+                all_parallelizable = (
+                    len(tool_calls) > 1
+                    and not has_task_complete
+                    and all(tc["function"]["name"] in PARALLELIZABLE_TOOLS for tc in tool_calls)
+                )
+
+                if all_parallelizable:
+                    # Parallel path for read-only tools
+                    results_by_id = self._execute_tools_parallel(
+                        tool_calls, deps, task_monitor, ui_callback, is_subagent
+                    )
+
+                    # Check for interrupts and append results in original order
+                    for tc in tool_calls:
+                        result = results_by_id[tc["id"]]
+                        t_name = tc["function"]["name"]
+                        t_args = json.loads(tc["function"]["arguments"])
+
+                        if ui_callback and hasattr(ui_callback, "on_tool_call"):
+                            ui_callback.on_tool_call(t_name, t_args)
+                        if ui_callback and hasattr(ui_callback, "on_tool_result"):
+                            ui_callback.on_tool_result(t_name, t_args, result)
+
+                        if result.get("interrupted"):
+                            interrupted = True
+                            return {
+                                "content": "Task interrupted by user",
+                                "messages": messages,
+                                "success": False,
+                                "interrupted": True,
+                            }
+
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": self._format_tool_result(t_name, result),
+                            }
+                        )
+                    continue  # Next iteration of outer while loop
+
+                # Sequential path (original logic)
+                for tool_call in tool_calls:
                     tool_name = tool_call["function"]["name"]
                     tool_args = json.loads(tool_call["function"]["arguments"])
 
@@ -366,9 +510,7 @@ class RunLoopMixin:
                                 {
                                     "role": "tool",
                                     "tool_call_id": tool_call["id"],
-                                    "content": (
-                                        "Completion deferred: new user messages arrived."
-                                    ),
+                                    "content": ("Completion deferred: new user messages arrived."),
                                 }
                             )
                             break  # Break inner for-loop, continue outer while-loop
@@ -384,18 +526,10 @@ class RunLoopMixin:
                     if ui_callback and hasattr(ui_callback, "on_tool_call"):
                         ui_callback.on_tool_call(tool_name, tool_args)
 
-                    # Check if this is a subagent (has overridden system prompt)
-                    is_subagent = (
-                        hasattr(self, "_subagent_system_prompt")
-                        and self._subagent_system_prompt is not None
-                    )
-
                     # Log tool registry type for debugging Docker execution
                     _logger = logging.getLogger(__name__)
                     _logger.info(f"MainAgent executing tool: {tool_name}")
-                    _logger.info(
-                        f"  tool_registry type: {type(self.tool_registry).__name__}"
-                    )
+                    _logger.info(f"  tool_registry type: {type(self.tool_registry).__name__}")
 
                     result = self.tool_registry.execute_tool(
                         tool_name,
@@ -422,28 +556,7 @@ class RunLoopMixin:
                             "interrupted": True,
                         }
 
-                    # Build tool result - prefer separate_response (subagent output)
-                    separate_response = result.get("separate_response")
-                    if result["success"]:
-                        tool_result = (
-                            separate_response
-                            if separate_response
-                            else result.get("output", "")
-                        )
-                        # Prepend completion status so agent knows subagent is done
-                        completion_status = result.get("completion_status")
-                        if completion_status:
-                            tool_result = (
-                                f"[completion_status={completion_status}]\n{tool_result}"
-                            )
-                    else:
-                        tool_result = (
-                            f"Error in {tool_name}: "
-                            f"{result.get('error', 'Tool execution failed')}"
-                        )
-                    # Append LLM-only suffix (e.g., retry prompts) - hidden from UI
-                    if result.get("_llm_suffix"):
-                        tool_result += result["_llm_suffix"]
+                    tool_result = self._format_tool_result(tool_name, result)
                     messages.append(
                         {
                             "role": "tool",
