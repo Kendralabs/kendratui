@@ -67,6 +67,19 @@ class PresentPlanTool:
                 "subagent to write the plan first.",
             }
 
+        # Reject trivially short plans (a real plan with sections/steps exceeds this easily)
+        MIN_PLAN_LENGTH = 100
+        stripped = plan_content.strip()
+        if len(stripped) < MIN_PLAN_LENGTH:
+            return {
+                "success": False,
+                "error": f"Plan file content is too short ({len(stripped)} chars). "
+                "The Planner subagent likely didn't write a complete plan.",
+                "output": "Plan file exists but contains insufficient content. "
+                "Re-spawn the Planner subagent to write a detailed plan "
+                f"to {plan_file_path}.",
+            }
+
         # Store plan_file_path in session metadata
         if session_manager:
             try:
