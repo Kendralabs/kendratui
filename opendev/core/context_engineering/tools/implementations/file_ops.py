@@ -128,6 +128,11 @@ DEFAULT_SEARCH_EXCLUDES = [
 ]
 
 
+# Image extensions that can be base64-encoded for LLM
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}
+_PDF_EXTENSIONS = {".pdf"}
+
+
 class FileOperations:
     """Tools for file operations."""
 
@@ -192,13 +197,102 @@ class FileOperations:
 
     @staticmethod
     def _is_binary_file(path: Path) -> bool:
-        """Check if a file is binary by looking for null bytes in the first 8192 bytes."""
+        """Check if a file is binary by looking for null bytes and non-printable chars."""
         try:
             with open(path, "rb") as f:
                 chunk = f.read(8192)
-            return b"\x00" in chunk
+            # Check 1: Null bytes are definitive binary indicator
+            if b"\x00" in chunk:
+                return True
+            # Check 2: High ratio of non-printable chars suggests binary
+            if chunk:
+                printable = set(range(0x20, 0x7F)) | {0x09, 0x0A, 0x0D}
+                non_printable = sum(1 for b in chunk[:4096] if b not in printable)
+                if non_printable / len(chunk[:4096]) > 0.30:
+                    return True
+            return False
         except OSError:
             return False
+
+    def _read_image_file(self, path: Path) -> str:
+        """Read an image file and return base64-encoded content."""
+        import base64
+
+        try:
+            data = path.read_bytes()
+            size_kb = len(data) / 1024
+            if size_kb > 10_000:  # 10 MB limit
+                return f"Error: Image file too large ({size_kb:.0f}KB). Max 10MB."
+
+            b64 = base64.b64encode(data).decode("ascii")
+            mime_type = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+                ".bmp": "image/bmp",
+                ".svg": "image/svg+xml",
+            }.get(path.suffix.lower(), "image/png")
+
+            return (
+                f"[Image: {path.name} ({size_kb:.1f}KB, {mime_type})]\n"
+                f"data:{mime_type};base64,{b64}"
+            )
+        except OSError as e:
+            return f"Error reading image: {e}"
+
+    def _read_pdf_file(
+        self, path: Path, offset: int = 1, max_lines: int = 2000
+    ) -> str:
+        """Read a PDF file and extract text content."""
+        try:
+            result = subprocess.run(
+                ["pdftotext", "-layout", str(path), "-"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                lines = result.stdout.split("\n")
+                total = len(lines)
+                start_idx = offset - 1
+                end_idx = min(start_idx + max_lines, total)
+                selected = lines[start_idx:end_idx]
+                output_parts = []
+                for i, line in enumerate(selected, start=offset):
+                    text = line.rstrip()
+                    if len(text) > self.MAX_LINE_LENGTH:
+                        text = text[: self.MAX_LINE_LENGTH] + "... (line truncated)"
+                    output_parts.append(f"  {i}\t{text}")
+                result_text = "\n".join(output_parts)
+                if end_idx < total:
+                    result_text += (
+                        f"\n... (truncated: showing lines {offset}-{end_idx} of {total})"
+                    )
+                return result_text
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # Fallback: try PyMuPDF
+        try:
+            import fitz  # type: ignore[import-untyped]
+
+            doc = fitz.open(str(path))
+            text_parts = []
+            for page_num in range(min(20, len(doc))):
+                page = doc[page_num]
+                text_parts.append(f"--- Page {page_num + 1} ---")
+                text_parts.append(page.get_text())
+            doc.close()
+            return "\n".join(text_parts)
+        except ImportError:
+            pass
+
+        return (
+            "Error: Cannot read PDF. "
+            "Install pdftotext (poppler) or PyMuPDF (pip install pymupdf)."
+        )
 
     def read_file(
         self,
@@ -232,6 +326,21 @@ class FileOperations:
 
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
+
+        # Handle image files — return as base64 for multimodal LLMs
+        suffix = path.suffix.lower()
+        if suffix in _IMAGE_EXTENSIONS:
+            return self._read_image_file(path)
+
+        # Handle PDF files — extract text
+        if suffix in _PDF_EXTENSIONS:
+            effective_offset = offset or line_start or 1
+            if effective_offset < 1:
+                effective_offset = 1
+            effective_max = max_lines if max_lines is not None else self.DEFAULT_MAX_LINES
+            if line_end is not None:
+                effective_max = line_end - effective_offset + 1
+            return self._read_pdf_file(path, offset=effective_offset, max_lines=effective_max)
 
         # Detect binary files
         if self._is_binary_file(path):
@@ -537,7 +646,7 @@ class FileOperations:
         Returns:
             Resolved Path object
         """
-        p = Path(path)
+        p = Path(path).expanduser()
         if p.is_absolute():
             return p
         return (self.working_dir / p).resolve()
