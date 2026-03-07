@@ -1,6 +1,7 @@
 """Security checks for bash command execution."""
 
 import re
+import shlex
 
 
 class SecurityMixin:
@@ -74,3 +75,47 @@ class SecurityMixin:
                 return True
 
         return False
+
+    @staticmethod
+    def _extract_paths_from_command(command: str) -> list[str]:
+        """Extract file paths from a command using structured parsing.
+
+        Uses shlex to properly parse the command, then identifies
+        arguments that look like file paths for dangerous commands.
+
+        Returns:
+            List of file paths found in the command.
+        """
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            # Malformed command (unmatched quotes, etc.)
+            return []
+
+        paths: list[str] = []
+        # Commands that take file path arguments in dangerous ways
+        path_commands = {
+            "rm": {"-r", "-rf", "-fr", "--recursive"},
+            "mv": set(),
+            "cp": set(),
+            "chmod": set(),
+            "chown": set(),
+            "ln": {"-s", "-sf", "--symbolic"},
+        }
+
+        if not tokens:
+            return paths
+
+        base_cmd = tokens[0].split("/")[-1]  # Handle /usr/bin/rm -> rm
+
+        if base_cmd not in path_commands:
+            return paths
+
+        # Collect non-flag arguments as potential paths
+        for token in tokens[1:]:
+            if token.startswith("-"):
+                continue
+            # It's a path argument
+            paths.append(token)
+
+        return paths

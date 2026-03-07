@@ -98,3 +98,23 @@ class BashResult(BaseModel):
     error: Optional[str] = None
     operation_id: Optional[str] = None
     background_task_id: Optional[str] = None  # ID if running as background task
+
+    @property
+    def llm_output(self) -> str:
+        """Return a compact version of stdout+stderr for LLM context.
+
+        Uses a tighter truncation (5K head + 5K tail) so the model sees
+        a lean summary while the TUI can still show full output.
+        """
+        from opendev.core.context_engineering.tools.implementations.bash_tool.tool import (
+            truncate_output,
+        )
+
+        parts: list[str] = []
+        if self.stdout:
+            parts.append(truncate_output(self.stdout, for_llm=True))
+        if self.stderr:
+            parts.append(truncate_output(self.stderr, for_llm=True))
+        if self.error:
+            parts.append(self.error)
+        return "\n".join(parts)

@@ -62,20 +62,43 @@ MAX_OUTPUT_CHARS = 30_000
 KEEP_HEAD_CHARS = 10_000
 KEEP_TAIL_CHARS = 10_000
 
+# Metadata cap for LLM context (more compact than display truncation)
+MAX_LLM_METADATA_CHARS = 15_000
+LLM_KEEP_HEAD_CHARS = 5_000
+LLM_KEEP_TAIL_CHARS = 5_000
 
-def truncate_output(text: str, max_chars: int = MAX_OUTPUT_CHARS) -> str:
+
+def truncate_output(
+    text: str,
+    max_chars: int = MAX_OUTPUT_CHARS,
+    for_llm: bool = False,
+) -> str:
     """Truncate output by removing the middle when it exceeds the limit.
 
-    Keeps the first KEEP_HEAD_CHARS and last KEEP_TAIL_CHARS characters
-    so both context and final error messages are preserved.
+    Keeps head and tail characters so both context and final error messages
+    are preserved.
+
+    Args:
+        text: The output text to truncate.
+        max_chars: Maximum allowed characters. Ignored when for_llm is True.
+        for_llm: If True, use the more compact LLM metadata cap (5K head + 5K tail)
+            to keep LLM context lean while the user still sees full output in the TUI.
     """
+    if for_llm:
+        max_chars = MAX_LLM_METADATA_CHARS
+        head = LLM_KEEP_HEAD_CHARS
+        tail = LLM_KEEP_TAIL_CHARS
+    else:
+        head = KEEP_HEAD_CHARS
+        tail = KEEP_TAIL_CHARS
+
     if len(text) <= max_chars:
         return text
-    removed = len(text) - KEEP_HEAD_CHARS - KEEP_TAIL_CHARS
+    removed = len(text) - head - tail
     return (
-        text[:KEEP_HEAD_CHARS]
+        text[:head]
         + f"\n... (truncated {removed} chars) ...\n"
-        + text[-KEEP_TAIL_CHARS:]
+        + text[-tail:]
     )
 
 
@@ -108,6 +131,7 @@ class BashTool(SecurityMixin, ProcessMixin, BaseTool):
 
     # Server command patterns - these should run in background mode with PTY
     _SERVER_PATTERNS = (
+        # Python web servers
         r"flask\s+run",
         r"python.*app\.py",
         r"python.*manage\.py\s+runserver",
@@ -115,15 +139,46 @@ class BashTool(SecurityMixin, ProcessMixin, BaseTool):
         r"uvicorn",
         r"gunicorn",
         r"python.*-m\s+http\.server",
+        r"python.*-m\s+uvicorn",
+        r"python.*-m\s+gunicorn",
+        r"hypercorn",
+        r"daphne",
+        r"waitress",
+        r"tornado",
+        r"aiohttp",
+        r"sanic",
+        r"fastapi",
+        # Node.js servers
         r"npm\s+(run\s+)?(start|dev|serve)",
         r"yarn\s+(run\s+)?(start|dev|serve)",
+        r"pnpm\s+(run\s+)?(start|dev|serve)",
+        r"bun\s+(run\s+)?(start|dev|serve)",
         r"node.*server",
         r"nodemon",
         r"next\s+(dev|start)",
+        r"nuxt\s+(dev|start)",
+        r"vite(\s+dev)?$",
+        r"webpack.*(dev.?server|serve)",
+        r"ts-node.*server",
+        # Ruby/PHP/Other
         r"rails\s+server",
         r"php.*artisan\s+serve",
+        r"php\s+-S\s+",
         r"hugo\s+server",
         r"jekyll\s+serve",
+        # Go
+        r"go\s+run.*server",
+        r"air",  # Go live reload
+        # Rust
+        r"cargo\s+watch",
+        # Java
+        r"mvn.*spring-boot:run",
+        r"gradle.*bootRun",
+        # Generic
+        r"live-server",
+        r"http-server",
+        r"serve\s+-",
+        r"browser-sync",
     )
 
     def _is_server_command(self, command: str) -> bool:
