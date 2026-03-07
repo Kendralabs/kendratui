@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import fnmatch
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from prompt_toolkit import prompt
 from prompt_toolkit.application import Application
@@ -56,6 +57,27 @@ class ApprovalManager:
         self.console = console or Console()
         self.auto_approve_remaining = False
         self.approved_patterns = set()
+        self.approved_glob_patterns: set[str] = set()
+        self._session_rules: dict[str, str] = {}  # description -> glob pattern
+
+    def add_glob_pattern(self, pattern: str) -> None:
+        """Add a glob pattern for auto-approval."""
+        self.approved_glob_patterns.add(pattern)
+
+    def is_pattern_approved(self, target: str) -> bool:
+        """Check if target matches any approved glob pattern."""
+        return any(fnmatch.fnmatch(target, p) for p in self.approved_glob_patterns)
+
+    def add_session_rule(self, description: str, pattern: str) -> None:
+        """Add a session-scoped auto-approve rule."""
+        self._session_rules[description] = pattern
+        self.approved_glob_patterns.add(pattern)
+
+    def clear_session_rules(self) -> None:
+        """Clear all session-scoped rules (called on session switch)."""
+        for pattern in self._session_rules.values():
+            self.approved_glob_patterns.discard(pattern)
+        self._session_rules.clear()
 
     def _create_operation_message(self, operation: Operation, preview: str) -> str:
         op_type = operation.type.value
@@ -99,26 +121,34 @@ class ApprovalManager:
         def get_formatted_text() -> FormattedText:
             lines = []
             lines.append(("", "\n"))
+            box_width = 75
             lines.append(
-                ("class:border", "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n")
+                ("class:border", "┏" + "━" * (box_width + 2) + "┓\n")
             )
 
-            preview_lines = preview.split("\n")[:3]
+            preview_lines = preview.split("\n")[:8]
             for line in preview_lines:
-                truncated = line[:57] if len(line) > 57 else line
-                padding = " " * (57 - len(truncated))
-                lines.append(("class:preview", f"┃ {truncated}{padding}┃\n"))
+                truncated = line[:box_width] if len(line) > box_width else line
+                padding = " " * (box_width - len(truncated))
+                # Color diff lines
+                if truncated.startswith("+") and not truncated.startswith("+++"):
+                    style = "class:diff-add"
+                elif truncated.startswith("-") and not truncated.startswith("---"):
+                    style = "class:diff-remove"
+                elif truncated.startswith("@@"):
+                    style = "class:diff-hunk"
+                else:
+                    style = "class:preview"
+                lines.append((style, f"┃ {truncated}{padding}┃\n"))
 
-            if len(preview.split("\n")) > 3:
-                lines.append(
-                    (
-                        "class:preview",
-                        "┃ ...                                                     ┃\n",
-                    )
-                )
+            if len(preview.split("\n")) > 8:
+                remaining = len(preview.split("\n")) - 8
+                msg = f"... ({remaining} more lines)"
+                padding = " " * (box_width - len(msg))
+                lines.append(("class:preview", f"┃ {msg}{padding}┃\n"))
 
             lines.append(
-                ("class:border", "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n")
+                ("class:border", "┗" + "━" * (box_width + 2) + "┛\n")
             )
             lines.append(("", "\n"))
             lines.append(("class:question bold", f"{message}\n"))
@@ -241,6 +271,12 @@ class ApprovalManager:
             )
             return ApprovalResult(True, ApprovalChoice.APPROVE)
 
+        if operation.target and self.is_pattern_approved(operation.target):
+            get_debug_logger().log(
+                "approval_result", "approval", approved=True, method="glob_pattern"
+            )
+            return ApprovalResult(True, ApprovalChoice.APPROVE)
+
         message = self._create_operation_message(operation, preview)
         choice = self._show_interactive_menu(message, preview, command, working_dir)
 
@@ -276,6 +312,67 @@ class ApprovalManager:
             "approval_result", "approval", approved=False, method="user", choice="deny"
         )
         return ApprovalResult(False, ApprovalChoice.DENY)
+
+    def request_batch_approval(
+        self,
+        operations: list[tuple[Operation, str]],
+        working_dir: Optional[str] = None,
+    ) -> list[ApprovalResult]:
+        """Request approval for multiple operations at once.
+
+        Shows all pending operations as a list with options to:
+        - Approve all
+        - Deny all
+        - Review individually
+
+        Args:
+            operations: List of (operation, preview) tuples.
+            working_dir: Working directory context.
+
+        Returns:
+            List of ApprovalResult, one per operation.
+        """
+        if not operations:
+            return []
+
+        if self.auto_approve_remaining:
+            return [ApprovalResult(True, ApprovalChoice.APPROVE) for _ in operations]
+
+        # Check glob patterns
+        results: list[tuple[int, ApprovalResult]] = []
+        pending: list[tuple[int, Operation, str]] = []
+        for i, (op, preview) in enumerate(operations):
+            if op.target and self.is_pattern_approved(op.target):
+                results.append((i, ApprovalResult(True, ApprovalChoice.APPROVE)))
+            else:
+                pending.append((i, op, preview))
+
+        if not pending:
+            return [r for _, r in sorted(results)]
+
+        # Show batch summary
+        console = self.console or Console()
+        console.print(f"\n[bold]{len(pending)} operations need approval:[/bold]")
+        for idx, (i, op, preview_text) in enumerate(pending):
+            op_type = op.type.value if hasattr(op.type, "value") else str(op.type)
+            target = op.target or "unknown"
+            preview_short = preview_text[:60].replace("\n", " ")
+            console.print(f"  {idx + 1}. [{op_type}] {target}: {preview_short}")
+
+        # Fall through to individual approval with batch overview context
+        for i, op, preview_text in pending:
+            result = self.request_approval(op, preview_text, working_dir=working_dir)
+            results.append((i, result))
+            if result.choice == ApprovalChoice.APPROVE_ALL:
+                # Approve remaining pending operations
+                current_pos = pending.index((i, op, preview_text))
+                for j, remaining_op, _ in pending[current_pos + 1 :]:
+                    results.append((j, ApprovalResult(True, ApprovalChoice.APPROVE)))
+                break
+
+        # Sort by original index and return
+        results.sort(key=lambda x: x[0])
+        return [r for _, r in results]
 
     def render_operation_preview(self, operation: Operation, preview: str) -> None:
         with Live(refresh_per_second=4):
