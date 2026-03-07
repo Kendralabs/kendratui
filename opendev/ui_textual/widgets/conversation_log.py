@@ -93,6 +93,10 @@ class ConversationLog(RichLog):
         """
         import uuid
 
+        # Respect user scroll position — don't force scroll if user scrolled up
+        if self._scroll_controller._user_scrolled and scroll_end is True:
+            scroll_end = None  # Fall back to self.auto_scroll (already False)
+
         lines_before = len(self.lines)
 
         # Call parent write
@@ -389,6 +393,11 @@ class ConversationLog(RichLog):
             self._resize_timer = None
         return super().clear()
 
+    def smart_scroll_end(self, animate: bool = False) -> None:
+        """Scroll to end only if user hasn't scrolled up."""
+        if not self._scroll_controller._user_scrolled:
+            self.scroll_end(animate=animate)
+
     def set_debug_enabled(self, enabled: bool) -> None:
         """Enable or disable debug message display."""
         self._debug_enabled = enabled
@@ -462,6 +471,8 @@ class ConversationLog(RichLog):
         self._scroll_controller.on_mouse_up(event)
 
     def add_user_message(self, message: str) -> None:
+        self._scroll_controller._user_scrolled = False
+        self._scroll_controller.auto_scroll = True
         self._message_renderer.add_user_message(message)
 
     def add_assistant_message(self, message: str) -> None:

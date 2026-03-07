@@ -363,7 +363,10 @@ class DefaultToolRenderer(
         else:
             self._tool_display = Text(str(display), style=PRIMARY)
 
-        self.log.scroll_end(animate=False)
+        if hasattr(self.log, "smart_scroll_end"):
+            self.log.smart_scroll_end(animate=False)
+        else:
+            self.log.scroll_end(animate=False)
         self._tool_call_start = len(self.log.lines)
         self._tool_timer_start = None
         self._tool_last_elapsed = None

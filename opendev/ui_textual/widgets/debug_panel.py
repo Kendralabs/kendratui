@@ -40,8 +40,8 @@ class DebugPanel(Static):
 
     is_visible = reactive(False)
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
         self._stats: dict[str, Any] = {}
         self._tool_timings: list[dict] = []
         self._llm_calls: list[dict] = []

@@ -155,22 +155,38 @@ class DefaultScrollController:
         # For other scroll keys (arrows, home, end), mark as user-scrolled
         # The default behavior will handle the actual scrolling
         elif event.key in ("up", "down", "home", "end"):
-            self._user_scrolled = True
-            self.auto_scroll = False
+            if event.key in ("up", "home"):
+                self._user_scrolled = True
+                self.auto_scroll = False
+            elif event.key in ("down", "end"):
+                self._user_scrolled = True
+                self.auto_scroll = False
+                self._check_and_reenable_auto_scroll()
+
+    def _check_and_reenable_auto_scroll(self) -> None:
+        """Re-enable auto-scroll if user has scrolled back to the bottom."""
+        if not self._user_scrolled:
+            return
+        max_y = getattr(self.log, "max_scroll_y", 0)
+        current_y = getattr(self.log, "scroll_y", 0)
+        # Within 5 lines of bottom = "at bottom"
+        if max_y - current_y <= 5:
+            self._user_scrolled = False
+            self.auto_scroll = True
 
     def scroll_partial_page(self, direction: int) -> None:
         """Scroll a fraction of the viewport instead of a full page."""
         self._user_scrolled = True
         self.auto_scroll = False
-        
-        # log.size might not be available if protocol doesn't have it, 
-        # but RichLogInterface usually inherits from Widget so it has size.
-        # We need to access size.height.
+
         height = getattr(self.log, 'size', Size(0, 20)).height
         stride = max(height // 10, 3)  # 10% of viewport per page
-        
+
         if hasattr(self.log, 'scroll_relative'):
             self.log.scroll_relative(y=direction * stride)
+
+        if direction == 1:
+            self._check_and_reenable_auto_scroll()
 
     def on_mouse_scroll_down(self, event: MouseScrollDown) -> None:
         """Handle mouse scroll down (wheel down / two-finger swipe down)."""
@@ -181,6 +197,7 @@ class DefaultScrollController:
         self.auto_scroll = False
         if hasattr(self.log, 'scroll_relative'):
             self.log.scroll_relative(y=3)  # Scroll 3 lines per tick
+        self._check_and_reenable_auto_scroll()
         event.stop()
 
     def on_mouse_scroll_up(self, event: MouseScrollUp) -> None:
