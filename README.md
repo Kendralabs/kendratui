@@ -31,11 +31,6 @@ Work is organized into concurrent sessions composed of specialized sub-agents. E
   <img src="figures/top.png" alt="OpenDev Compound AI Architecture" width="700"/>
 </p>
 
-OpenDev's **Web UI** lets you manage multiple concurrent sessions, monitor agent activity in real time, and kick off tasks remotely — even from your phone.
-
-<p align="center">
-  <img src="figures/web_ui.png" alt="OpenDev Web UI" width="800"/>
-</p>
 
 ---
 
@@ -90,6 +85,10 @@ opendev -p "explain this codebase"
 # Resume most recent session
 opendev --continue
 ```
+
+<p align="center">
+  <img src="figures/web_ui.png" alt="OpenDev Web UI" width="800"/>
+</p>
 
 ### Multi-Provider Support
 
