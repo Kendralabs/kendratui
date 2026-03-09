@@ -90,12 +90,12 @@ export function ThinkingBlock({ content, level }: ThinkingBlockProps) {
         <div
           className="overflow-hidden transition-all duration-300 ease-in-out"
           style={{
-            maxHeight: isExpanded ? `${Math.min(contentHeight + 24, 384)}px` : '0px',
+            maxHeight: isExpanded ? `${contentHeight + 24}px` : '0px',
             opacity: isExpanded ? 1 : 0,
           }}
         >
           <div ref={contentRef} className="px-3 pb-3">
-            <pre className="text-xs text-text-300 whitespace-pre-wrap font-mono leading-relaxed max-h-96 overflow-y-auto">
+            <pre className="text-xs text-text-300 whitespace-pre-wrap font-mono leading-relaxed">
               {content}
             </pre>
           </div>
