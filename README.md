@@ -33,6 +33,7 @@ Each workflow is a modular slot you can bind to any LLM of your choice: **Normal
   <img src="figures/top.png" alt="OpenDev Compound AI Architecture" width="700"/>
 </p>
 
+OpenDev is currently written in Python, with a planned rewrite in Rust in the near future.
 
 ---
 
