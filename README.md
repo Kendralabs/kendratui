@@ -60,8 +60,10 @@ pip install opendev
 ### Quick Start
 
 ```bash
-# Configure your LLM providers
-opendev config setup
+# Set an API key (OpenAI, Anthropic, or Fireworks — any one will do)
+export OPENAI_API_KEY="sk-..."
+# export ANTHROPIC_API_KEY="sk-ant-..."
+# export FIREWORKS_API_KEY="fw_..."
 
 # Start the interactive TUI
 opendev
@@ -76,13 +78,38 @@ opendev -p "explain this codebase"
 opendev --continue
 ```
 
+Prefer a guided walkthrough? Run `opendev config setup` to interactively choose providers, models, and workflow bindings.
+
+See the [Provider Setup Guide](docs/providers.md) for all 9 supported providers, authentication details, and advanced configuration.
+
 <p align="center">
   <img src="figures/web_ui.png" alt="OpenDev Web UI" width="800"/>
 </p>
 
 ### Multi-Provider Support
 
-OpenDev is not coupled to any single provider. It supports OpenAI, Anthropic, Fireworks, Google, and any OpenAI-compatible endpoint. Different tasks (planning, execution, compaction) can each bind to a different model, letting you optimize cost and capability independently.
+OpenDev supports 9 LLM providers: **OpenAI**, **Anthropic**, **Fireworks**, **Google**, **Groq**, **Mistral**, **DeepInfra**, **OpenRouter**, and **Azure OpenAI**.
+
+Each provider's models can be independently assigned to 5 workflow slots:
+
+- **Normal** -- Primary execution model for coding tasks and tool calls
+- **Thinking** -- Complex reasoning and planning (falls back to Normal)
+- **Compact** -- Context summarization when history grows long (falls back to Normal)
+- **Critique** -- Self-critique of agent reasoning (falls back to Thinking)
+- **VLM** -- Vision/image processing (falls back to Normal if it supports vision)
+
+Mix and match providers per slot in `~/.opendev/settings.json`:
+
+```json
+{
+  "model_provider": "anthropic",
+  "model": "claude-sonnet-4-20250514",
+  "model_thinking_provider": "openai",
+  "model_thinking": "o3"
+}
+```
+
+See the [Provider Setup Guide](docs/providers.md) for the full list of env vars, fallback chains, and configuration options.
 
 ### MCP Integration
 
