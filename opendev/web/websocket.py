@@ -44,6 +44,10 @@ class WebSocketManager:
 
     async def broadcast(self, message: Dict[str, Any]):
         """Broadcast a message to all connected clients."""
+        if not self.active_connections:
+            logger.debug("Broadcast to 0 clients: type=%s", message.get("type"))
+            return
+
         # Validate message is JSON-serializable before broadcasting
         try:
             import json

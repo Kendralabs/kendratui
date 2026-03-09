@@ -410,9 +410,17 @@ class TextualRunner:
         self._web_port = None
         if not os.environ.get("OPENDEV_NO_WEB_BRIDGE"):
             try:
+                import threading
                 from opendev.web.server import start_server
                 from opendev.web.port_utils import find_available_port
                 from opendev.web.state import get_state
+
+                # Redirect web server logs to file to prevent TUI console noise
+                from opendev.web.logging_config import suppress_console_output
+                from opendev.core.paths import get_paths
+
+                bridge_log = str(get_paths(self.working_dir).global_dir / "bridge.log")
+                suppress_console_output(log_file=bridge_log)
 
                 port = find_available_port("127.0.0.1", 8080)
                 if port is not None:
@@ -424,6 +432,7 @@ class TextualRunner:
 
                         user_store = UserStore(get_paths(self.working_dir).global_dir)
 
+                    server_ready = threading.Event()
                     self._web_server_thread = start_server(
                         config_manager=self.config_manager,
                         session_manager=self.session_manager,
@@ -434,12 +443,39 @@ class TextualRunner:
                         mcp_manager=getattr(self.repl, "mcp_manager", None),
                         port=port,
                         open_browser=False,
+                        ready_event=server_ready,
                     )
+                    # Wait for server event loop + ws_manager to be ready
+                    server_ready.wait(timeout=5.0)
                     self._web_port = port
 
-                    # Mark bridge mode so WebSocket handler routes queries to TUI
+                    # Validate bridge components are actually initialized
                     state = get_state()
+                    if state.ws_manager is None or state._event_loop is None:
+                        logger.error(
+                            "Bridge startup incomplete: ws_manager=%s, event_loop=%s "
+                            "— disabling bridge",
+                            state.ws_manager is not None,
+                            state._event_loop is not None,
+                        )
+                        self._web_server_thread = None
+                        self._web_port = None
+                        raise RuntimeError("Bridge startup incomplete")
+
+                    # Mark bridge mode so WebSocket handler routes queries to TUI
                     state.tui_message_injector = self._inject_web_message
+
+                    # Save TUI session so web routes can find it on disk
+                    self.session_manager.save_session(force=True)
+
+                    # Install guard: web routes see wrapped session_manager
+                    from opendev.web.bridge_guard import BridgeSessionGuard
+                    session = self.session_manager.get_current_session()
+                    if session:
+                        state.session_manager = BridgeSessionGuard(
+                            state.session_manager, session.id
+                        )
+
                     logger.info("Embedded web server started on port %d (bridge mode)", port)
             except Exception as e:
                 logger.warning("Failed to start embedded web server: %s", e)
@@ -615,19 +651,38 @@ class TextualRunner:
         """Broadcast a message to WebSocket clients from a non-async context."""
         try:
             from opendev.web.state import get_state
+            import asyncio
 
             state = get_state()
             ws_mgr = state.ws_manager
             loop = state.get_event_loop()
-            if ws_mgr and loop:
-                import asyncio
 
-                future = asyncio.run_coroutine_threadsafe(
-                    ws_mgr.broadcast(payload), loop
-                )
-                future.result(timeout=3)
-        except Exception:
-            pass  # Don't let web broadcast failures affect TUI
+            if not ws_mgr or not loop:
+                if not getattr(self, "_bridge_no_loop_warned", False):
+                    self._bridge_no_loop_warned = True
+                    logger.warning(
+                        "Bridge broadcast unavailable: ws_mgr=%s, loop=%s",
+                        ws_mgr is not None,
+                        loop is not None,
+                    )
+                return
+
+            if loop.is_closed():
+                if not getattr(self, "_bridge_loop_closed_warned", False):
+                    self._bridge_loop_closed_warned = True
+                    logger.warning("Bridge event loop is closed")
+                return
+
+            future = asyncio.run_coroutine_threadsafe(
+                ws_mgr.broadcast(payload), loop
+            )
+            future.result(timeout=3)
+        except Exception as exc:
+            logger.warning(
+                "Bridge broadcast failed for %s: %s",
+                payload.get("type", "?"),
+                exc,
+            )
 
     def _run_query(self, message: str) -> list[ChatMessage]:
         """Execute a user query via the REPL and return new session messages."""
@@ -720,6 +775,10 @@ class TextualRunner:
                                 state=state,
                             )
                             ui_callback = BridgeUICallback(ui_callback, web_callback)
+                        else:
+                            logger.warning(
+                                "Bridge active but event loop/ws_manager unavailable"
+                            )
                     except Exception as bridge_err:
                         logger.warning("Failed to create bridge callback: %s", bridge_err)
             else:
@@ -802,6 +861,20 @@ class TextualRunner:
                     "type": "message_start",
                     "data": {
                         "messageId": str(_time.time()),
+                        "session_id": (
+                            self.session_manager.get_current_session().id
+                            if self.session_manager.get_current_session()
+                            else "unknown"
+                        ),
+                    },
+                })
+
+                # Broadcast the TUI user's message so the web frontend can display it
+                self._web_broadcast_sync({
+                    "type": "user_message",
+                    "data": {
+                        "role": "user",
+                        "content": message,
                         "session_id": (
                             self.session_manager.get_current_session().id
                             if self.session_manager.get_current_session()

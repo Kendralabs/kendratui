@@ -36,8 +36,8 @@ class BridgeUICallback(BaseUICallback):
             return
         try:
             fn(*args, **kwargs)
-        except Exception:
-            logger.debug("BridgeUICallback: web.%s failed (suppressed)", method_name)
+        except Exception as exc:
+            logger.warning("BridgeUICallback: web.%s failed: %s", method_name, exc)
 
     # ------------------------------------------------------------------
     # Thinking lifecycle
