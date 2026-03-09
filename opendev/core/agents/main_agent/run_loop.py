@@ -246,6 +246,7 @@ class RunLoopMixin:
         MAX_TODO_NUDGES = 4  # After this many todo nudges, allow completion anyway
         completion_nudge_sent = False
         interrupted = False
+        has_explored = False  # Track whether Code-Explorer has been spawned
 
         try:
             while True:
@@ -534,6 +535,48 @@ class RunLoopMixin:
                     continue  # Next iteration of outer while loop
 
                 # Sequential path (original logic)
+                # Explore-first enforcement: block task subagent spawns until
+                # Code-Explorer has run
+                _EXPLORE_EXEMPT = {"Code-Explorer", "ask-user"}
+                _explore_blocked = False
+                if not has_explored:
+                    for tc in tool_calls:
+                        if tc["function"]["name"] == "spawn_subagent":
+                            tc_args = json.loads(tc["function"]["arguments"])
+                            subagent_type = tc_args.get("subagent_type", "")
+                            if subagent_type not in _EXPLORE_EXEMPT:
+                                _explore_blocked = True
+                                for t in tool_calls:
+                                    if t["id"] == tc["id"]:
+                                        messages.append(
+                                            {
+                                                "role": "tool",
+                                                "tool_call_id": t["id"],
+                                                "content": get_reminder(
+                                                    "explore_first_nudge"
+                                                ),
+                                            }
+                                        )
+                                    else:
+                                        messages.append(
+                                            {
+                                                "role": "tool",
+                                                "tool_call_id": t["id"],
+                                                "content": "Blocked: explore first.",
+                                            }
+                                        )
+                                break
+                if _explore_blocked:
+                    continue  # Next iteration of outer while loop
+
+                # Mark explored when Code-Explorer is being spawned
+                for tc in tool_calls:
+                    if tc["function"]["name"] == "spawn_subagent":
+                        tc_args = json.loads(tc["function"]["arguments"])
+                        if tc_args.get("subagent_type", "") == "Code-Explorer":
+                            has_explored = True
+                            break
+
                 for tool_call in tool_calls:
                     tool_name = tool_call["function"]["name"]
                     tool_args = json.loads(tool_call["function"]["arguments"])

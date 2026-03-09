@@ -121,6 +121,11 @@ A plan file exists from a previous session at {plan_file_path}. You may read
 it with read_file and call present_plan to show it for approval, or spawn a
 Planner subagent to revise it.
 
+--- explore_first_nudge ---
+<system-reminder>
+Before proceeding with this subagent, you should first explore the codebase using Code-Explorer to build context about the relevant code areas. Spawn Code-Explorer first to understand the existing code structure, then re-spawn this subagent with the enriched context.
+</system-reminder>
+
 --- completion_summary_nudge ---
 <system-reminder>
 The task appears complete. Briefly state the outcome.

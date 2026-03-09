@@ -120,6 +120,7 @@ class TestParallelismDecision:
 
     def test_spawn_subagent_uses_parallel(self, executor, ctx):
         """Multiple spawn_subagent still uses the parallel path."""
+        ctx.has_explored = True  # Skip explore-first enforcement
         tool_calls = [
             _make_tool_call("spawn_subagent", {"subagent_type": "explore"}, "c1"),
             _make_tool_call("spawn_subagent", {"subagent_type": "explore"}, "c2"),

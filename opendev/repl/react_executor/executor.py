@@ -89,6 +89,7 @@ class IterationContext:
     all_todos_complete_nudged: bool = False
     completion_nudge_sent: bool = False
     continue_after_subagent: bool = False  # If True, don't inject stop signal after subagent
+    has_explored: bool = False  # True after Code-Explorer has been spawned
     # Doom-loop detection: track recent (tool_name, args_hash) tuples
     recent_tool_calls: deque = field(default_factory=lambda: deque(maxlen=20))
     doom_loop_warned: bool = False  # True if user already chose to continue

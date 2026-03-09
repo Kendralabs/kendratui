@@ -152,6 +152,48 @@ class ToolProcessingMixin:
         all_reads = all(tc["function"]["name"] in self.READ_OPERATIONS for tc in tool_calls)
         ctx.consecutive_reads = ctx.consecutive_reads + 1 if all_reads else 0
 
+        # Explore-first enforcement: block task subagent spawns until Code-Explorer has run
+        EXPLORE_EXEMPT_SUBAGENTS = {"Code-Explorer", "ask-user"}
+        if not ctx.has_explored:
+            for tc in tool_calls:
+                if tc["function"]["name"] == "spawn_subagent":
+                    try:
+                        args = json.loads(tc["function"]["arguments"])
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+                    subagent_type = args.get("subagent_type", "")
+                    if subagent_type not in EXPLORE_EXEMPT_SUBAGENTS:
+                        # Nudge the agent to explore first
+                        ctx.messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": get_reminder("explore_first_nudge"),
+                            }
+                        )
+                        # Fill remaining tool calls with synthetic results
+                        for other_tc in tool_calls:
+                            if other_tc["id"] != tc["id"]:
+                                ctx.messages.append(
+                                    {
+                                        "role": "tool",
+                                        "tool_call_id": other_tc["id"],
+                                        "content": "Blocked: explore first.",
+                                    }
+                                )
+                        return LoopAction.CONTINUE
+
+        # Mark explored when Code-Explorer is being spawned
+        for tc in tool_calls:
+            if tc["function"]["name"] == "spawn_subagent":
+                try:
+                    args = json.loads(tc["function"]["arguments"])
+                except (json.JSONDecodeError, KeyError):
+                    continue
+                if args.get("subagent_type", "") == "Code-Explorer":
+                    ctx.has_explored = True
+                    break
+
         # Execute tools (parallel for spawn_subagent batches or read-only batches)
         spawn_calls = [tc for tc in tool_calls if tc["function"]["name"] == "spawn_subagent"]
         is_all_spawn_agents = len(spawn_calls) == len(tool_calls) and len(spawn_calls) > 1
