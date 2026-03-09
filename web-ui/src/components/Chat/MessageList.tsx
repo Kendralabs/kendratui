@@ -34,6 +34,9 @@ export function MessageList() {
   // Braille halo animation for welcome screen
   const [brailleOffset, setBrailleOffset] = useState(0);
 
+  // Stagger animation: track previous message count
+  const prevMessageCountRef = useRef(messages.length);
+
   // Smart auto-scroll: track user scroll position
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -84,6 +87,14 @@ export function MessageList() {
       setBrailleOffset(prev => (prev + 1) % SPINNER_FRAMES.length);
     }, 100);
     return () => clearInterval(interval);
+  }, [messages.length]);
+
+  // Update stagger ref after new messages settle
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      prevMessageCountRef.current = messages.length;
+    }, 500);
+    return () => clearTimeout(timer);
   }, [messages.length]);
 
   // Custom Page Up/Page Down handling with shorter scroll distance
@@ -163,11 +174,18 @@ export function MessageList() {
           // Nested tool calls get indentation
           const depthMargin = message.depth ? `ml-${Math.min(message.depth * 6, 24)}` : '';
 
+          // Stagger animation for new messages
+          const isNewMessage = index >= prevMessageCountRef.current;
+          const staggerStyle = isNewMessage
+            ? { animationDelay: `${(index - prevMessageCountRef.current) * 50}ms`, animationFillMode: 'both' as const }
+            : undefined;
+
           // Render tool calls with special component
           if (message.role === 'tool_call') {
+            const hasResult = message.tool_result != null && Object.keys(message.tool_result).length > 0;
             return (
-              <div key={index} className={depthMargin} style={message.depth ? { marginLeft: `${message.depth * 1.5}rem` } : undefined}>
-                <ToolCallMessage message={message} />
+              <div key={index} className={`animate-slide-up ${depthMargin}`} style={{ ...(message.depth ? { marginLeft: `${message.depth * 1.5}rem` } : {}), ...staggerStyle }}>
+                <ToolCallMessage message={message} hasResult={hasResult} />
               </div>
             );
           }
@@ -175,13 +193,14 @@ export function MessageList() {
           // Render thinking blocks (only when thinking level is not Off)
           if (message.role === 'thinking') {
             if (thinkingLevel === 'Off') return null;
-            return <ThinkingBlock key={index} content={message.content} level={message.metadata?.level} />;
+            const isLastThinking = isLoading && index === messages.length - 1;
+            return <ThinkingBlock key={index} content={message.content} level={message.metadata?.level} isActive={isLastThinking} />;
           }
 
           const isUser = message.role === 'user';
 
           return (
-            <div key={index} className="animate-slide-up">
+            <div key={index} className="animate-slide-up" style={staggerStyle}>
               {isUser ? (
                 <div className="bg-bg-200 border border-border-300/15 rounded-lg px-4 py-3">
                   <div className="flex items-start gap-3">
@@ -195,7 +214,7 @@ export function MessageList() {
                 <div className="bg-bg-000 border border-border-300/15 rounded-lg px-4 py-3">
                   <div className="flex items-start gap-3">
                     <span className="text-text-400 font-mono text-sm font-medium flex-shrink-0">&#10095;</span>
-                    <div className="flex-1 prose prose-sm max-w-none">
+                    <div className="flex-1 prose prose-sm max-w-none code-hover">
                       <ReactMarkdown
                         components={{
                           code({ node, className, children, ...props }) {
@@ -230,7 +249,7 @@ export function MessageList() {
                             return <strong className="font-semibold text-text-000 text-sm">{children}</strong>;
                           },
                           a({ children, href }) {
-                            return <a href={href} className="underline text-accent-secondary-100 hover:text-accent-secondary-100/80 text-sm" target="_blank" rel="noopener noreferrer">{children}</a>;
+                            return <a href={href} className="link-underline text-accent-secondary-100 hover:text-accent-secondary-100/80 text-sm" target="_blank" rel="noopener noreferrer">{children}</a>;
                           },
                         }}
                       >
