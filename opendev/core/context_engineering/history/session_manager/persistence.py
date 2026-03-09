@@ -104,7 +104,7 @@ class PersistenceMixin:
         session_file = self.session_dir / f"{session_id}.json"
         if session_file.exists():
             session = self._load_from_file(session_file)
-            if owner_id and session.owner_id != owner_id:
+            if owner_id and session.owner_id is not None and session.owner_id != owner_id:
                 raise FileNotFoundError(f"Session {session_id} not found")
             self.current_session = session
             self.turn_count = len(session.messages)
@@ -122,7 +122,7 @@ class PersistenceMixin:
                 candidate = project_dir / f"{session_id}.json"
                 if candidate.exists():
                     session = self._load_from_file(candidate)
-                    if owner_id and session.owner_id != owner_id:
+                    if owner_id and session.owner_id is not None and session.owner_id != owner_id:
                         continue
                     self.current_session = session
                     self.turn_count = len(session.messages)

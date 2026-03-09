@@ -124,21 +124,21 @@ class WebState:
         return session.id if session else None
 
     def resume_session(self, session_id: str, owner_id: str) -> bool:
-        """Resume the given session if owned by the user."""
+        """Resume the given session if owned by the user or unowned."""
         try:
             session = self.session_manager.load_session(session_id, owner_id=owner_id)
         except FileNotFoundError:
             return False
-        if session.owner_id != owner_id:
+        if session.owner_id is not None and session.owner_id != owner_id:
             return False
         return True
 
     def list_sessions(self, owner_id: str) -> List[Dict[str, Any]]:
-        """List all sessions owned by the specified user across all workspaces."""
+        """List sessions owned by the user or unowned (TUI-created) across all workspaces."""
         sessions = []
-        for session_meta in self.session_manager.list_all_sessions():
-            if session_meta.owner_id != owner_id:
-                continue
+        for session_meta in self.session_manager.list_all_sessions(
+            owner_id=owner_id, include_unowned=True
+        ):
             sessions.append(
                 {
                     "id": session_meta.id,
@@ -177,10 +177,8 @@ class WebState:
 
     def resolve_approval(self, approval_id: str, approved: bool, auto_approve: bool = False) -> bool:
         """Resolve a pending approval request."""
-        print(f"[State] resolve_approval called: id={approval_id}, approved={approved}")
         with self._lock:
             if approval_id in self._pending_approvals:
-                print(f"[State] Found approval in pending list, marking as resolved")
                 self._pending_approvals[approval_id]["resolved"] = True
                 self._pending_approvals[approval_id]["approved"] = approved
                 self._pending_approvals[approval_id]["auto_approve"] = auto_approve
@@ -188,8 +186,6 @@ class WebState:
                 if event:
                     event.set()
                 return True
-            print(f"[State] Approval {approval_id} NOT FOUND in pending list!")
-            print(f"[State] Current pending approvals: {list(self._pending_approvals.keys())}")
             return False
 
     def get_pending_approval(self, approval_id: str) -> Optional[Dict[str, Any]]:

@@ -47,7 +47,12 @@ class ListingMixin:
 
         return sorted(sessions, key=lambda s: s.updated_at, reverse=True)
 
-    def list_all_sessions(self, include_archived: bool = False) -> list[SessionMetadata]:
+    def list_all_sessions(
+        self,
+        include_archived: bool = False,
+        owner_id: Optional[str] = None,
+        include_unowned: bool = True,
+    ) -> list[SessionMetadata]:
         """List sessions from ALL project directories.
 
         Scans every subdirectory under ``~/.opendev/projects/`` and merges
@@ -56,6 +61,10 @@ class ListingMixin:
 
         Args:
             include_archived: If False (default), exclude archived sessions.
+            owner_id: If provided, filter to sessions owned by this user.
+            include_unowned: If True (default), also include sessions with no
+                owner (e.g. TUI-created sessions). Only relevant when
+                ``owner_id`` is set.
 
         Returns:
             List of session metadata from all projects, sorted by update time
@@ -118,6 +127,12 @@ class ListingMixin:
                         continue
             except Exception:
                 continue
+
+        if owner_id:
+            all_sessions = [
+                s for s in all_sessions
+                if s.owner_id == owner_id or (include_unowned and s.owner_id is None)
+            ]
 
         return sorted(all_sessions, key=lambda s: s.updated_at, reverse=True)
 
