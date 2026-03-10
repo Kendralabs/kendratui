@@ -8,37 +8,11 @@ import uuid
 from typing import Any, Optional, Union
 
 from opendev.models.operation import Operation
-from opendev.web.state import get_state
+from opendev.core.runtime.approval import ApprovalResult
+from opendev.core.runtime.approval.constants import AutonomyLevel, is_safe_command
 from opendev.web.logging_config import logger
-
-
-class ApprovalResult:
-    """Result of an approval request (simplified for web)."""
-
-    def __init__(
-        self,
-        approved: bool,
-        choice: str = "approve",
-        edited_content: Optional[str] = None,
-        apply_to_all: bool = False,
-        cancelled: bool = False,
-    ) -> None:
-        self.approved = approved
-        self.choice = choice
-        self.edited_content = edited_content
-        self.apply_to_all = apply_to_all
-        self.cancelled = cancelled
-
-
-# Safe commands that can be auto-approved in Semi-Auto mode
-SAFE_COMMANDS = [
-    "ls", "cat", "head", "tail", "grep", "find", "wc", "pwd",
-    "echo", "which", "type", "file", "stat", "du", "df", "tree",
-    "git status", "git log", "git diff", "git branch", "git show",
-    "git remote", "git tag", "git stash list",
-    "python --version", "python3 --version", "node --version",
-    "npm --version", "cargo --version", "go version",
-]
+from opendev.web.protocol import WSMessageType
+from opendev.web.state import get_state
 
 
 class WebApprovalManager:
@@ -93,14 +67,11 @@ class WebApprovalManager:
         # Check autonomy level before prompting
         autonomy = self.state.get_autonomy_level()
 
-        if autonomy == "Auto":
+        if autonomy == AutonomyLevel.AUTO:
             return ApprovalResult(approved=True, choice="approve")
 
-        if autonomy == "Semi-Auto" and command:
-            cmd_lower = command.strip().lower()
-            for safe_cmd in SAFE_COMMANDS:
-                if cmd_lower == safe_cmd or cmd_lower.startswith(safe_cmd + " "):
-                    return ApprovalResult(approved=True, choice="approve")
+        if autonomy == AutonomyLevel.SEMI_AUTO and command and is_safe_command(command):
+            return ApprovalResult(approved=True, choice="approve")
 
         approval_id = str(uuid.uuid4())
         done_event = threading.Event()
@@ -131,11 +102,13 @@ class WebApprovalManager:
         # Broadcast approval request via WebSocket
         logger.info(f"Requesting approval for {tool_name}: {approval_request}")
         future = asyncio.run_coroutine_threadsafe(
-            self.ws_manager.broadcast({
-                "type": "approval_required",
-                "data": approval_request,
-            }),
-            self.loop
+            self.ws_manager.broadcast(
+                {
+                    "type": WSMessageType.APPROVAL_REQUIRED,
+                    "data": approval_request,
+                }
+            ),
+            self.loop,
         )
 
         # Wait for broadcast to complete
@@ -163,9 +136,7 @@ class WebApprovalManager:
         auto_approve = approval.get("auto_approve", False)
         self.state.clear_approval(approval_id)
         choice = (
-            "approve_all"
-            if (approved and auto_approve)
-            else ("approve" if approved else "deny")
+            "approve_all" if (approved and auto_approve) else ("approve" if approved else "deny")
         )
         logger.info(f"Approval resolved: {approval_id} - {'approved' if approved else 'denied'}")
         return ApprovalResult(approved=approved, choice=choice, apply_to_all=auto_approve)

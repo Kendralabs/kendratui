@@ -1,25 +1,12 @@
 """Approval manager for chat interface with interactive prompts."""
 
 import asyncio
-from enum import Enum
 
-
-class AutonomyLevel(Enum):
-    """Autonomy levels for command approval."""
-    MANUAL = "Manual"
-    SEMI_AUTO = "Semi-Auto"
-    AUTO = "Auto"
-
-
-# Safe commands that can be auto-approved in Semi-Auto mode
-SAFE_COMMANDS = [
-    "ls", "cat", "head", "tail", "grep", "find", "wc", "pwd",
-    "echo", "which", "type", "file", "stat", "du", "df", "tree",
-    "git status", "git log", "git diff", "git branch", "git show",
-    "git remote", "git tag", "git stash list",
-    "python --version", "python3 --version", "node --version",
-    "npm --version", "cargo --version", "go version",
-]
+from opendev.core.runtime.approval.constants import (
+    SAFE_COMMANDS,
+    AutonomyLevel,
+    is_safe_command,
+)
 
 
 class ChatApprovalManager:
@@ -59,12 +46,9 @@ class ChatApprovalManager:
             command: The command string to check
 
         Returns:
-            True if the command starts with a safe prefix
+            True if the command matches a known safe prefix
         """
-        if not command:
-            return False
-        cmd_lower = command.strip().lower()
-        return any(cmd_lower.startswith(safe.lower()) for safe in SAFE_COMMANDS)
+        return is_safe_command(command)
 
     def _check_auto_approval(self, operation, command):
         """Check if operation should be auto-approved.
@@ -150,21 +134,27 @@ class ChatApprovalManager:
             self.rules_manager.add_history(command, True, rule_matched=matched_rule.id)
             # Don't show auto-approval messages in chat to reduce noise
             # self.console.print(f"[dim]✓ Auto-approved by rule: {matched_rule.name}[/dim]")
-            return ApprovalResult(
-                approved=True,
-                choice=ApprovalChoice.APPROVE,
-                apply_to_all=False,
-            ), matched_rule
+            return (
+                ApprovalResult(
+                    approved=True,
+                    choice=ApprovalChoice.APPROVE,
+                    apply_to_all=False,
+                ),
+                matched_rule,
+            )
 
         # Auto-deny rule
         if matched_rule.action == self.RuleAction.AUTO_DENY:
             self.rules_manager.add_history(command, False, rule_matched=matched_rule.id)
             self.console.print(f"  ⎿  [red]Denied by rule: {matched_rule.name}[/red]")
-            return ApprovalResult(
-                approved=False,
-                choice=ApprovalChoice.DENY,
-                cancelled=True,
-            ), matched_rule
+            return (
+                ApprovalResult(
+                    approved=False,
+                    choice=ApprovalChoice.DENY,
+                    cancelled=True,
+                ),
+                matched_rule,
+            )
 
         # REQUIRE_APPROVAL or REQUIRE_EDIT - continue to modal
         return None, matched_rule
@@ -194,7 +184,9 @@ class ChatApprovalManager:
         def invoke_modal() -> None:
             async def run_modal() -> None:
                 try:
-                    result = await self.chat_app.show_approval_modal(command or "", working_dir or "")
+                    result = await self.chat_app.show_approval_modal(
+                        command or "", working_dir or ""
+                    )
                 except Exception as exc:  # pragma: no cover - defensive
                     origin_loop.call_soon_threadsafe(ui_loop_future.set_exception, exc)
                 else:
@@ -449,10 +441,10 @@ class ChatApprovalManager:
                 return rule_result
 
         # Check if already interrupted before showing modal
-        if self.chat_app and hasattr(self.chat_app, 'runner'):
+        if self.chat_app and hasattr(self.chat_app, "runner"):
             runner = self.chat_app.runner
-            if hasattr(runner, 'query_processor'):
-                task_monitor = getattr(runner.query_processor, 'task_monitor', None)
+            if hasattr(runner, "query_processor"):
+                task_monitor = getattr(runner.query_processor, "task_monitor", None)
                 if task_monitor and task_monitor.should_interrupt():
                     get_debug_logger().log(
                         "approval_result", "approval", approved=False, method="interrupted"

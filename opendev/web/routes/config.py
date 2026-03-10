@@ -7,13 +7,16 @@ from pydantic import BaseModel
 
 from opendev.web.state import get_state, broadcast_to_all_clients
 from opendev.config import get_model_registry
+from opendev.core.runtime.approval.constants import AutonomyLevel, ThinkingLevel
 from opendev.core.runtime.mode_manager import OperationMode
+from opendev.web.protocol import WSMessageType
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 
 class ConfigUpdate(BaseModel):
     """Configuration update model."""
+
     model_provider: str | None = None
     model: str | None = None
     model_thinking_provider: str | None = None
@@ -130,7 +133,7 @@ async def update_config(update: ConfigUpdate) -> Dict[str, str]:
         if update.enable_bash is not None:
             config.enable_bash = update.enable_bash
             # Also update permissions.bash.enabled for consistency
-            if hasattr(config, 'permissions'):
+            if hasattr(config, "permissions"):
                 config.permissions.bash.enabled = update.enable_bash
 
         # Save configuration with the updated config object
@@ -144,11 +147,13 @@ async def update_config(update: ConfigUpdate) -> Dict[str, str]:
 
 class ModeUpdate(BaseModel):
     """Mode update model."""
+
     mode: str
 
 
 class AutonomyUpdate(BaseModel):
     """Autonomy update model."""
+
     level: str
 
 
@@ -169,16 +174,18 @@ async def set_mode(update: ModeUpdate) -> Dict[str, str]:
 
         # Broadcast status update to all clients
         session = state.session_manager.get_current_session()
-        await broadcast_to_all_clients({
-            "type": "status_update",
-            "data": {
-                "mode": mode.value,
-                "autonomy_level": state.get_autonomy_level(),
-                "thinking_level": state.get_thinking_level(),
-                "working_dir": session.working_directory if session else "",
-                "git_branch": state.get_git_branch(),
-            },
-        })
+        await broadcast_to_all_clients(
+            {
+                "type": WSMessageType.STATUS_UPDATE,
+                "data": {
+                    "mode": mode.value,
+                    "autonomy_level": state.get_autonomy_level(),
+                    "thinking_level": state.get_thinking_level(),
+                    "working_dir": session.working_directory if session else "",
+                    "git_branch": state.get_git_branch(),
+                },
+            }
+        )
 
         return {"status": "success", "message": f"Mode set to {mode.value}"}
     except ValueError:
@@ -198,7 +205,7 @@ async def set_autonomy(update: AutonomyUpdate) -> Dict[str, str]:
         Status response
     """
     try:
-        valid_levels = {"Manual", "Semi-Auto", "Auto"}
+        valid_levels = {level.value for level in AutonomyLevel}
         if update.level not in valid_levels:
             raise HTTPException(
                 status_code=400,
@@ -210,16 +217,18 @@ async def set_autonomy(update: AutonomyUpdate) -> Dict[str, str]:
 
         # Broadcast status update to all clients
         session = state.session_manager.get_current_session()
-        await broadcast_to_all_clients({
-            "type": "status_update",
-            "data": {
-                "mode": state.mode_manager.current_mode.value,
-                "autonomy_level": update.level,
-                "thinking_level": state.get_thinking_level(),
-                "working_dir": session.working_directory if session else "",
-                "git_branch": state.get_git_branch(),
-            },
-        })
+        await broadcast_to_all_clients(
+            {
+                "type": WSMessageType.STATUS_UPDATE,
+                "data": {
+                    "mode": state.mode_manager.current_mode.value,
+                    "autonomy_level": update.level,
+                    "thinking_level": state.get_thinking_level(),
+                    "working_dir": session.working_directory if session else "",
+                    "git_branch": state.get_git_branch(),
+                },
+            }
+        )
 
         return {"status": "success", "message": f"Autonomy set to {update.level}"}
     except HTTPException:
@@ -230,6 +239,7 @@ async def set_autonomy(update: AutonomyUpdate) -> Dict[str, str]:
 
 class ThinkingUpdate(BaseModel):
     """Thinking level update model."""
+
     level: str
 
 
@@ -244,7 +254,7 @@ async def set_thinking(update: ThinkingUpdate) -> Dict[str, str]:
         Status response
     """
     try:
-        valid_levels = {"Off", "Low", "Medium", "High"}
+        valid_levels = {level.value for level in ThinkingLevel}
         if update.level not in valid_levels:
             raise HTTPException(
                 status_code=400,
@@ -256,16 +266,18 @@ async def set_thinking(update: ThinkingUpdate) -> Dict[str, str]:
 
         # Broadcast status update to all clients
         session = state.session_manager.get_current_session()
-        await broadcast_to_all_clients({
-            "type": "status_update",
-            "data": {
-                "mode": state.mode_manager.current_mode.value,
-                "autonomy_level": state.get_autonomy_level(),
-                "thinking_level": update.level,
-                "working_dir": session.working_directory if session else "",
-                "git_branch": state.get_git_branch(),
-            },
-        })
+        await broadcast_to_all_clients(
+            {
+                "type": WSMessageType.STATUS_UPDATE,
+                "data": {
+                    "mode": state.mode_manager.current_mode.value,
+                    "autonomy_level": state.get_autonomy_level(),
+                    "thinking_level": update.level,
+                    "working_dir": session.working_directory if session else "",
+                    "git_branch": state.get_git_branch(),
+                },
+            }
+        )
 
         return {"status": "success", "message": f"Thinking level set to {update.level}"}
     except HTTPException:
@@ -296,18 +308,22 @@ async def list_providers() -> List[Dict[str, Any]]:
                 if model_info.recommended:
                     description = "Recommended • " + description
 
-                models.append({
-                    "id": model_info.id,
-                    "name": model_info.name,
-                    "description": description,
-                })
+                models.append(
+                    {
+                        "id": model_info.id,
+                        "name": model_info.name,
+                        "description": description,
+                    }
+                )
 
-            providers.append({
-                "id": provider_info.id,
-                "name": provider_info.name,
-                "description": provider_info.description,
-                "models": models
-            })
+            providers.append(
+                {
+                    "id": provider_info.id,
+                    "name": provider_info.name,
+                    "description": provider_info.description,
+                    "models": models,
+                }
+            )
 
         return providers
 

@@ -38,7 +38,7 @@ class ApprovalResult:
     def __init__(
         self,
         approved: bool,
-        choice: ApprovalChoice,
+        choice: Union[ApprovalChoice, str] = "approve",
         edited_content: Optional[str] = None,
         apply_to_all: bool = False,
         cancelled: bool = False,
@@ -122,9 +122,7 @@ class ApprovalManager:
             lines = []
             lines.append(("", "\n"))
             box_width = 75
-            lines.append(
-                ("class:border", "┏" + "━" * (box_width + 2) + "┓\n")
-            )
+            lines.append(("class:border", "┏" + "━" * (box_width + 2) + "┓\n"))
 
             preview_lines = preview.split("\n")[:8]
             for line in preview_lines:
@@ -147,9 +145,7 @@ class ApprovalManager:
                 padding = " " * (box_width - len(msg))
                 lines.append(("class:preview", f"┃ {msg}{padding}┃\n"))
 
-            lines.append(
-                ("class:border", "┗" + "━" * (box_width + 2) + "┛\n")
-            )
+            lines.append(("class:border", "┗" + "━" * (box_width + 2) + "┛\n"))
             lines.append(("", "\n"))
             lines.append(("class:question bold", f"{message}\n"))
             lines.append(("", "\n"))
@@ -266,9 +262,7 @@ class ApprovalManager:
         )
 
         if self.auto_approve_remaining and not force_prompt:
-            get_debug_logger().log(
-                "approval_result", "approval", approved=True, method="auto"
-            )
+            get_debug_logger().log("approval_result", "approval", approved=True, method="auto")
             return ApprovalResult(True, ApprovalChoice.APPROVE)
 
         if operation.target and self.is_pattern_approved(operation.target):
