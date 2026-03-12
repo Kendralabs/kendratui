@@ -1,3 +1,5 @@
+@import '@xyflow/react/dist/style.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -247,4 +249,40 @@ pre {
 .code-hover pre:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px hsl(var(--border-100) / 0.08);
+}
+
+/* React Flow light theme overrides */
+.react-flow__background {
+  background: hsl(var(--bg-100)) !important;
+}
+
+.react-flow__edge-path {
+  stroke: hsl(var(--border-300) / 0.4) !important;
+}
+
+.react-flow__controls button {
+  background: hsl(var(--bg-000)) !important;
+  border-color: hsl(var(--border-300) / 0.3) !important;
+  fill: hsl(var(--text-400)) !important;
+}
+
+.react-flow__controls button:hover {
+  background: hsl(var(--bg-200)) !important;
+}
+
+.react-flow__minimap {
+  background: hsl(var(--bg-100)) !important;
+  border: 1px solid hsl(var(--border-300) / 0.3) !important;
+}
+
+/* Disable global transition rule inside React Flow to prevent animation conflicts */
+.react-flow-wrapper *,
+.react-flow *,
+.react-flow__node * {
+  transition: none !important;
+}
+
+/* Re-enable transitions only for specific interactive elements */
+.react-flow__controls button {
+  transition: background-color 0.15s ease !important;
 }

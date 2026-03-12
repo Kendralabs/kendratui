@@ -139,6 +139,16 @@ class APIClient {
     return response.json();
   }
 
+  async verifyModel(provider: string, model: string): Promise<{ valid: boolean; error?: string }> {
+    const response = await fetch(`${API_BASE}/config/verify-model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, model }),
+    });
+    if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+    return response.json();
+  }
+
   // Config endpoints
   async getConfig(): Promise<any> {
     const response = await fetch(`${API_BASE}/config`);

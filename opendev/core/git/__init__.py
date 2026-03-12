@@ -1,1 +1,0 @@
-"""Git utilities for OpenDev."""

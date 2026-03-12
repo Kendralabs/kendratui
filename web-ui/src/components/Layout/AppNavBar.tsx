@@ -44,6 +44,16 @@ export function AppNavBar() {
             >
               CodeWiki
             </Link>
+            <Link
+              to="/traces"
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                isActive('/traces')
+                  ? 'bg-purple-100 text-purple-900'
+                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              Traces
+            </Link>
           </div>
         </div>
 

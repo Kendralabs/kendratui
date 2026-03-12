@@ -1,0 +1,20 @@
+[package]
+name = "opendev-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Configuration and path management for OpenDev"
+
+[dependencies]
+opendev-models = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+reqwest = { version = "0.13", features = ["json", "rustls", "blocking"] }
+tokio = { workspace = true }
+dirs = "6"
+
+[dev-dependencies]
+tempfile = { workspace = true }

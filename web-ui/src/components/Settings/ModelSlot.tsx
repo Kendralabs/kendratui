@@ -22,6 +22,9 @@ export interface ModelSlotProps {
   onModelChange: (model: string) => void;
   optional?: boolean;
   notSetText?: string;
+  verifyStatus?: 'idle' | 'verifying' | 'success' | 'error';
+  verifyError?: string;
+  onVerify?: (provider: string, model: string) => void;
 }
 
 export function ModelSlot({
@@ -34,7 +37,10 @@ export function ModelSlot({
   onProviderChange,
   onModelChange,
   optional = false,
-  notSetText = "Not configured"
+  notSetText = "Not configured",
+  verifyStatus = 'idle',
+  verifyError,
+  onVerify
 }: ModelSlotProps) {
   const currentProvider = providers.find(p => p.id === selectedProvider);
   const availableModels = currentProvider?.models || [];
@@ -111,6 +117,50 @@ export function ModelSlot({
               <p className="mt-1.5 text-xs text-gray-500">
                 {availableModels.find(m => m.id === selectedModel)?.description}
               </p>
+            )}
+
+            {/* Verification Status Area */}
+            {selectedProvider && selectedModel && onVerify && (
+              <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
+                <div className="flex-1 pr-4">
+                  {verifyStatus === 'success' && (
+                    <div className="flex items-center gap-1.5 text-green-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      <span className="text-xs font-medium">Model verified successfully</span>
+                    </div>
+                  )}
+                  {verifyStatus === 'error' && (
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5 text-red-600">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="text-xs font-medium">Verification failed</span>
+                      </div>
+                      {verifyError && (
+                        <span className="text-xs text-red-500 break-words line-clamp-2" title={verifyError}>
+                          {verifyError}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {verifyStatus === 'idle' && (
+                    <span className="text-xs text-gray-400">Not verified</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => onVerify(selectedProvider, selectedModel)}
+                  disabled={verifyStatus === 'verifying'}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 flex-shrink-0"
+                >
+                  {verifyStatus === 'verifying' ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify'
+                  )}
+                </button>
+              </div>
             )}
           </div>
         )}

@@ -30,6 +30,19 @@ export function SessionModelModal({ sessionId, sessionLabel, onClose }: SessionM
   const [visionProvider, setVisionProvider] = useState('');
   const [visionModel, setVisionModel] = useState('');
 
+  // Verification states
+  type VerifyStatus = 'idle' | 'verifying' | 'success' | 'error';
+  const [normalVerifyStatus, setNormalVerifyStatus] = useState<VerifyStatus>('idle');
+  const [normalVerifyError, setNormalVerifyError] = useState<string>();
+  const [thinkingVerifyStatus, setThinkingVerifyStatus] = useState<VerifyStatus>('idle');
+  const [thinkingVerifyError, setThinkingVerifyError] = useState<string>();
+  const [critiqueVerifyStatus, setCritiqueVerifyStatus] = useState<VerifyStatus>('idle');
+  const [critiqueVerifyError, setCritiqueVerifyError] = useState<string>();
+  const [compactVerifyStatus, setCompactVerifyStatus] = useState<VerifyStatus>('idle');
+  const [compactVerifyError, setCompactVerifyError] = useState<string>();
+  const [visionVerifyStatus, setVisionVerifyStatus] = useState<VerifyStatus>('idle');
+  const [visionVerifyError, setVisionVerifyError] = useState<string>();
+
   useEffect(() => {
     if (sessionId) {
       loadData();
@@ -69,8 +82,75 @@ export function SessionModelModal({ sessionId, sessionLabel, onClose }: SessionM
     }
   };
 
+  const verifySingleModel = async (
+    provider: string,
+    model: string,
+    setStatus: (status: VerifyStatus) => void,
+    setError: (error: string | undefined) => void
+  ): Promise<boolean> => {
+    if (!provider || !model) return true; // Nothing to verify
+
+    setStatus('verifying');
+    setError(undefined);
+
+    try {
+      const result = await apiClient.verifyModel(provider, model);
+      if (result.valid) {
+        setStatus('success');
+        return true;
+      } else {
+        setStatus('error');
+        setError(result.error || 'Verification failed');
+        return false;
+      }
+    } catch (err: any) {
+      setStatus('error');
+      setError(err.message || 'Verification failed');
+      return false;
+    }
+  };
+
+  const verifyAllModels = async (): Promise<boolean> => {
+    setSaving(true);
+    let allValid = true;
+
+    // Run verifications in parallel
+    const verifications = [
+      normalProvider && normalModel
+        ? verifySingleModel(normalProvider, normalModel, setNormalVerifyStatus, setNormalVerifyError)
+        : Promise.resolve(true),
+      thinkingProvider && thinkingModel
+        ? verifySingleModel(thinkingProvider, thinkingModel, setThinkingVerifyStatus, setThinkingVerifyError)
+        : Promise.resolve(true),
+      critiqueProvider && critiqueModel
+        ? verifySingleModel(critiqueProvider, critiqueModel, setCritiqueVerifyStatus, setCritiqueVerifyError)
+        : Promise.resolve(true),
+      compactProvider && compactModel
+        ? verifySingleModel(compactProvider, compactModel, setCompactVerifyStatus, setCompactVerifyError)
+        : Promise.resolve(true),
+      visionProvider && visionModel
+        ? verifySingleModel(visionProvider, visionModel, setVisionVerifyStatus, setVisionVerifyError)
+        : Promise.resolve(true),
+    ];
+
+    const results = await Promise.all(verifications);
+    allValid = results.every(Boolean);
+
+    if (!allValid) {
+      addToast('One or more models failed verification', 'error');
+      setSaving(false);
+    }
+
+    return allValid;
+  };
+
   const handleSave = async () => {
     if (!sessionId) return;
+
+    // Verify before saving
+    const isValid = await verifyAllModels();
+    if (!isValid) return;
+
     try {
       setSaving(true);
 
@@ -182,8 +262,11 @@ export function SessionModelModal({ sessionId, sessionLabel, onClose }: SessionM
                 providers={providers}
                 selectedProvider={normalProvider}
                 selectedModel={normalModel}
-                onProviderChange={setNormalProvider}
-                onModelChange={setNormalModel}
+                onProviderChange={(p) => { setNormalProvider(p); setNormalVerifyStatus('idle'); }}
+                onModelChange={(m) => { setNormalModel(m); setNormalVerifyStatus('idle'); }}
+                verifyStatus={normalVerifyStatus}
+                verifyError={normalVerifyError}
+                onVerify={(p, m) => verifySingleModel(p, m, setNormalVerifyStatus, setNormalVerifyError)}
               />
 
               <ModelSlot
@@ -193,10 +276,13 @@ export function SessionModelModal({ sessionId, sessionLabel, onClose }: SessionM
                 providers={providers}
                 selectedProvider={thinkingProvider}
                 selectedModel={thinkingModel}
-                onProviderChange={setThinkingProvider}
-                onModelChange={setThinkingModel}
+                onProviderChange={(p) => { setThinkingProvider(p); setThinkingVerifyStatus('idle'); }}
+                onModelChange={(m) => { setThinkingModel(m); setThinkingVerifyStatus('idle'); }}
                 optional
                 notSetText="Use Normal Model"
+                verifyStatus={thinkingVerifyStatus}
+                verifyError={thinkingVerifyError}
+                onVerify={(p, m) => verifySingleModel(p, m, setThinkingVerifyStatus, setThinkingVerifyError)}
               />
 
               <ModelSlot
@@ -206,10 +292,13 @@ export function SessionModelModal({ sessionId, sessionLabel, onClose }: SessionM
                 providers={providers}
                 selectedProvider={critiqueProvider}
                 selectedModel={critiqueModel}
-                onProviderChange={setCritiqueProvider}
-                onModelChange={setCritiqueModel}
+                onProviderChange={(p) => { setCritiqueProvider(p); setCritiqueVerifyStatus('idle'); }}
+                onModelChange={(m) => { setCritiqueModel(m); setCritiqueVerifyStatus('idle'); }}
                 optional
                 notSetText="Use Thinking Model"
+                verifyStatus={critiqueVerifyStatus}
+                verifyError={critiqueVerifyError}
+                onVerify={(p, m) => verifySingleModel(p, m, setCritiqueVerifyStatus, setCritiqueVerifyError)}
               />
 
               <ModelSlot
@@ -219,10 +308,13 @@ export function SessionModelModal({ sessionId, sessionLabel, onClose }: SessionM
                 providers={providers}
                 selectedProvider={compactProvider}
                 selectedModel={compactModel}
-                onProviderChange={setCompactProvider}
-                onModelChange={setCompactModel}
+                onProviderChange={(p) => { setCompactProvider(p); setCompactVerifyStatus('idle'); }}
+                onModelChange={(m) => { setCompactModel(m); setCompactVerifyStatus('idle'); }}
                 optional
                 notSetText="Use Normal Model"
+                verifyStatus={compactVerifyStatus}
+                verifyError={compactVerifyError}
+                onVerify={(p, m) => verifySingleModel(p, m, setCompactVerifyStatus, setCompactVerifyError)}
               />
 
               <ModelSlot
@@ -232,10 +324,13 @@ export function SessionModelModal({ sessionId, sessionLabel, onClose }: SessionM
                 providers={providers}
                 selectedProvider={visionProvider}
                 selectedModel={visionModel}
-                onProviderChange={setVisionProvider}
-                onModelChange={setVisionModel}
+                onProviderChange={(p) => { setVisionProvider(p); setVisionVerifyStatus('idle'); }}
+                onModelChange={(m) => { setVisionModel(m); setVisionVerifyStatus('idle'); }}
                 optional
                 notSetText="Vision Disabled"
+                verifyStatus={visionVerifyStatus}
+                verifyError={visionVerifyError}
+                onVerify={(p, m) => verifySingleModel(p, m, setVisionVerifyStatus, setVisionVerifyError)}
               />
             </>
           )}

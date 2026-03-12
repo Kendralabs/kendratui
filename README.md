@@ -5,14 +5,9 @@
 <p align="center">Open-source AI coding agent that spawns parallel agents, each bound to the LLM of your choice.</p>
 
 <p align="center">
-  <a href="https://pypi.org/project/opendev/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/opendev?style=flat-square" /></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" /></a>
-  <a href="https://python.org/"><img alt="Python version" src="https://img.shields.io/badge/python-%3E%3D3.10-blue.svg?style=flat-square" /></a>
+  <a href="https://www.rust-lang.org/"><img alt="Rust" src="https://img.shields.io/badge/rust-%3E%3D1.75-orange.svg?style=flat-square" /></a>
   <a href="https://arxiv.org/pdf/2603.05344"><img alt="Technical Report" src="https://img.shields.io/badge/Technical%20Report-arXiv-b31b1b.svg?style=flat-square" /></a>
-</p>
-
-<p align="center">
-  🌐 <b>Website & Docs are coming soon — stay tuned!</b> 🚀
 </p>
 
 <p align="center">
@@ -29,32 +24,31 @@ Work is organized into concurrent sessions composed of specialized sub-agents. E
 
 Each workflow is a modular slot you can bind to any LLM of your choice: **Normal** (execution), **Thinking** (reasoning), **Compact** (context summarization), **Self-Critique** (output verification), and **VLM** (vision). For example, use Claude Opus for execution, GPT-o3 for thinking, and a lightweight Qwen model for compaction. Together, these combinations form a compound AI system where multiple models collaborate, each optimized for its role.
 
-OpenDev is currently written in **Python**, with a planned rewrite in **Rust** in the near future.
-
+OpenDev is written in **Rust** for maximum performance and minimal resource usage. Looking for the original Python version? See [opendev-py](https://github.com/opendev-to/opendev-py) (archived).
 
 <p align="center">
   <img src="figures/top.png" alt="OpenDev Compound AI Architecture" width="700"/>
 </p>
 
-
 ---
 
 ### Why OpenDev?
 
-- 🤖 **Proactive, not reactive.** OpenDev can plan, execute, and iterate autonomously. Kick off a refactoring, walk away, and come back to a PR ready for review.
-- 🔀 **Multi-provider, multi-model.** Assign different models from different providers to every workflow and session, all running in parallel. Your models, your rules.
-- 💻 **TUI + Web UI.** A full terminal UI for power users and a Web UI for visual monitoring. The Web UI supports remote sessions, so you can start a task from your phone and let OpenDev work while you sleep. 🛏️📱
+- **Proactive, not reactive.** OpenDev can plan, execute, and iterate autonomously. Kick off a refactoring, walk away, and come back to a PR ready for review.
+- **Multi-provider, multi-model.** Assign different models from different providers to every workflow and session, all running in parallel. Your models, your rules.
+- **TUI + Web UI.** A full terminal UI for power users and a Web UI for visual monitoring. The Web UI supports remote sessions, so you can start a task from your phone and let OpenDev work while you sleep.
+- **Fast.** Written in Rust with a ~3.7MB release binary. Instant startup, low memory footprint.
 
 ---
 
 ### Installation
 
 ```bash
-# With uv (recommended)
-uv pip install opendev
-
-# With pip
-pip install opendev
+# From source
+git clone https://github.com/opendev-to/opendev.git
+cd opendev
+cargo build --release -p opendev-cli
+cp target/release/opendev ~/.local/bin/
 ```
 
 ### Quick Start
@@ -126,22 +120,24 @@ opendev mcp enable/disable myserver
 ```bash
 git clone https://github.com/opendev-to/opendev.git
 cd opendev
-make install
-source .venv/bin/activate
+cargo build --workspace
+cargo test --workspace
 ```
-
-A `Makefile` provides shortcuts for all common tasks:
 
 ```bash
-make check        # Format (Black) + lint (Ruff) + type-check (mypy)
-make test         # Run all tests
-make test-cov     # Run tests with coverage report
-make install-ui   # Install Web UI npm dependencies
-make build-ui     # Install dependencies and build the Web UI frontend
-make help         # List all available targets
+cargo check --workspace       # Type check
+cargo clippy --workspace      # Lint
+cargo fmt --all               # Format
+cargo test -p opendev-cli     # Test a specific crate
 ```
 
-> **Web UI:** `make build-ui` automatically runs `npm ci` before building, so you don't need to run `make install-ui` separately unless you only want to install dependencies without building.
+### Web UI
+
+The frontend is a React/Vite app in `web-ui/`:
+
+```bash
+cd web-ui && npm ci && npm run build
+```
 
 ### Contributing
 
@@ -154,8 +150,6 @@ If you're interested in contributing to OpenDev, please open an issue or submit 
 - **vs. Claude Code / Codex CLI / Gemini CLI:** Closed-source tools that lock you into a single provider. OpenDev is fully open source and lets you mix models from any provider, independently bound per workflow (execution, thinking, critique, compaction, vision).
 - **vs. OpenCode:** OpenCode is a great open-source coding agent with TUI, Web UI, and LSP support. However, its architecture is not modular enough to support per-workflow model binding, concurrent multi-agent sessions, or compound AI orchestration.
 - **vs. OpenClaw:** OpenDev and OpenClaw share similar concepts around autonomous AI agents. The key difference is focus: OpenDev is purpose-built for the software development lifecycle, with context engineering, structured agent workflows, and deep code understanding.
-
-📋 See the [Roadmap](./ROADMAP.md) for what's shipped, in progress, and planned.
 
 ---
 

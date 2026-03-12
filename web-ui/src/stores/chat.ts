@@ -562,7 +562,6 @@ wsClient.on('tool_result', (message) => {
         updatedMessages[i] = {
           ...msgs[i],
           tool_result: message.data.raw_result ?? message.data.output,
-          tool_summary: message.data.summary,
           tool_success: message.data.success,
           tool_error: message.data.error || null,
         };
@@ -696,7 +695,6 @@ wsClient.on('subagent_complete', (message) => {
         updatedMessages[i] = {
           ...msgs[i],
           tool_result: { success, output: success ? 'Agent completed' : 'Agent failed' },
-          tool_summary: success ? 'Agent completed successfully' : 'Agent failed',
           tool_success: success,
         };
         return patchSession(state, sid, { messages: updatedMessages });

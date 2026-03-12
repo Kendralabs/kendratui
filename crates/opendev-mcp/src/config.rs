@@ -1,0 +1,361 @@
+//! MCP server configuration management.
+//!
+//! Handles loading, saving, and merging MCP server configurations
+//! from global (~/.opendev/mcp.json) and project-level (.mcp.json) files.
+
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use crate::error::{McpError, McpResult};
+
+/// Transport type for MCP server connections.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransportType {
+    Stdio,
+    Sse,
+    Http,
+}
+
+impl Default for TransportType {
+    fn default() -> Self {
+        Self::Stdio
+    }
+}
+
+impl std::fmt::Display for TransportType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stdio => write!(f, "stdio"),
+            Self::Sse => write!(f, "sse"),
+            Self::Http => write!(f, "http"),
+        }
+    }
+}
+
+/// Configuration for a single MCP server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServerConfig {
+    /// Command to start the MCP server (for stdio transport).
+    #[serde(default)]
+    pub command: String,
+
+    /// Arguments for the command.
+    #[serde(default)]
+    pub args: Vec<String>,
+
+    /// Environment variables to set.
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+
+    /// URL for HTTP/SSE transport.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    /// HTTP headers for remote servers.
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+
+    /// Whether the server is enabled.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Auto-start when OpenDev launches.
+    #[serde(default = "default_true")]
+    pub auto_start: bool,
+
+    /// Transport type.
+    #[serde(default)]
+    pub transport: TransportType,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for McpServerConfig {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            args: Vec::new(),
+            env: HashMap::new(),
+            url: None,
+            headers: HashMap::new(),
+            enabled: true,
+            auto_start: true,
+            transport: TransportType::Stdio,
+        }
+    }
+}
+
+/// Root MCP configuration containing all server definitions.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct McpConfig {
+    /// Server configurations keyed by name.
+    #[serde(alias = "mcpServers", default)]
+    pub mcp_servers: HashMap<String, McpServerConfig>,
+}
+
+/// Load MCP configuration from a JSON file.
+pub fn load_config(config_path: &Path) -> McpResult<McpConfig> {
+    if !config_path.exists() {
+        return Ok(McpConfig::default());
+    }
+
+    let content = std::fs::read_to_string(config_path).map_err(|e| {
+        McpError::Config(format!(
+            "Failed to read MCP config from {}: {}",
+            config_path.display(),
+            e
+        ))
+    })?;
+
+    serde_json::from_str(&content).map_err(|e| {
+        McpError::Config(format!(
+            "Failed to parse MCP config from {}: {}",
+            config_path.display(),
+            e
+        ))
+    })
+}
+
+/// Save MCP configuration to a JSON file.
+pub fn save_config(config: &McpConfig, config_path: &Path) -> McpResult<()> {
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            McpError::Config(format!(
+                "Failed to create config directory {}: {}",
+                parent.display(),
+                e
+            ))
+        })?;
+    }
+
+    let content = serde_json::to_string_pretty(config)?;
+    std::fs::write(config_path, content).map_err(|e| {
+        McpError::Config(format!(
+            "Failed to write MCP config to {}: {}",
+            config_path.display(),
+            e
+        ))
+    })?;
+
+    Ok(())
+}
+
+/// Merge global and project-level MCP configurations.
+///
+/// Project config takes precedence over global config.
+pub fn merge_configs(global: &McpConfig, project: Option<&McpConfig>) -> McpConfig {
+    let Some(project) = project else {
+        return global.clone();
+    };
+
+    let mut merged = global.mcp_servers.clone();
+    merged.extend(project.mcp_servers.clone());
+
+    McpConfig {
+        mcp_servers: merged,
+    }
+}
+
+/// Expand environment variables in a string.
+///
+/// Supports `${VAR_NAME}` syntax. Variables not found in the environment
+/// are left as-is.
+pub fn expand_env_vars(value: &str) -> String {
+    let re = Regex::new(r"\$\{([^}]+)\}").unwrap();
+    re.replace_all(value, |caps: &regex::Captures| {
+        let var_name = &caps[1];
+        std::env::var(var_name).unwrap_or_else(|_| caps[0].to_string())
+    })
+    .into_owned()
+}
+
+/// Prepare a server config by expanding environment variables in all fields.
+pub fn prepare_server_config(config: &McpServerConfig) -> McpServerConfig {
+    McpServerConfig {
+        command: config.command.clone(),
+        args: config.args.iter().map(|a| expand_env_vars(a)).collect(),
+        env: config
+            .env
+            .iter()
+            .map(|(k, v)| (k.clone(), expand_env_vars(v)))
+            .collect(),
+        url: config.url.as_ref().map(|u| expand_env_vars(u)),
+        headers: config
+            .headers
+            .iter()
+            .map(|(k, v)| (k.clone(), expand_env_vars(v)))
+            .collect(),
+        enabled: config.enabled,
+        auto_start: config.auto_start,
+        transport: config.transport.clone(),
+    }
+}
+
+/// Get the project-level MCP config path if it exists.
+pub fn get_project_config_path(working_dir: &Path) -> Option<PathBuf> {
+    let config_path = working_dir.join(".mcp.json");
+    if config_path.exists() {
+        Some(config_path)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_server_config() {
+        let config = McpServerConfig::default();
+        assert!(config.enabled);
+        assert!(config.auto_start);
+        assert_eq!(config.transport, TransportType::Stdio);
+        assert!(config.command.is_empty());
+    }
+
+    #[test]
+    fn test_config_roundtrip() {
+        let mut config = McpConfig::default();
+        config.mcp_servers.insert(
+            "test-server".to_string(),
+            McpServerConfig {
+                command: "npx".to_string(),
+                args: vec!["mcp-server-test".to_string()],
+                ..Default::default()
+            },
+        );
+
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: McpConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.mcp_servers.contains_key("test-server"));
+        assert_eq!(deserialized.mcp_servers["test-server"].command, "npx");
+    }
+
+    #[test]
+    fn test_config_alias_deserialization() {
+        let json = r#"{"mcpServers": {"my-server": {"command": "node", "args": ["server.js"]}}}"#;
+        let config: McpConfig = serde_json::from_str(json).unwrap();
+        assert!(config.mcp_servers.contains_key("my-server"));
+        assert_eq!(config.mcp_servers["my-server"].command, "node");
+    }
+
+    #[test]
+    fn test_merge_configs() {
+        let mut global = McpConfig::default();
+        global.mcp_servers.insert(
+            "global-server".to_string(),
+            McpServerConfig {
+                command: "node".to_string(),
+                ..Default::default()
+            },
+        );
+        global.mcp_servers.insert(
+            "shared".to_string(),
+            McpServerConfig {
+                command: "old".to_string(),
+                ..Default::default()
+            },
+        );
+
+        let mut project = McpConfig::default();
+        project.mcp_servers.insert(
+            "project-server".to_string(),
+            McpServerConfig {
+                command: "python".to_string(),
+                ..Default::default()
+            },
+        );
+        project.mcp_servers.insert(
+            "shared".to_string(),
+            McpServerConfig {
+                command: "new".to_string(),
+                ..Default::default()
+            },
+        );
+
+        let merged = merge_configs(&global, Some(&project));
+        assert_eq!(merged.mcp_servers.len(), 3);
+        assert!(merged.mcp_servers.contains_key("global-server"));
+        assert!(merged.mcp_servers.contains_key("project-server"));
+        // Project overrides global
+        assert_eq!(merged.mcp_servers["shared"].command, "new");
+    }
+
+    #[test]
+    fn test_expand_env_vars() {
+        std::env::set_var("TEST_MCP_VAR", "hello");
+        assert_eq!(expand_env_vars("${TEST_MCP_VAR}_world"), "hello_world");
+        // Unknown variables are left as-is
+        assert_eq!(
+            expand_env_vars("${UNKNOWN_VAR_12345}"),
+            "${UNKNOWN_VAR_12345}"
+        );
+        // No variables
+        assert_eq!(expand_env_vars("no vars here"), "no vars here");
+        std::env::remove_var("TEST_MCP_VAR");
+    }
+
+    #[test]
+    fn test_prepare_server_config() {
+        std::env::set_var("MCP_TEST_TOKEN", "secret123");
+        let config = McpServerConfig {
+            command: "node".to_string(),
+            args: vec!["server.js".to_string(), "--token=${MCP_TEST_TOKEN}".to_string()],
+            headers: HashMap::from([
+                ("Authorization".to_string(), "Bearer ${MCP_TEST_TOKEN}".to_string()),
+            ]),
+            url: Some("https://example.com/${MCP_TEST_TOKEN}".to_string()),
+            ..Default::default()
+        };
+
+        let prepared = prepare_server_config(&config);
+        assert_eq!(prepared.args[1], "--token=secret123");
+        assert_eq!(prepared.headers["Authorization"], "Bearer secret123");
+        assert_eq!(
+            prepared.url.as_deref(),
+            Some("https://example.com/secret123")
+        );
+        std::env::remove_var("MCP_TEST_TOKEN");
+    }
+
+    #[test]
+    fn test_transport_type_display() {
+        assert_eq!(TransportType::Stdio.to_string(), "stdio");
+        assert_eq!(TransportType::Sse.to_string(), "sse");
+        assert_eq!(TransportType::Http.to_string(), "http");
+    }
+
+    #[test]
+    fn test_load_config_missing_file() {
+        let result = load_config(Path::new("/nonexistent/path/mcp.json"));
+        assert!(result.is_ok());
+        assert!(result.unwrap().mcp_servers.is_empty());
+    }
+
+    #[test]
+    fn test_save_and_load_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("mcp.json");
+
+        let mut config = McpConfig::default();
+        config.mcp_servers.insert(
+            "test".to_string(),
+            McpServerConfig {
+                command: "npx".to_string(),
+                args: vec!["mcp-test".to_string()],
+                ..Default::default()
+            },
+        );
+
+        save_config(&config, &config_path).unwrap();
+        let loaded = load_config(&config_path).unwrap();
+        assert_eq!(loaded.mcp_servers.len(), 1);
+        assert_eq!(loaded.mcp_servers["test"].command, "npx");
+    }
+}

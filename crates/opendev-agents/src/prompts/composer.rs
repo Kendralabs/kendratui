@@ -1,0 +1,830 @@
+//! Prompt composition engine with conditional loading.
+//!
+//! Mirrors `opendev/core/agents/prompts/composition.py`.
+//!
+//! Composes system prompts from modular sections based on runtime context
+//! and conversation lifecycle. Supports priority ordering, conditional
+//! inclusion, cache-aware two-part splitting, and variable substitution.
+//!
+//! Templates are resolved in order:
+//! 1. Embedded (compile-time `include_str!`) — zero filesystem dependency
+//! 2. Filesystem fallback (`templates_dir`) — for user customisation
+
+use regex::Regex;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+
+use super::embedded;
+
+/// Regex to strip HTML comment frontmatter from markdown files.
+static FRONTMATTER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)^\s*<!--.*?-->\s*").unwrap());
+
+/// Regex for `{{variable_name}}` placeholders in templates.
+static VARIABLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{(\w+)\}\}").unwrap());
+
+/// Runtime context passed to condition functions for section filtering.
+pub type PromptContext = HashMap<String, serde_json::Value>;
+
+/// A condition function that determines if a section should be included.
+pub type ConditionFn = Box<dyn Fn(&PromptContext) -> bool + Send + Sync>;
+
+/// A section to conditionally include in the system prompt.
+pub struct PromptSection {
+    /// Section identifier.
+    pub name: String,
+    /// Path to template file (relative to templates_dir).
+    pub file_path: String,
+    /// Optional predicate to determine if section should be included.
+    pub condition: Option<ConditionFn>,
+    /// Loading priority (lower = earlier in prompt).
+    pub priority: i32,
+    /// Whether this section is stable across turns (true = cacheable).
+    pub cacheable: bool,
+}
+
+impl std::fmt::Debug for PromptSection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PromptSection")
+            .field("name", &self.name)
+            .field("file_path", &self.file_path)
+            .field("priority", &self.priority)
+            .field("cacheable", &self.cacheable)
+            .field("has_condition", &self.condition.is_some())
+            .finish()
+    }
+}
+
+/// Composes system prompts from modular sections.
+///
+/// Follows Claude Code's approach of building prompts from many small
+/// markdown files with conditional loading based on runtime context.
+///
+/// Templates are resolved first from the embedded store (compile-time),
+/// falling back to the filesystem `templates_dir` for user overrides.
+#[derive(Debug)]
+pub struct PromptComposer {
+    templates_dir: PathBuf,
+    sections: Vec<PromptSection>,
+}
+
+impl PromptComposer {
+    /// Create a new composer.
+    pub fn new(templates_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            templates_dir: templates_dir.into(),
+            sections: Vec::new(),
+        }
+    }
+
+    /// Register a prompt section for conditional inclusion.
+    pub fn register_section(
+        &mut self,
+        name: impl Into<String>,
+        file_path: impl Into<String>,
+        condition: Option<ConditionFn>,
+        priority: i32,
+        cacheable: bool,
+    ) {
+        self.sections.push(PromptSection {
+            name: name.into(),
+            file_path: file_path.into(),
+            condition,
+            priority,
+            cacheable,
+        });
+    }
+
+    /// Register a section with defaults (priority=50, cacheable=true, no condition).
+    pub fn register_simple(&mut self, name: impl Into<String>, file_path: impl Into<String>) {
+        self.register_section(name, file_path, None, 50, true);
+    }
+
+    /// Compose final prompt from registered sections.
+    ///
+    /// Sections are filtered by their condition, sorted by priority, loaded
+    /// (embedded first, then filesystem), and joined with double newlines.
+    pub fn compose(&self, context: &PromptContext) -> String {
+        let included = self.filter_and_sort(context);
+        let parts: Vec<String> = included
+            .iter()
+            .filter_map(|s| self.load_section_content(s))
+            .collect();
+        parts.join("\n\n")
+    }
+
+    /// Compose final prompt with variable substitution.
+    ///
+    /// After composing, replaces all `{{variable_name}}` placeholders with
+    /// values from the provided variables map.
+    pub fn compose_with_vars(
+        &self,
+        context: &PromptContext,
+        variables: &HashMap<String, String>,
+    ) -> String {
+        let raw = self.compose(context);
+        substitute_variables(&raw, variables)
+    }
+
+    /// Compose prompt split into stable (cacheable) and dynamic parts.
+    ///
+    /// For Anthropic prompt caching: the stable part gets cache_control,
+    /// the dynamic part changes per session/turn.
+    pub fn compose_two_part(&self, context: &PromptContext) -> (String, String) {
+        let included = self.filter_and_sort(context);
+        let mut stable_parts = Vec::new();
+        let mut dynamic_parts = Vec::new();
+
+        for section in &included {
+            if let Some(content) = self.load_section_content(section) {
+                if section.cacheable {
+                    stable_parts.push(content);
+                } else {
+                    dynamic_parts.push(content);
+                }
+            }
+        }
+
+        (stable_parts.join("\n\n"), dynamic_parts.join("\n\n"))
+    }
+
+    /// Compose two-part prompt with variable substitution on both halves.
+    pub fn compose_two_part_with_vars(
+        &self,
+        context: &PromptContext,
+        variables: &HashMap<String, String>,
+    ) -> (String, String) {
+        let (stable, dynamic) = self.compose_two_part(context);
+        (
+            substitute_variables(&stable, variables),
+            substitute_variables(&dynamic, variables),
+        )
+    }
+
+    /// Get the number of registered sections.
+    pub fn section_count(&self) -> usize {
+        self.sections.len()
+    }
+
+    /// Get names of all registered sections.
+    pub fn section_names(&self) -> Vec<&str> {
+        self.sections.iter().map(|s| s.name.as_str()).collect()
+    }
+
+    fn filter_and_sort(&self, context: &PromptContext) -> Vec<&PromptSection> {
+        let mut included: Vec<&PromptSection> = self
+            .sections
+            .iter()
+            .filter(|s| s.condition.as_ref().map_or(true, |f| f(context)))
+            .collect();
+        included.sort_by_key(|s| s.priority);
+        included
+    }
+
+    /// Load a section's content: try embedded first, then filesystem.
+    fn load_section_content(&self, section: &PromptSection) -> Option<String> {
+        // 1. Try embedded templates
+        if let Some(raw) = embedded::get_embedded(&section.file_path) {
+            let stripped = strip_frontmatter(raw);
+            if !stripped.is_empty() {
+                return Some(stripped);
+            }
+        }
+
+        // 2. Fallback to filesystem
+        let file_path = self.templates_dir.join(&section.file_path);
+        if !file_path.exists() {
+            return None;
+        }
+        let content = std::fs::read_to_string(&file_path).ok()?;
+        let stripped = strip_frontmatter(&content);
+        if stripped.is_empty() {
+            None
+        } else {
+            Some(stripped)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Utility functions
+// ---------------------------------------------------------------------------
+
+/// Strip HTML comment frontmatter from markdown content.
+pub fn strip_frontmatter(content: &str) -> String {
+    FRONTMATTER_RE.replace(content, "").trim().to_string()
+}
+
+/// Substitute `{{variable_name}}` placeholders in a template string.
+///
+/// Variables not present in the map are left as-is.
+///
+/// ```
+/// use std::collections::HashMap;
+/// use opendev_agents::prompts::substitute_variables;
+///
+/// let mut vars = HashMap::new();
+/// vars.insert("session_id".into(), "abc-123".into());
+/// let result = substitute_variables("path: ~/.opendev/sessions/{{session_id}}/", &vars);
+/// assert_eq!(result, "path: ~/.opendev/sessions/abc-123/");
+/// ```
+pub fn substitute_variables(template: &str, variables: &HashMap<String, String>) -> String {
+    VARIABLE_RE
+        .replace_all(template, |caps: &regex::Captures| {
+            let key = &caps[1];
+            variables
+                .get(key)
+                .cloned()
+                .unwrap_or_else(|| caps[0].to_string())
+        })
+        .into_owned()
+}
+
+// ---------------------------------------------------------------------------
+// Condition helpers
+// ---------------------------------------------------------------------------
+
+/// Create a condition that checks for a boolean context value.
+pub fn ctx_bool(key: &str) -> ConditionFn {
+    let key = key.to_string();
+    Box::new(move |ctx: &PromptContext| {
+        ctx.get(&key)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    })
+}
+
+/// Create a condition that checks for a string context value equality.
+pub fn ctx_eq(key: &str, expected: &str) -> ConditionFn {
+    let key = key.to_string();
+    let expected = expected.to_string();
+    Box::new(move |ctx: &PromptContext| {
+        ctx.get(&key)
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| v == expected)
+    })
+}
+
+/// Create a condition that checks if a string value is in a set.
+pub fn ctx_in(key: &str, values: &[&str]) -> ConditionFn {
+    let key = key.to_string();
+    let values: Vec<String> = values.iter().map(|s| s.to_string()).collect();
+    Box::new(move |ctx: &PromptContext| {
+        ctx.get(&key)
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| values.iter().any(|exp| exp == v))
+    })
+}
+
+/// Create a condition that checks for a non-null context value.
+pub fn ctx_present(key: &str) -> ConditionFn {
+    let key = key.to_string();
+    Box::new(move |ctx: &PromptContext| {
+        ctx.get(&key).is_some_and(|v| !v.is_null())
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Factory functions
+// ---------------------------------------------------------------------------
+
+/// Create a default composer with standard sections registered.
+///
+/// Priority ranges:
+/// - 10-30: Core identity and policies (always loaded)
+/// - 40-50: Tool guidance and interaction patterns
+/// - 55-65: Code quality and workflows
+/// - 70-80: Conditional sections (git, MCP, etc.)
+/// - 85-95: Context-specific additions
+pub fn create_default_composer(templates_dir: impl AsRef<Path>) -> PromptComposer {
+    let mut composer = PromptComposer::new(templates_dir.as_ref());
+
+    // Core sections (always included) - Priority 10-30
+    composer.register_section(
+        "mode_awareness",
+        "system/main/main-mode-awareness.md",
+        None,
+        12,
+        true,
+    );
+    composer.register_section(
+        "security_policy",
+        "system/main/main-security-policy.md",
+        None,
+        15,
+        true,
+    );
+    composer.register_section(
+        "tone_and_style",
+        "system/main/main-tone-and-style.md",
+        None,
+        20,
+        true,
+    );
+    composer.register_section(
+        "no_time_estimates",
+        "system/main/main-no-time-estimates.md",
+        None,
+        25,
+        true,
+    );
+
+    // Interaction patterns - Priority 40-50
+    composer.register_section(
+        "interaction_pattern",
+        "system/main/main-interaction-pattern.md",
+        None,
+        40,
+        true,
+    );
+    composer.register_section(
+        "available_tools",
+        "system/main/main-available-tools.md",
+        None,
+        45,
+        true,
+    );
+    composer.register_section(
+        "tool_selection",
+        "system/main/main-tool-selection.md",
+        None,
+        50,
+        true,
+    );
+
+    // Code quality and workflows - Priority 55-65
+    composer.register_section(
+        "code_quality",
+        "system/main/main-code-quality.md",
+        None,
+        55,
+        true,
+    );
+    composer.register_section(
+        "action_safety",
+        "system/main/main-action-safety.md",
+        None,
+        56,
+        true,
+    );
+    composer.register_section(
+        "read_before_edit",
+        "system/main/main-read-before-edit.md",
+        None,
+        58,
+        true,
+    );
+    composer.register_section(
+        "error_recovery",
+        "system/main/main-error-recovery.md",
+        None,
+        60,
+        true,
+    );
+
+    // Conditional sections - Priority 65-80
+    composer.register_section(
+        "subagent_guide",
+        "system/main/main-subagent-guide.md",
+        Some(ctx_bool("has_subagents")),
+        65,
+        true,
+    );
+    composer.register_section(
+        "git_workflow",
+        "system/main/main-git-workflow.md",
+        Some(ctx_bool("in_git_repo")),
+        70,
+        true,
+    );
+    composer.register_section(
+        "verification",
+        "system/main/main-verification.md",
+        None,
+        72,
+        true,
+    );
+    composer.register_section(
+        "task_tracking",
+        "system/main/main-task-tracking.md",
+        Some(ctx_bool("todo_tracking_enabled")),
+        75,
+        true,
+    );
+
+    // Provider-specific sections - Priority 80
+    composer.register_section(
+        "provider_openai",
+        "system/main/main-provider-openai.md",
+        Some(ctx_eq("model_provider", "openai")),
+        80,
+        true,
+    );
+    composer.register_section(
+        "provider_anthropic",
+        "system/main/main-provider-anthropic.md",
+        Some(ctx_eq("model_provider", "anthropic")),
+        80,
+        true,
+    );
+    composer.register_section(
+        "provider_fireworks",
+        "system/main/main-provider-fireworks.md",
+        Some(ctx_in("model_provider", &["fireworks", "fireworks-ai"])),
+        80,
+        true,
+    );
+
+    // Context awareness - Priority 85-95
+    composer.register_section(
+        "output_awareness",
+        "system/main/main-output-awareness.md",
+        None,
+        85,
+        true,
+    );
+    composer.register_section(
+        "scratchpad",
+        "system/main/main-scratchpad.md",
+        Some(ctx_present("session_id")),
+        87,
+        false, // Dynamic
+    );
+    composer.register_section(
+        "code_references",
+        "system/main/main-code-references.md",
+        None,
+        90,
+        true,
+    );
+    composer.register_section(
+        "system_reminders_note",
+        "system/main/main-reminders-note.md",
+        None,
+        95,
+        false, // Dynamic
+    );
+
+    composer
+}
+
+/// Create a thinking-mode composer.
+pub fn create_thinking_composer(templates_dir: impl AsRef<Path>) -> PromptComposer {
+    let mut composer = PromptComposer::new(templates_dir.as_ref());
+
+    composer.register_section(
+        "available_tools",
+        "system/thinking/thinking-available-tools.md",
+        None,
+        45,
+        true,
+    );
+    composer.register_section(
+        "subagent_guide",
+        "system/thinking/thinking-subagent-guide.md",
+        None,
+        50,
+        true,
+    );
+    composer.register_section(
+        "code_references",
+        "system/thinking/thinking-code-references.md",
+        None,
+        85,
+        true,
+    );
+    composer.register_section(
+        "output_rules",
+        "system/thinking/thinking-output-rules.md",
+        None,
+        90,
+        true,
+    );
+
+    composer
+}
+
+/// Create the appropriate composer for a given mode.
+pub fn create_composer(templates_dir: impl AsRef<Path>, mode: &str) -> PromptComposer {
+    if mode == "system/thinking" {
+        create_thinking_composer(templates_dir)
+    } else {
+        create_default_composer(templates_dir)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn setup_templates(dir: &Path) {
+        let main_dir = dir.join("system/main");
+        fs::create_dir_all(&main_dir).unwrap();
+
+        fs::write(main_dir.join("section-a.md"), "# Section A\nContent A").unwrap();
+        fs::write(main_dir.join("section-b.md"), "# Section B\nContent B").unwrap();
+        fs::write(
+            main_dir.join("section-c.md"),
+            "<!-- frontmatter: true -->\n# Section C\nContent C",
+        )
+        .unwrap();
+        fs::write(main_dir.join("section-d.md"), "# Dynamic\nDynamic content").unwrap();
+    }
+
+    #[test]
+    fn test_compose_basic() {
+        let dir = tempfile::TempDir::new().unwrap();
+        setup_templates(dir.path());
+
+        let mut composer = PromptComposer::new(dir.path());
+        composer.register_section("a", "system/main/section-a.md", None, 10, true);
+        composer.register_section("b", "system/main/section-b.md", None, 20, true);
+
+        let result = composer.compose(&HashMap::new());
+        assert!(result.contains("Content A"));
+        assert!(result.contains("Content B"));
+        // A should come before B (lower priority)
+        assert!(result.find("Content A") < result.find("Content B"));
+    }
+
+    #[test]
+    fn test_compose_priority_ordering() {
+        let dir = tempfile::TempDir::new().unwrap();
+        setup_templates(dir.path());
+
+        let mut composer = PromptComposer::new(dir.path());
+        // Register in reverse order
+        composer.register_section("b", "system/main/section-b.md", None, 20, true);
+        composer.register_section("a", "system/main/section-a.md", None, 10, true);
+
+        let result = composer.compose(&HashMap::new());
+        assert!(result.find("Content A") < result.find("Content B"));
+    }
+
+    #[test]
+    fn test_compose_with_condition() {
+        let dir = tempfile::TempDir::new().unwrap();
+        setup_templates(dir.path());
+
+        let mut composer = PromptComposer::new(dir.path());
+        composer.register_section("a", "system/main/section-a.md", None, 10, true);
+        composer.register_section(
+            "b",
+            "system/main/section-b.md",
+            Some(ctx_bool("show_b")),
+            20,
+            true,
+        );
+
+        // Without condition met
+        let result = composer.compose(&HashMap::new());
+        assert!(result.contains("Content A"));
+        assert!(!result.contains("Content B"));
+
+        // With condition met
+        let mut ctx = HashMap::new();
+        ctx.insert("show_b".to_string(), serde_json::json!(true));
+        let result = composer.compose(&ctx);
+        assert!(result.contains("Content A"));
+        assert!(result.contains("Content B"));
+    }
+
+    #[test]
+    fn test_compose_strips_frontmatter() {
+        let dir = tempfile::TempDir::new().unwrap();
+        setup_templates(dir.path());
+
+        let mut composer = PromptComposer::new(dir.path());
+        composer.register_section("c", "system/main/section-c.md", None, 10, true);
+
+        let result = composer.compose(&HashMap::new());
+        assert!(!result.contains("frontmatter"));
+        assert!(result.contains("Content C"));
+    }
+
+    #[test]
+    fn test_compose_two_part() {
+        let dir = tempfile::TempDir::new().unwrap();
+        setup_templates(dir.path());
+
+        let mut composer = PromptComposer::new(dir.path());
+        composer.register_section("a", "system/main/section-a.md", None, 10, true);
+        composer.register_section("d", "system/main/section-d.md", None, 20, false);
+
+        let (stable, dynamic) = composer.compose_two_part(&HashMap::new());
+        assert!(stable.contains("Content A"));
+        assert!(!stable.contains("Dynamic content"));
+        assert!(dynamic.contains("Dynamic content"));
+        assert!(!dynamic.contains("Content A"));
+    }
+
+    #[test]
+    fn test_compose_missing_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        let mut composer = PromptComposer::new(dir.path());
+        composer.register_section("missing", "nonexistent.md", None, 10, true);
+
+        let result = composer.compose(&HashMap::new());
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_strip_frontmatter() {
+        assert_eq!(
+            strip_frontmatter("<!-- key: value -->\n# Title\nContent"),
+            "# Title\nContent"
+        );
+        assert_eq!(strip_frontmatter("No frontmatter"), "No frontmatter");
+        assert_eq!(strip_frontmatter(""), "");
+    }
+
+    #[test]
+    fn test_section_count_and_names() {
+        let composer_dir = tempfile::TempDir::new().unwrap();
+        let mut composer = PromptComposer::new(composer_dir.path());
+        composer.register_simple("alpha", "alpha.md");
+        composer.register_simple("beta", "beta.md");
+
+        assert_eq!(composer.section_count(), 2);
+        let names = composer.section_names();
+        assert!(names.contains(&"alpha"));
+        assert!(names.contains(&"beta"));
+    }
+
+    #[test]
+    fn test_ctx_eq_condition() {
+        let cond = ctx_eq("provider", "openai");
+
+        let mut ctx = HashMap::new();
+        assert!(!cond(&ctx));
+
+        ctx.insert("provider".to_string(), serde_json::json!("anthropic"));
+        assert!(!cond(&ctx));
+
+        ctx.insert("provider".to_string(), serde_json::json!("openai"));
+        assert!(cond(&ctx));
+    }
+
+    #[test]
+    fn test_ctx_in_condition() {
+        let cond = ctx_in("provider", &["fireworks", "fireworks-ai"]);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("provider".to_string(), serde_json::json!("fireworks"));
+        assert!(cond(&ctx));
+
+        ctx.insert("provider".to_string(), serde_json::json!("fireworks-ai"));
+        assert!(cond(&ctx));
+
+        ctx.insert("provider".to_string(), serde_json::json!("openai"));
+        assert!(!cond(&ctx));
+    }
+
+    #[test]
+    fn test_ctx_present_condition() {
+        let cond = ctx_present("session_id");
+
+        let mut ctx = HashMap::new();
+        assert!(!cond(&ctx));
+
+        ctx.insert("session_id".to_string(), serde_json::json!(null));
+        assert!(!cond(&ctx));
+
+        ctx.insert("session_id".to_string(), serde_json::json!("abc-123"));
+        assert!(cond(&ctx));
+    }
+
+    #[test]
+    fn test_create_default_composer_section_count() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let composer = create_default_composer(dir.path());
+        // Should have many sections registered
+        assert!(composer.section_count() > 15);
+    }
+
+    #[test]
+    fn test_create_thinking_composer() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let composer = create_thinking_composer(dir.path());
+        assert_eq!(composer.section_count(), 4);
+    }
+
+    #[test]
+    fn test_create_composer_dispatch() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        let main = create_composer(dir.path(), "system/main");
+        assert!(main.section_count() > 15);
+
+        let thinking = create_composer(dir.path(), "system/thinking");
+        assert_eq!(thinking.section_count(), 4);
+    }
+
+    #[test]
+    fn test_substitute_variables_basic() {
+        let mut vars = HashMap::new();
+        vars.insert("name".to_string(), "world".to_string());
+        assert_eq!(substitute_variables("Hello {{name}}!", &vars), "Hello world!");
+    }
+
+    #[test]
+    fn test_substitute_variables_multiple() {
+        let mut vars = HashMap::new();
+        vars.insert("session_id".to_string(), "abc-123".to_string());
+        vars.insert("path".to_string(), "/home/user".to_string());
+
+        let template = "Session {{session_id}} at {{path}}";
+        assert_eq!(
+            substitute_variables(template, &vars),
+            "Session abc-123 at /home/user"
+        );
+    }
+
+    #[test]
+    fn test_substitute_variables_missing_left_as_is() {
+        let vars = HashMap::new();
+        assert_eq!(
+            substitute_variables("Hello {{unknown}}!", &vars),
+            "Hello {{unknown}}!"
+        );
+    }
+
+    #[test]
+    fn test_substitute_variables_no_placeholders() {
+        let vars = HashMap::new();
+        assert_eq!(substitute_variables("No vars here", &vars), "No vars here");
+    }
+
+    #[test]
+    fn test_compose_with_vars() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let main_dir = dir.path().join("system/main");
+        fs::create_dir_all(&main_dir).unwrap();
+        fs::write(
+            main_dir.join("template.md"),
+            "Session: {{session_id}}\nPath: {{path}}",
+        )
+        .unwrap();
+
+        let mut composer = PromptComposer::new(dir.path());
+        composer.register_section("t", "system/main/template.md", None, 10, true);
+
+        let mut vars = HashMap::new();
+        vars.insert("session_id".to_string(), "xyz-789".to_string());
+        vars.insert("path".to_string(), "/workspace".to_string());
+
+        let result = composer.compose_with_vars(&HashMap::new(), &vars);
+        assert!(result.contains("Session: xyz-789"));
+        assert!(result.contains("Path: /workspace"));
+    }
+
+    #[test]
+    fn test_compose_two_part_with_vars() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let main_dir = dir.path().join("test");
+        fs::create_dir_all(&main_dir).unwrap();
+        fs::write(main_dir.join("stable.md"), "Stable {{key}}").unwrap();
+        fs::write(main_dir.join("dynamic.md"), "Dynamic {{key}}").unwrap();
+
+        let mut composer = PromptComposer::new(dir.path());
+        composer.register_section("s", "test/stable.md", None, 10, true);
+        composer.register_section("d", "test/dynamic.md", None, 20, false);
+
+        let mut vars = HashMap::new();
+        vars.insert("key".to_string(), "value".to_string());
+
+        let (stable, dynamic) = composer.compose_two_part_with_vars(&HashMap::new(), &vars);
+        assert_eq!(stable, "Stable value");
+        assert_eq!(dynamic, "Dynamic value");
+    }
+
+    #[test]
+    fn test_embedded_templates_used_by_default_composer() {
+        // Use a temp dir that has NO files — embedded should still resolve
+        let dir = tempfile::TempDir::new().unwrap();
+        let composer = create_default_composer(dir.path());
+
+        // Compose without any conditions to get the always-included sections
+        let result = composer.compose(&HashMap::new());
+
+        // The security policy section is always included (no condition) and should
+        // come from embedded templates even though the filesystem dir is empty.
+        assert!(
+            result.contains("Security Policy"),
+            "Expected embedded security policy template"
+        );
+    }
+
+    #[test]
+    fn test_embedded_thinking_composer() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let composer = create_thinking_composer(dir.path());
+        let result = composer.compose(&HashMap::new());
+        // At least one thinking template should resolve from embedded
+        assert!(!result.is_empty(), "Thinking composer should produce output from embedded");
+    }
+}
