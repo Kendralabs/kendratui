@@ -35,7 +35,9 @@ impl Widget for InputWidget<'_> {
             return;
         }
 
-        let accent = if self.agent_active {
+        let accent = if self.mode == "PLAN" {
+            style_tokens::GREEN_LIGHT
+        } else if self.agent_active {
             style_tokens::GOLD
         } else {
             style_tokens::ACCENT
@@ -72,45 +74,83 @@ impl Widget for InputWidget<'_> {
         ]);
         buf.set_line(area.left(), area.top(), &sep_line, area.width);
 
-        // Row 1: "> " prefix + input text
+        // Rows below separator: multiline input
+        let text_height = area.height.saturating_sub(1);
+        if text_height == 0 {
+            return;
+        }
         let text_area = Rect {
             x: area.x,
             y: area.y + 1,
             width: area.width,
-            height: 1,
+            height: text_height,
         };
 
-        let prefix = Span::styled(
-            "> ".to_string(),
-            Style::default().fg(accent).add_modifier(Modifier::BOLD),
-        );
-
-        let content = if self.buffer.is_empty() {
-            vec![
+        if self.buffer.is_empty() {
+            let prefix = Span::styled(
+                "> ".to_string(),
+                Style::default().fg(accent).add_modifier(Modifier::BOLD),
+            );
+            let content = vec![
                 prefix,
                 Span::styled(placeholder, Style::default().fg(style_tokens::SUBTLE)),
-            ]
+            ];
+            Paragraph::new(Line::from(content)).render(text_area, buf);
         } else {
-            let before = &self.buffer[..self.cursor];
-            let cursor_char = self.buffer.get(self.cursor..self.cursor + 1).unwrap_or(" ");
-            let after = if self.cursor < self.buffer.len() {
-                &self.buffer[self.cursor + 1..]
-            } else {
-                ""
-            };
+            // Split buffer into lines and render each with proper prefix
+            let input_lines: Vec<&str> = self.buffer.split('\n').collect();
 
-            vec![
-                prefix,
-                Span::raw(before.to_string()),
-                Span::styled(
-                    cursor_char.to_string(),
-                    Style::default().fg(Color::Black).bg(Color::White),
-                ),
-                Span::raw(after.to_string()),
-            ]
-        };
+            // Compute which line and column the cursor is on
+            let mut cursor_line = 0;
+            let mut cursor_col = 0;
+            let mut pos = 0;
+            for (i, line) in input_lines.iter().enumerate() {
+                if self.cursor <= pos + line.len() {
+                    cursor_line = i;
+                    cursor_col = self.cursor - pos;
+                    break;
+                }
+                pos += line.len() + 1; // +1 for '\n'
+                if i == input_lines.len() - 1 {
+                    cursor_line = i;
+                    cursor_col = line.len();
+                }
+            }
 
-        Paragraph::new(Line::from(content)).render(text_area, buf);
+            let prefix_style = Style::default().fg(accent).add_modifier(Modifier::BOLD);
+            let cursor_style = Style::default().fg(Color::Black).bg(Color::White);
+
+            for (i, line_text) in input_lines.iter().enumerate() {
+                if i as u16 >= text_height {
+                    break;
+                }
+                let row = text_area.y + i as u16;
+                let pfx = if i == 0 { "> " } else { "  " };
+
+                if i == cursor_line {
+                    let before = &line_text[..cursor_col];
+                    let cursor_char = line_text.get(cursor_col..cursor_col + 1).unwrap_or(" ");
+                    let after = if cursor_col < line_text.len() {
+                        &line_text[cursor_col + 1..]
+                    } else {
+                        ""
+                    };
+                    let spans = Line::from(vec![
+                        Span::styled(pfx, prefix_style),
+                        Span::raw(before.to_string()),
+                        Span::styled(cursor_char.to_string(), cursor_style),
+                        Span::raw(after.to_string()),
+                    ]);
+                    buf.set_line(text_area.x, row, &spans, text_area.width);
+                } else {
+                    let spans = Line::from(vec![
+                        Span::styled(pfx, prefix_style),
+                        Span::raw(line_text.to_string()),
+                    ]);
+                    buf.set_line(text_area.x, row, &spans, text_area.width);
+                }
+            }
+        }
     }
 }
 

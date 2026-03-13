@@ -14,9 +14,15 @@ use crate::widgets::{
     TodoPanelWidget, ToolDisplayWidget, WelcomePanelState, WelcomePanelWidget,
 };
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers},
+    event::{
+        DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers,
+        KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    },
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        supports_keyboard_enhancement,
+    },
 };
 use ratatui::{Terminal, backend::CrosstermBackend, layout};
 use tokio::sync::mpsc;
@@ -289,6 +295,17 @@ impl App {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+
+        // Enable Kitty keyboard protocol so terminals report Shift+Enter distinctly
+        let keyboard_enhanced = matches!(supports_keyboard_enhancement(), Ok(true))
+            && execute!(
+                io::stdout(),
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                )
+            )
+            .is_ok();
+
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
         terminal.clear()?;
@@ -300,6 +317,9 @@ impl App {
         let result = self.event_loop(&mut terminal).await;
 
         // Terminal teardown (always runs)
+        if keyboard_enhanced {
+            let _ = execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags);
+        }
         disable_raw_mode()?;
         execute!(
             terminal.backend_mut(),
