@@ -51,33 +51,26 @@ pub fn render_thinking_block(block: &ThinkingBlock) -> Vec<Line<'static>> {
         ThinkingPhase::Refinement => ("Refined Thinking", style_tokens::PHASE_REFINEMENT),
     };
 
-    // Header line with collapsible indicator
-    let collapse_indicator = if block.collapsed {
-        format!("{} +", style_tokens::THINKING_ICON)
-    } else {
-        format!("{} -", style_tokens::THINKING_ICON)
-    };
+    // Header line: ⟡ icon at col 0 (aligned with ⏺ / > / !)
+    let collapse_char = if block.collapsed { "+" } else { "-" };
     lines.push(Line::from(vec![
         Span::styled(
-            format!("{collapse_indicator} "),
+            format!("{} ", style_tokens::THINKING_ICON),
             Style::default().fg(style_tokens::GREY),
         ),
         Span::styled(
-            header_text.to_string(),
+            format!("{collapse_char} {header_text}"),
             Style::default()
                 .fg(header_color)
                 .add_modifier(Modifier::BOLD | Modifier::ITALIC),
         ),
     ]));
 
-    // Content lines (only if expanded)
+    // Content lines (only if expanded) — 2-char indent matching other roles
     if !block.collapsed {
         for content_line in block.content.lines() {
             lines.push(Line::from(vec![
-                Span::styled(
-                    "  ".to_string(),
-                    Style::default().fg(style_tokens::THINKING_BG),
-                ),
+                Span::raw("  ".to_string()),
                 Span::styled(
                     content_line.to_string(),
                     Style::default().fg(style_tokens::THINKING_BG),
