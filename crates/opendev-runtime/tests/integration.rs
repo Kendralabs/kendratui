@@ -38,7 +38,13 @@ fn make_rule(
 /// Pattern rules use regex matching.
 #[test]
 fn pattern_rule_regex_matching() {
-    let rule = make_rule("p1", RuleType::Pattern, r"rm\s+-rf", RuleAction::AutoDeny, 0);
+    let rule = make_rule(
+        "p1",
+        RuleType::Pattern,
+        r"rm\s+-rf",
+        RuleAction::AutoDeny,
+        0,
+    );
     assert!(rule.matches("rm -rf /tmp/stuff"));
     assert!(rule.matches("sudo rm -rf /"));
     assert!(!rule.matches("ls -la"));
@@ -48,7 +54,13 @@ fn pattern_rule_regex_matching() {
 /// Command rules use exact string matching.
 #[test]
 fn command_rule_exact_matching() {
-    let rule = make_rule("c1", RuleType::Command, "deploy", RuleAction::RequireApproval, 0);
+    let rule = make_rule(
+        "c1",
+        RuleType::Command,
+        "deploy",
+        RuleAction::RequireApproval,
+        0,
+    );
     assert!(rule.matches("deploy"));
     assert!(!rule.matches("deploy --force"));
     assert!(!rule.matches("Deploy"));
@@ -58,7 +70,13 @@ fn command_rule_exact_matching() {
 /// Prefix rules match exact command or command + space + args.
 #[test]
 fn prefix_rule_boundary_matching() {
-    let rule = make_rule("px1", RuleType::Prefix, "git push", RuleAction::RequireApproval, 0);
+    let rule = make_rule(
+        "px1",
+        RuleType::Prefix,
+        "git push",
+        RuleAction::RequireApproval,
+        0,
+    );
     assert!(rule.matches("git push"));
     assert!(rule.matches("git push --force origin main"));
     assert!(!rule.matches("git pull"));
@@ -69,7 +87,13 @@ fn prefix_rule_boundary_matching() {
 /// Danger rules behave like Pattern rules (regex).
 #[test]
 fn danger_rule_regex_matching() {
-    let rule = make_rule("d1", RuleType::Danger, r"chmod\s+777", RuleAction::RequireApproval, 0);
+    let rule = make_rule(
+        "d1",
+        RuleType::Danger,
+        r"chmod\s+777",
+        RuleAction::RequireApproval,
+        0,
+    );
     assert!(rule.matches("chmod 777 /etc/passwd"));
     assert!(rule.matches("sudo chmod 777 ."));
     assert!(!rule.matches("chmod 755 file"));
@@ -86,7 +110,13 @@ fn disabled_rule_never_matches() {
 /// Invalid regex in a pattern rule returns false (no panic).
 #[test]
 fn invalid_regex_returns_false() {
-    let rule = make_rule("bad", RuleType::Pattern, r"[unclosed", RuleAction::AutoDeny, 0);
+    let rule = make_rule(
+        "bad",
+        RuleType::Pattern,
+        r"[unclosed",
+        RuleAction::AutoDeny,
+        0,
+    );
     assert!(!rule.matches("anything"));
 }
 
@@ -158,7 +188,10 @@ fn default_rules_present() {
     assert_eq!(rm_rule.priority, 100);
     assert!(rm_rule.enabled);
 
-    let chmod_rule = rules.iter().find(|r| r.id == "default_danger_chmod").unwrap();
+    let chmod_rule = rules
+        .iter()
+        .find(|r| r.id == "default_danger_chmod")
+        .unwrap();
     assert!(chmod_rule.matches("chmod 777 /etc"));
 }
 
@@ -292,7 +325,10 @@ fn list_persistent_excludes_defaults() {
     assert_eq!(listing[0]["id"], "custom");
     // No default rules in listing
     assert!(!listing.iter().any(|r| {
-        r["id"].as_str().map(|s| s.starts_with("default_")).unwrap_or(false)
+        r["id"]
+            .as_str()
+            .map(|s| s.starts_with("default_"))
+            .unwrap_or(false)
     }));
 }
 
@@ -370,7 +406,7 @@ fn cost_tracker_with_pricing() {
 
     let mut tracker = CostTracker::new();
     let pricing = PricingInfo {
-        input_price_per_million: 3.0,  // $3/M input tokens
+        input_price_per_million: 3.0,   // $3/M input tokens
         output_price_per_million: 15.0, // $15/M output tokens
     };
 

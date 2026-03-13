@@ -57,7 +57,10 @@ impl Widget for ToolDisplayWidget<'_> {
             } else {
                 // Animated braille spinner
                 let frame_idx = tool.tick_count % SPINNER_FRAMES.len();
-                (SPINNER_FRAMES[frame_idx].to_string(), style_tokens::BLUE_BRIGHT)
+                (
+                    SPINNER_FRAMES[frame_idx].to_string(),
+                    style_tokens::BLUE_BRIGHT,
+                )
             };
 
             // Tool header with elapsed time
@@ -70,9 +73,7 @@ impl Widget for ToolDisplayWidget<'_> {
                 ),
                 Span::styled(
                     tool.name.clone(),
-                    Style::default()
-                        .fg(name_color)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(name_color).add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(elapsed_str, Style::default().fg(style_tokens::GREY)),
             ]));
@@ -103,9 +104,7 @@ impl Widget for ToolDisplayWidget<'_> {
             return;
         }
 
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: true });
+        let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
 
         paragraph.render(area, buf);
     }

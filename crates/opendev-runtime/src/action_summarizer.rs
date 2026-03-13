@@ -186,7 +186,7 @@ fn capitalize_first(s: &str) -> String {
 
 fn first_sentence(text: &str) -> Cow<'_, str> {
     let line = text.lines().next().unwrap_or(text);
-    if let Some(pos) = line.find(|c: char| c == '.' || c == '!' || c == '?') {
+    if let Some(pos) = line.find(['.', '!', '?']) {
         Cow::Borrowed(&line[..pos])
     } else {
         Cow::Borrowed(line)
@@ -196,9 +196,7 @@ fn first_sentence(text: &str) -> Cow<'_, str> {
 fn first_clause(text: &str) -> String {
     let line = text.lines().next().unwrap_or(text);
     // End at period, comma, semicolon, or em-dash
-    let end = line
-        .find(|c: char| c == '.' || c == ';' || c == '—')
-        .unwrap_or(line.len());
+    let end = line.find(['.', ';', '—']).unwrap_or(line.len());
     line[..end].trim().to_string()
 }
 

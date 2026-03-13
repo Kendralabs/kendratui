@@ -56,8 +56,7 @@ async fn send_request(
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let json: serde_json::Value =
-        serde_json::from_slice(&bytes).unwrap_or(serde_json::json!(null));
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or(serde_json::json!(null));
 
     (status, json)
 }
@@ -159,8 +158,13 @@ async fn get_session_by_id() {
         session_id = session.id;
     }
 
-    let (status, json) =
-        send_request(state, Method::GET, &format!("/api/sessions/{session_id}"), None).await;
+    let (status, json) = send_request(
+        state,
+        Method::GET,
+        &format!("/api/sessions/{session_id}"),
+        None,
+    )
+    .await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["id"], session_id);
@@ -170,8 +174,7 @@ async fn get_session_by_id() {
 #[tokio::test]
 async fn get_nonexistent_session_returns_404() {
     let (_tmp, state) = make_test_state();
-    let (status, json) =
-        send_request(state, Method::GET, "/api/sessions/nonexistent", None).await;
+    let (status, json) = send_request(state, Method::GET, "/api/sessions/nonexistent", None).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(json["error"].as_str().is_some());

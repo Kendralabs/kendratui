@@ -130,15 +130,15 @@ impl ConfigLoader {
         if let Ok(model) = std::env::var("OPENDEV_MODEL") {
             config.model = model;
         }
-        if let Ok(val) = std::env::var("OPENDEV_MAX_TOKENS") {
-            if let Ok(max_tokens) = val.parse() {
-                config.max_tokens = max_tokens;
-            }
+        if let Ok(val) = std::env::var("OPENDEV_MAX_TOKENS")
+            && let Ok(max_tokens) = val.parse()
+        {
+            config.max_tokens = max_tokens;
         }
-        if let Ok(val) = std::env::var("OPENDEV_TEMPERATURE") {
-            if let Ok(temp) = val.parse() {
-                config.temperature = temp;
-            }
+        if let Ok(val) = std::env::var("OPENDEV_TEMPERATURE")
+            && let Ok(temp) = val.parse()
+        {
+            config.temperature = temp;
         }
         if let Ok(val) = std::env::var("OPENDEV_VERBOSE") {
             config.verbose = val == "1" || val.eq_ignore_ascii_case("true");

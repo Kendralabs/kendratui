@@ -11,15 +11,11 @@ use serde::{Deserialize, Serialize};
 /// Whether to interact with a local or remote Docker daemon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RuntimeType {
+    #[default]
     Local,
     Remote,
-}
-
-impl Default for RuntimeType {
-    fn default() -> Self {
-        Self::Local
-    }
 }
 
 /// A single volume mount specification.
@@ -53,19 +49,15 @@ fn default_protocol() -> String {
 /// Status of a Docker container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ContainerStatus {
     Created,
     Running,
     Paused,
     Stopped,
     Removing,
+    #[default]
     Unknown,
-}
-
-impl Default for ContainerStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Specification for creating a container (image, resources, mounts, …).
@@ -253,19 +245,15 @@ pub struct CloseSessionResponse {
 /// How to handle non-zero exit codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum CheckMode {
     /// Raise an error on non-zero exit.
     Raise,
     /// Return the result silently.
+    #[default]
     Silent,
     /// Skip exit-code checking entirely.
     Ignore,
-}
-
-impl Default for CheckMode {
-    fn default() -> Self {
-        Self::Silent
-    }
 }
 
 /// Action to execute in a bash session.

@@ -70,7 +70,10 @@ async fn pre_tool_hook_regex_matcher_selectively_blocks() {
         .run_hooks(HookEvent::PreToolUse, Some("read_file"), None)
         .await;
     assert!(outcome.allowed());
-    assert!(outcome.results.is_empty(), "no hooks should run for non-matching tool");
+    assert!(
+        outcome.results.is_empty(),
+        "no hooks should run for non-matching tool"
+    );
 }
 
 // ========================================================================
@@ -212,9 +215,9 @@ async fn multiple_hooks_short_circuit_on_block() {
     // First hook blocks
     config.add_matcher(
         HookEvent::PreToolUse,
-        HookMatcher::catch_all(vec![
-            HookCommand::new(r#"echo '{"reason":"first blocks"}' && exit 2"#),
-        ]),
+        HookMatcher::catch_all(vec![HookCommand::new(
+            r#"echo '{"reason":"first blocks"}' && exit 2"#,
+        )]),
     );
     // Second hook would succeed (but should never run)
     config.add_matcher(
@@ -250,11 +253,7 @@ async fn stdin_payload_includes_all_fields() {
     });
 
     let outcome = manager
-        .run_hooks(
-            HookEvent::PreToolUse,
-            Some("bash"),
-            Some(&event_data),
-        )
+        .run_hooks(HookEvent::PreToolUse, Some("bash"), Some(&event_data))
         .await;
 
     let stdout = &outcome.results[0].stdout;

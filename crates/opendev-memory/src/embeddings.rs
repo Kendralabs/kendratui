@@ -79,9 +79,7 @@ impl EmbeddingCache {
         let cache_map: serde_json::Map<String, serde_json::Value> = self
             .cache
             .iter()
-            .map(|(key, meta)| {
-                (key.clone(), serde_json::to_value(meta).unwrap_or_default())
-            })
+            .map(|(key, meta)| (key.clone(), serde_json::to_value(meta).unwrap_or_default()))
             .collect();
         serde_json::json!({
             "model": self.model,
@@ -114,8 +112,7 @@ impl EmbeddingCache {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let json = serde_json::to_string_pretty(&self.to_dict())
-            .map_err(std::io::Error::other)?;
+        let json = serde_json::to_string_pretty(&self.to_dict()).map_err(std::io::Error::other)?;
         std::fs::write(path, json)
     }
 

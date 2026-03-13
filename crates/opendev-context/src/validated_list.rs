@@ -110,10 +110,10 @@ impl ValidatedMessageList {
         if let Some(tcs) = tool_calls {
             let mut pending = self.pending_tool_ids.lock().unwrap();
             for tc in &tcs {
-                if let Some(id) = tc.get("id").and_then(|v| v.as_str()) {
-                    if !id.is_empty() {
-                        pending.insert(id.to_string());
-                    }
+                if let Some(id) = tc.get("id").and_then(|v| v.as_str())
+                    && !id.is_empty()
+                {
+                    pending.insert(id.to_string());
                 }
             }
             msg.insert("tool_calls".to_string(), serde_json::Value::Array(tcs));
@@ -192,10 +192,7 @@ impl ValidatedMessageList {
                 "tool_call_id".to_string(),
                 serde_json::Value::String(tc_id.to_string()),
             );
-            msg.insert(
-                "content".to_string(),
-                serde_json::Value::String(content),
-            );
+            msg.insert("content".to_string(), serde_json::Value::String(content));
             drop(pending);
             self.messages.push(msg);
             pending = self.pending_tool_ids.lock().unwrap();
@@ -216,17 +213,17 @@ impl ValidatedMessageList {
             if role == "assistant" {
                 if let Some(tcs) = msg.get("tool_calls").and_then(|v| v.as_array()) {
                     for tc in tcs {
-                        if let Some(id) = tc.get("id").and_then(|v| v.as_str()) {
-                            if !id.is_empty() {
-                                expected.insert(id.to_string());
-                            }
+                        if let Some(id) = tc.get("id").and_then(|v| v.as_str())
+                            && !id.is_empty()
+                        {
+                            expected.insert(id.to_string());
                         }
                     }
                 }
-            } else if role == "tool" {
-                if let Some(id) = msg.get("tool_call_id").and_then(|v| v.as_str()) {
-                    expected.remove(id);
-                }
+            } else if role == "tool"
+                && let Some(id) = msg.get("tool_call_id").and_then(|v| v.as_str())
+            {
+                expected.remove(id);
             }
         }
         *self.pending_tool_ids.lock().unwrap() = expected;
@@ -253,10 +250,7 @@ impl ValidatedMessageList {
                 "role".to_string(),
                 serde_json::Value::String("tool".to_string()),
             );
-            msg.insert(
-                "tool_call_id".to_string(),
-                serde_json::Value::String(tc_id),
-            );
+            msg.insert("tool_call_id".to_string(), serde_json::Value::String(tc_id));
             msg.insert(
                 "content".to_string(),
                 serde_json::Value::String(SYNTHETIC_TOOL_RESULT.to_string()),
@@ -314,10 +308,7 @@ mod tests {
 
         // Check synthetic result was inserted
         let tool_msg = &list.messages()[1];
-        assert_eq!(
-            tool_msg.get("role").and_then(|v| v.as_str()),
-            Some("tool")
-        );
+        assert_eq!(tool_msg.get("role").and_then(|v| v.as_str()), Some("tool"));
         assert_eq!(
             tool_msg.get("content").and_then(|v| v.as_str()),
             Some(SYNTHETIC_TOOL_RESULT)

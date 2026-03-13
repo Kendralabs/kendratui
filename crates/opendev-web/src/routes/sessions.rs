@@ -78,9 +78,7 @@ pub fn router() -> Router<AppState> {
 }
 
 /// List all sessions.
-async fn list_sessions(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, WebError> {
+async fn list_sessions(State(state): State<AppState>) -> Result<Json<serde_json::Value>, WebError> {
     let mgr = state.session_manager().await;
     let index = mgr.index().read_index();
 
@@ -119,38 +117,38 @@ async fn create_session(
     let mut mgr = state.session_manager_mut().await;
 
     // Try to reuse an existing empty session for the same workspace.
-    if let Some(ref wd) = requested_wd {
-        if let Some(index) = mgr.index().read_index() {
-            let empty_match = index.entries.iter().find(|entry| {
-                entry.message_count == 0
-                    && entry
-                        .working_directory
-                        .as_deref()
-                        .map(|d| d == wd.as_str())
-                        .unwrap_or(false)
-            });
+    if let Some(ref wd) = requested_wd
+        && let Some(index) = mgr.index().read_index()
+    {
+        let empty_match = index.entries.iter().find(|entry| {
+            entry.message_count == 0
+                && entry
+                    .working_directory
+                    .as_deref()
+                    .map(|d| d == wd.as_str())
+                    .unwrap_or(false)
+        });
 
-            if let Some(entry) = empty_match {
-                let candidate_id = entry.session_id.clone();
+        if let Some(entry) = empty_match {
+            let candidate_id = entry.session_id.clone();
 
-                // Guard against stale index: if the candidate is already the
-                // current session with in-memory messages, skip reuse.
-                let is_stale = mgr
-                    .current_session()
-                    .map(|s| s.id == candidate_id && !s.messages.is_empty())
-                    .unwrap_or(false);
+            // Guard against stale index: if the candidate is already the
+            // current session with in-memory messages, skip reuse.
+            let is_stale = mgr
+                .current_session()
+                .map(|s| s.id == candidate_id && !s.messages.is_empty())
+                .unwrap_or(false);
 
-                if !is_stale {
-                    // Try to load and resume the candidate session.
-                    if mgr.resume_session(&candidate_id).is_ok() {
-                        return Ok(Json(serde_json::json!({
-                            "id": candidate_id,
-                            "status": "reused",
-                            "message": "Reusing existing empty session",
-                        })));
-                    }
-                    // If load fails (e.g. file deleted), fall through to create new.
+            if !is_stale {
+                // Try to load and resume the candidate session.
+                if mgr.resume_session(&candidate_id).is_ok() {
+                    return Ok(Json(serde_json::json!({
+                        "id": candidate_id,
+                        "status": "reused",
+                        "message": "Reusing existing empty session",
+                    })));
                 }
+                // If load fails (e.g. file deleted), fall through to create new.
             }
         }
     }
@@ -160,16 +158,15 @@ async fn create_session(
     let session_id = session.id.clone();
 
     // Set working directory if provided.
-    if let Some(wd) = requested_wd {
-        if let Some(session) = mgr.current_session_mut() {
-            session.working_directory = Some(wd);
-        }
+    if let Some(wd) = requested_wd
+        && let Some(session) = mgr.current_session_mut()
+    {
+        session.working_directory = Some(wd);
     }
 
     // Save the new session.
-    mgr.save_current().map_err(|e| {
-        WebError::Internal(format!("Failed to save session: {}", e))
-    })?;
+    mgr.save_current()
+        .map_err(|e| WebError::Internal(format!("Failed to save session: {}", e)))?;
 
     Ok(Json(serde_json::json!({
         "id": session_id,
@@ -183,11 +180,11 @@ async fn get_session(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<serde_json::Value>, WebError> {
     let mgr = state.session_manager().await;
-    let session = mgr.load_session(&id).map_err(|e| {
-        WebError::NotFound(format!("Session {} not found: {}", id, e))
-    })?;
+    let session = mgr
+        .load_session(&id)
+        .map_err(|e| WebError::NotFound(format!("Session {} not found: {}", id, e)))?;
 
-    Ok(Json(serde_json::to_value(&session.get_metadata()).map_err(
+    Ok(Json(serde_json::to_value(session.get_metadata()).map_err(
         |e| WebError::Internal(format!("Failed to serialize session: {}", e)),
     )?))
 }
@@ -200,9 +197,8 @@ async fn delete_session(
     let mut mgr = state.session_manager_mut().await;
 
     // Check session exists.
-    mgr.load_session(&id).map_err(|e| {
-        WebError::NotFound(format!("Session {} not found: {}", id, e))
-    })?;
+    mgr.load_session(&id)
+        .map_err(|e| WebError::NotFound(format!("Session {} not found: {}", id, e)))?;
 
     // Delete session files (.json, .jsonl).
     let session_dir = mgr.session_dir().to_path_buf();
@@ -211,9 +207,8 @@ async fn delete_session(
     let debug_path = session_dir.join(format!("{}.debug", id));
 
     if json_path.exists() {
-        std::fs::remove_file(&json_path).map_err(|e| {
-            WebError::Internal(format!("Failed to delete session file: {}", e))
-        })?;
+        std::fs::remove_file(&json_path)
+            .map_err(|e| WebError::Internal(format!("Failed to delete session file: {}", e)))?;
     }
     if jsonl_path.exists() {
         std::fs::remove_file(&jsonl_path).map_err(|e| {
@@ -225,16 +220,12 @@ async fn delete_session(
     }
 
     // Remove from index.
-    mgr.index().remove_entry(&id).map_err(|e| {
-        WebError::Internal(format!("Failed to update index: {}", e))
-    })?;
+    mgr.index()
+        .remove_entry(&id)
+        .map_err(|e| WebError::Internal(format!("Failed to update index: {}", e)))?;
 
     // Clear current session if it was the deleted one.
-    if mgr
-        .current_session()
-        .map(|s| s.id == id)
-        .unwrap_or(false)
-    {
+    if mgr.current_session().map(|s| s.id == id).unwrap_or(false) {
         mgr.set_current_session(opendev_models::Session::new());
     }
 
@@ -250,9 +241,8 @@ async fn resume_session(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<serde_json::Value>, WebError> {
     let mut mgr = state.session_manager_mut().await;
-    mgr.resume_session(&id).map_err(|e| {
-        WebError::NotFound(format!("Session {} not found: {}", id, e))
-    })?;
+    mgr.resume_session(&id)
+        .map_err(|e| WebError::NotFound(format!("Session {} not found: {}", id, e)))?;
 
     Ok(Json(serde_json::json!({
         "status": "resumed",
@@ -266,9 +256,9 @@ async fn get_session_messages(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<serde_json::Value>, WebError> {
     let mgr = state.session_manager().await;
-    let session = mgr.load_session(&id).map_err(|e| {
-        WebError::NotFound(format!("Session {} not found: {}", id, e))
-    })?;
+    let session = mgr
+        .load_session(&id)
+        .map_err(|e| WebError::NotFound(format!("Session {} not found: {}", id, e)))?;
 
     let messages: Vec<serde_json::Value> = session
         .messages
@@ -287,9 +277,7 @@ async fn get_session_messages(
 }
 
 /// Get bridge mode status.
-async fn get_bridge_info(
-    State(_state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn get_bridge_info(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // Bridge mode is not yet implemented in the Rust port.
     // Return a default non-bridge response.
     Json(serde_json::json!({
@@ -413,12 +401,7 @@ async fn verify_path(
     State(_state): State<AppState>,
     Json(payload): Json<VerifyPathRequest>,
 ) -> Json<serde_json::Value> {
-    let path_str = payload
-        .path
-        .as_deref()
-        .unwrap_or("")
-        .trim()
-        .to_string();
+    let path_str = payload.path.as_deref().unwrap_or("").trim().to_string();
 
     if path_str.is_empty() {
         return Json(serde_json::json!({
@@ -466,9 +449,7 @@ async fn verify_path(
         }));
     }
 
-    let canonical = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf());
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
     Json(serde_json::json!({
         "exists": true,
@@ -504,9 +485,7 @@ async fn browse_directory(
         std::path::PathBuf::from(expanded)
     };
 
-    let target = target
-        .canonicalize()
-        .unwrap_or_else(|_| target.clone());
+    let target = target.canonicalize().unwrap_or_else(|_| target.clone());
 
     if !target.exists() {
         return Json(serde_json::json!({
@@ -587,9 +566,9 @@ async fn get_session_model(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<serde_json::Value>, WebError> {
     let mgr = state.session_manager().await;
-    let session = mgr.load_session(&id).map_err(|e| {
-        WebError::NotFound(format!("Session {} not found: {}", id, e))
-    })?;
+    let session = mgr
+        .load_session(&id)
+        .map_err(|e| WebError::NotFound(format!("Session {} not found: {}", id, e)))?;
 
     let overlay = session
         .metadata
@@ -608,9 +587,9 @@ async fn update_session_model(
 ) -> Result<Json<serde_json::Value>, WebError> {
     let mgr = state.session_manager().await;
 
-    let mut session = mgr.load_session(&id).map_err(|e| {
-        WebError::NotFound(format!("Session {} not found: {}", id, e))
-    })?;
+    let mut session = mgr
+        .load_session(&id)
+        .map_err(|e| WebError::NotFound(format!("Session {} not found: {}", id, e)))?;
 
     // Build overlay from non-None fields.
     let mut overlay = serde_json::Map::new();
@@ -646,9 +625,7 @@ async fn update_session_model(
     }
 
     if overlay.is_empty() {
-        return Err(WebError::BadRequest(
-            "No model fields provided".to_string(),
-        ));
+        return Err(WebError::BadRequest("No model fields provided".to_string()));
     }
 
     // Store overlay in session metadata.
@@ -657,9 +634,8 @@ async fn update_session_model(
         serde_json::Value::Object(overlay),
     );
 
-    mgr.save_session(&session).map_err(|e| {
-        WebError::Internal(format!("Failed to save session: {}", e))
-    })?;
+    mgr.save_session(&session)
+        .map_err(|e| WebError::Internal(format!("Failed to save session: {}", e)))?;
 
     Ok(Json(serde_json::json!({
         "status": "success",
@@ -674,15 +650,14 @@ async fn clear_session_model(
 ) -> Result<Json<serde_json::Value>, WebError> {
     let mgr = state.session_manager().await;
 
-    let mut session = mgr.load_session(&id).map_err(|e| {
-        WebError::NotFound(format!("Session {} not found: {}", id, e))
-    })?;
+    let mut session = mgr
+        .load_session(&id)
+        .map_err(|e| WebError::NotFound(format!("Session {} not found: {}", id, e)))?;
 
     session.metadata.remove("session_model");
 
-    mgr.save_session(&session).map_err(|e| {
-        WebError::Internal(format!("Failed to save session: {}", e))
-    })?;
+    mgr.save_session(&session)
+        .map_err(|e| WebError::Internal(format!("Failed to save session: {}", e)))?;
 
     Ok(Json(serde_json::json!({
         "status": "success",
@@ -714,7 +689,13 @@ mod tests {
         let config = AppConfig::default();
         let user_store = UserStore::new(tmp.to_path_buf()).unwrap();
         let model_registry = ModelRegistry::new();
-        AppState::new(session_manager, config, "/tmp/test".to_string(), user_store, model_registry)
+        AppState::new(
+            session_manager,
+            config,
+            "/tmp/test".to_string(),
+            user_store,
+            model_registry,
+        )
     }
 
     #[tokio::test]
@@ -749,9 +730,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/sessions")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"working_directory":"/workspace/project"}"#,
-                    ))
+                    .body(Body::from(r#"{"working_directory":"/workspace/project"}"#))
                     .unwrap(),
             )
             .await
@@ -1000,9 +979,7 @@ mod tests {
                     .method("PUT")
                     .uri(format!("/api/sessions/{}/model", session_id))
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"model_provider":"openai","model":"gpt-4"}"#,
-                    ))
+                    .body(Body::from(r#"{"model_provider":"openai","model":"gpt-4"}"#))
                     .unwrap(),
             )
             .await

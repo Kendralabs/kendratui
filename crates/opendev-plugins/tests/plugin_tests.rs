@@ -1,7 +1,7 @@
 //! Comprehensive tests for the opendev-plugins crate.
 
-use opendev_plugins::models::*;
 use opendev_plugins::manager::*;
+use opendev_plugins::models::*;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -38,7 +38,11 @@ fn create_plugin_dir(base: &std::path::Path, name: &str, version: &str) -> PathB
         "dependencies": [],
         "skills": ["skill_a"]
     });
-    fs::write(dir.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+    fs::write(
+        dir.join("manifest.json"),
+        serde_json::to_string_pretty(&manifest).unwrap(),
+    )
+    .unwrap();
     dir
 }
 
@@ -209,7 +213,11 @@ fn test_discover_plugins_project_and_global() {
     fs::create_dir_all(&manager.paths.global_plugins_dir).unwrap();
     fs::create_dir_all(&manager.paths.project_plugins_dir).unwrap();
     create_plugin_dir(&manager.paths.global_plugins_dir, "global-plugin", "1.0.0");
-    create_plugin_dir(&manager.paths.project_plugins_dir, "project-plugin", "1.0.0");
+    create_plugin_dir(
+        &manager.paths.project_plugins_dir,
+        "project-plugin",
+        "1.0.0",
+    );
 
     let manifests = manager.discover_plugins().unwrap();
     assert_eq!(manifests.len(), 2);
@@ -473,7 +481,9 @@ fn test_search_marketplace() {
     );
     manager.save_known_marketplaces(&marketplaces).unwrap();
 
-    let results = manager.search_marketplace(marketplace_name, "lint").unwrap();
+    let results = manager
+        .search_marketplace(marketplace_name, "lint")
+        .unwrap();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].name, "linter");
 
@@ -505,7 +515,7 @@ fn test_extract_name_from_url() {
     );
     assert_eq!(
         PluginManager::extract_name_from_url("https://github.com/user/swecli-marketplace"),
-        "marketplace"  // swecli- prefix removed -> "marketplace"; -marketplace$ doesn't match
+        "marketplace" // swecli- prefix removed -> "marketplace"; -marketplace$ doesn't match
     );
     assert_eq!(
         PluginManager::extract_name_from_url("https://github.com/user/awesome-tools"),
@@ -663,7 +673,9 @@ fn test_list_installed_merges_scopes() {
     user_plugins.add(PluginConfig {
         name: "user-plug".into(),
         version: "1.0.0".into(),
-        source: PluginSource::Local { path: PathBuf::from("/tmp") },
+        source: PluginSource::Local {
+            path: PathBuf::from("/tmp"),
+        },
         status: PluginStatus::Installed,
         scope: PluginScope::User,
         enabled: true,
@@ -671,14 +683,18 @@ fn test_list_installed_merges_scopes() {
         installed_at: chrono::Utc::now(),
         marketplace: Some("local".into()),
     });
-    manager.save_installed_plugins(&user_plugins, PluginScope::User).unwrap();
+    manager
+        .save_installed_plugins(&user_plugins, PluginScope::User)
+        .unwrap();
 
     // Add a project-scope plugin
     let mut project_plugins = InstalledPlugins::default();
     project_plugins.add(PluginConfig {
         name: "project-plug".into(),
         version: "1.0.0".into(),
-        source: PluginSource::Local { path: PathBuf::from("/tmp") },
+        source: PluginSource::Local {
+            path: PathBuf::from("/tmp"),
+        },
         status: PluginStatus::Installed,
         scope: PluginScope::Project,
         enabled: true,
@@ -686,7 +702,9 @@ fn test_list_installed_merges_scopes() {
         installed_at: chrono::Utc::now(),
         marketplace: Some("local".into()),
     });
-    manager.save_installed_plugins(&project_plugins, PluginScope::Project).unwrap();
+    manager
+        .save_installed_plugins(&project_plugins, PluginScope::Project)
+        .unwrap();
 
     // List all
     let all = manager.list_installed(None).unwrap();

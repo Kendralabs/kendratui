@@ -7,8 +7,8 @@
 use axum::extract::State;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use axum_extra::extract::cookie::{Cookie, SameSite};
 use axum_extra::extract::CookieJar;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 
 use crate::error::WebError;
@@ -60,11 +60,9 @@ fn secret_key() -> &'static [u8] {
     // Allow override via env at startup. We leak a small allocation so
     // the reference is 'static — acceptable for a single-value config.
     static KEY: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new();
-    KEY.get_or_init(|| {
-        match std::env::var("OPENDEV_SECRET_KEY") {
-            Ok(val) => Box::leak(val.into_bytes().into_boxed_slice()) as &[u8],
-            Err(_) => b"change-me-in-production",
-        }
+    KEY.get_or_init(|| match std::env::var("OPENDEV_SECRET_KEY") {
+        Ok(val) => Box::leak(val.into_bytes().into_boxed_slice()) as &[u8],
+        Err(_) => b"change-me-in-production",
     })
 }
 
@@ -79,13 +77,14 @@ pub fn create_token(user_id: &str) -> String {
         iat: chrono::Utc::now().timestamp(),
     };
     let payload_json = serde_json::to_string(&payload).expect("serialize token payload");
-    let payload_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload_json.as_bytes());
+    let payload_b64 =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload_json.as_bytes());
 
     let mut mac =
         Hmac::<Sha256>::new_from_slice(secret_key()).expect("HMAC can take key of any size");
     mac.update(payload_b64.as_bytes());
     let sig = mac.finalize().into_bytes();
-    let sig_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&sig);
+    let sig_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig);
 
     format!("{}.{}", payload_b64, sig_b64)
 }
@@ -134,9 +133,9 @@ pub fn verify_token(token: &str) -> Result<String, WebError> {
 
 /// Hash a password using Argon2id.
 fn hash_password(password: &str) -> Result<String, WebError> {
+    use argon2::{Argon2, PasswordHasher};
     use password_hash::SaltString;
     use rand_core::OsRng;
-    use argon2::{Argon2, PasswordHasher};
 
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();

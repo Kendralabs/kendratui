@@ -46,10 +46,7 @@ impl BaseTool for PatchTool {
             None => return ToolResult::fail("patch is required"),
         };
 
-        let strip = args
-            .get("strip")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as usize;
+        let strip = args.get("strip").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
 
         let cwd = &ctx.working_dir;
 
@@ -225,11 +222,7 @@ fn parse_hunk_header(line: &str) -> Option<HunkBuilder> {
         return None;
     }
     let old_range = parts[1].strip_prefix('-')?;
-    let old_start: usize = old_range
-        .split(',')
-        .next()?
-        .parse()
-        .ok()?;
+    let old_start: usize = old_range.split(',').next()?.parse().ok()?;
 
     Some(HunkBuilder {
         old_start,
@@ -276,8 +269,7 @@ fn apply_hunks(cwd: &Path, file: &str, hunks: &[Hunk]) -> Result<(), String> {
 
     // Write result
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Cannot create directory: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create directory: {e}"))?;
     }
 
     let content = file_lines.join("\n");
@@ -324,10 +316,7 @@ mod tests {
 
         let hunk = Hunk {
             old_start: 2,
-            lines: vec![
-                "-line2".to_string(),
-                "+line2_modified".to_string(),
-            ],
+            lines: vec!["-line2".to_string(), "+line2_modified".to_string()],
         };
 
         apply_hunks(tmp.path(), "test.txt", &[hunk]).unwrap();

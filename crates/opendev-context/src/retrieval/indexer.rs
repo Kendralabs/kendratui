@@ -65,13 +65,12 @@ impl CodebaseIndexer {
         }
 
         // README excerpt
-        if let Some(readme_path) = self.find_readme() {
-            if let Ok(content) = fs::read_to_string(&readme_path) {
-                if let Some(desc) = Self::extract_description(&content, 300) {
-                    lines.push(String::new());
-                    lines.push(desc);
-                }
-            }
+        if let Some(readme_path) = self.find_readme()
+            && let Ok(content) = fs::read_to_string(&readme_path)
+            && let Some(desc) = Self::extract_description(&content, 300)
+        {
+            lines.push(String::new());
+            lines.push(desc);
         }
 
         // Project type
@@ -142,14 +141,8 @@ impl CodebaseIndexer {
                     "Dockerfile",
                 ],
             ),
-            (
-                "Tests",
-                vec!["test_*.py", "*_test.py", "*_test.rs"],
-            ),
-            (
-                "Docs",
-                vec!["README.md", "CHANGELOG.md"],
-            ),
+            ("Tests", vec!["test_*.py", "*_test.py", "*_test.rs"]),
+            ("Docs", vec!["README.md", "CHANGELOG.md"]),
         ];
 
         for (category, patterns) in &categories {
@@ -192,41 +185,35 @@ impl CodebaseIndexer {
 
         // package.json
         let package_json = self.working_dir.join("package.json");
-        if let Ok(content) = fs::read_to_string(&package_json) {
-            if let Ok(data) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(obj) = data.get("dependencies").and_then(|d| d.as_object()) {
-                    let node_deps: Vec<String> =
-                        obj.keys().take(10).map(|k| k.to_string()).collect();
-                    if !node_deps.is_empty() {
-                        deps.push(("Node", node_deps));
-                    }
-                }
+        if let Ok(content) = fs::read_to_string(&package_json)
+            && let Ok(data) = serde_json::from_str::<serde_json::Value>(&content)
+            && let Some(obj) = data.get("dependencies").and_then(|d| d.as_object())
+        {
+            let node_deps: Vec<String> = obj.keys().take(10).map(|k| k.to_string()).collect();
+            if !node_deps.is_empty() {
+                deps.push(("Node", node_deps));
             }
         }
 
         // Cargo.toml
         let cargo_toml = self.working_dir.join("Cargo.toml");
-        if cargo_toml.exists() {
-            if let Ok(content) = fs::read_to_string(&cargo_toml) {
-                let rust_deps: Vec<String> = content
-                    .lines()
-                    .filter(|line| {
-                        let trimmed = line.trim();
-                        trimmed.contains(" = ") && !trimmed.starts_with('[') && !trimmed.starts_with('#')
-                    })
-                    .take(10)
-                    .map(|line| {
-                        line.split('=')
-                            .next()
-                            .unwrap_or("")
-                            .trim()
-                            .to_string()
-                    })
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                if !rust_deps.is_empty() {
-                    deps.push(("Rust", rust_deps));
-                }
+        if cargo_toml.exists()
+            && let Ok(content) = fs::read_to_string(&cargo_toml)
+        {
+            let rust_deps: Vec<String> = content
+                .lines()
+                .filter(|line| {
+                    let trimmed = line.trim();
+                    trimmed.contains(" = ")
+                        && !trimmed.starts_with('[')
+                        && !trimmed.starts_with('#')
+                })
+                .take(10)
+                .map(|line| line.split('=').next().unwrap_or("").trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !rust_deps.is_empty() {
+                deps.push(("Rust", rust_deps));
             }
         }
 
@@ -262,10 +249,7 @@ impl CodebaseIndexer {
         ];
 
         for (project_type, files) in indicators {
-            if files
-                .iter()
-                .any(|f| self.working_dir.join(f).exists())
-            {
+            if files.iter().any(|f| self.working_dir.join(f).exists()) {
                 return Some(project_type);
             }
         }
@@ -345,10 +329,10 @@ impl CodebaseIndexer {
             if let Some(name) = pattern.strip_prefix("*_") {
                 // Suffix pattern like *_test.py
                 self.walk_files(&self.working_dir, &mut |path| {
-                    if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
-                        if fname.ends_with(name) {
-                            matches.push(path.to_path_buf());
-                        }
+                    if let Some(fname) = path.file_name().and_then(|n| n.to_str())
+                        && fname.ends_with(name)
+                    {
+                        matches.push(path.to_path_buf());
                     }
                 });
             } else if pattern.contains('*') {
@@ -356,10 +340,11 @@ impl CodebaseIndexer {
                 let prefix = pattern.split('*').next().unwrap_or("");
                 let suffix = pattern.split('*').nth(1).unwrap_or("");
                 self.walk_files(&self.working_dir, &mut |path| {
-                    if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
-                        if fname.starts_with(prefix) && fname.ends_with(suffix) {
-                            matches.push(path.to_path_buf());
-                        }
+                    if let Some(fname) = path.file_name().and_then(|n| n.to_str())
+                        && fname.starts_with(prefix)
+                        && fname.ends_with(suffix)
+                    {
+                        matches.push(path.to_path_buf());
                     }
                 });
             } else {
@@ -423,7 +408,11 @@ mod tests {
     fn test_generate_index_with_temp_dir() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("main.py"), "print('hello')").unwrap();
-        fs::write(dir.path().join("README.md"), "# My Project\n\nA test project.").unwrap();
+        fs::write(
+            dir.path().join("README.md"),
+            "# My Project\n\nA test project.",
+        )
+        .unwrap();
 
         let indexer = CodebaseIndexer::new(dir.path());
         let index = indexer.generate_index(5000);
@@ -491,7 +480,11 @@ mod tests {
     #[test]
     fn test_generate_overview_with_readme() {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("README.md"), "# Title\n\nThis is the description.").unwrap();
+        fs::write(
+            dir.path().join("README.md"),
+            "# Title\n\nThis is the description.",
+        )
+        .unwrap();
 
         let indexer = CodebaseIndexer::new(dir.path());
         let overview = indexer.generate_overview();

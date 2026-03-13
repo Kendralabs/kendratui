@@ -15,11 +15,10 @@ impl TextUtils {
     ///
     /// Returns `None` if the position is out of bounds.
     pub fn position_to_offset(text: &str, pos: Position) -> Option<usize> {
-        let mut current_line = 0u32;
         let mut offset = 0usize;
 
-        for line_content in text.split('\n') {
-            if current_line == pos.line {
+        for (current_line, line_content) in text.split('\n').enumerate() {
+            if current_line as u32 == pos.line {
                 let col = pos.character as usize;
                 if col <= line_content.len() {
                     return Some(offset + col);
@@ -30,7 +29,6 @@ impl TextUtils {
             }
             // +1 for the newline character
             offset += line_content.len() + 1;
-            current_line += 1;
         }
 
         None
@@ -111,20 +109,14 @@ impl PathUtils {
         let absolute = if path.is_absolute() {
             path.to_path_buf()
         } else {
-            std::env::current_dir()
-                .unwrap_or_default()
-                .join(path)
+            std::env::current_dir().unwrap_or_default().join(path)
         };
         format!("file://{}", absolute.display())
     }
 
     /// Parse a file:// URI string into a path.
     pub fn uri_string_to_path(uri: &str) -> Option<PathBuf> {
-        if let Some(path_str) = uri.strip_prefix("file://") {
-            Some(PathBuf::from(path_str))
-        } else {
-            None
-        }
+        uri.strip_prefix("file://").map(PathBuf::from)
     }
 
     /// Normalize a path (resolve `.` and `..` without touching the filesystem).
@@ -156,9 +148,8 @@ pub struct FileUtils;
 impl FileUtils {
     /// Read a file to string, returning an error with context.
     pub fn read_to_string(path: &Path) -> Result<String, std::io::Error> {
-        std::fs::read_to_string(path).map_err(|e| {
-            std::io::Error::new(e.kind(), format!("{}: {}", path.display(), e))
-        })
+        std::fs::read_to_string(path)
+            .map_err(|e| std::io::Error::new(e.kind(), format!("{}: {}", path.display(), e)))
     }
 
     /// Write content to a file atomically (via tmp + rename).
@@ -170,9 +161,7 @@ impl FileUtils {
 
         let tmp_path = parent.join(format!(
             ".{}.tmp",
-            path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("file")
+            path.file_name().and_then(|n| n.to_str()).unwrap_or("file")
         ));
         std::fs::write(&tmp_path, content)?;
         std::fs::rename(&tmp_path, path)?;
@@ -191,8 +180,14 @@ mod tests {
         // "line zero\nline one\nline two\nline three"
         // line 0: 0..9  (line zero)
         // line 1: 10..17 (line one)
-        assert_eq!(TextUtils::position_to_offset(SAMPLE, Position::new(0, 0)), Some(0));
-        assert_eq!(TextUtils::position_to_offset(SAMPLE, Position::new(0, 4)), Some(4));
+        assert_eq!(
+            TextUtils::position_to_offset(SAMPLE, Position::new(0, 0)),
+            Some(0)
+        );
+        assert_eq!(
+            TextUtils::position_to_offset(SAMPLE, Position::new(0, 4)),
+            Some(4)
+        );
         assert_eq!(
             TextUtils::position_to_offset(SAMPLE, Position::new(1, 0)),
             Some(10)
@@ -232,10 +227,16 @@ mod tests {
     #[test]
     fn test_extract_range() {
         let range = SourceRange::new(Position::new(0, 5), Position::new(0, 9));
-        assert_eq!(TextUtils::extract_range(SAMPLE, &range), Some("zero".to_string()));
+        assert_eq!(
+            TextUtils::extract_range(SAMPLE, &range),
+            Some("zero".to_string())
+        );
 
         let range = SourceRange::new(Position::new(1, 5), Position::new(1, 8));
-        assert_eq!(TextUtils::extract_range(SAMPLE, &range), Some("one".to_string()));
+        assert_eq!(
+            TextUtils::extract_range(SAMPLE, &range),
+            Some("one".to_string())
+        );
     }
 
     #[test]
@@ -282,7 +283,10 @@ mod tests {
 
     #[test]
     fn test_extension() {
-        assert_eq!(PathUtils::extension(Path::new("foo.RS")), Some("rs".to_string()));
+        assert_eq!(
+            PathUtils::extension(Path::new("foo.RS")),
+            Some("rs".to_string())
+        );
         assert_eq!(PathUtils::extension(Path::new("no_ext")), None);
     }
 

@@ -90,11 +90,7 @@ impl BaseTool for BatchTool {
                 let tool_input = inv
                     .get("input")
                     .and_then(|v| v.as_object())
-                    .map(|obj| {
-                        obj.iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect()
-                    })
+                    .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
                     .unwrap_or_default();
                 (tool_name, tool_input)
             })

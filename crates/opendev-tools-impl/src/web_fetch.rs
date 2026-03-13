@@ -127,7 +127,10 @@ mod tests {
     use super::*;
 
     fn make_args(pairs: &[(&str, serde_json::Value)]) -> HashMap<String, serde_json::Value> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     #[tokio::test]
@@ -153,7 +156,10 @@ mod tests {
     async fn test_web_fetch_bad_host() {
         let tool = WebFetchTool;
         let ctx = ToolContext::new("/tmp");
-        let args = make_args(&[("url", serde_json::json!("http://this-host-does-not-exist-12345.invalid"))]);
+        let args = make_args(&[(
+            "url",
+            serde_json::json!("http://this-host-does-not-exist-12345.invalid"),
+        )]);
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
     }

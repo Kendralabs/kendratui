@@ -103,7 +103,11 @@ impl fmt::Display for ContextReason {
         } else {
             String::new()
         };
-        write!(f, "[{}]{}{}: {}", self.source, score_str, tokens_str, self.reason)
+        write!(
+            f,
+            "[{}]{}{}: {}",
+            self.source, score_str, tokens_str, self.reason
+        )
     }
 }
 
@@ -271,11 +275,7 @@ mod tests {
 
         // Without explicit tokens, estimate from content
         let reason2 = ContextReason::new("test", "test");
-        let piece2 = ContextPiece::new(
-            "x".repeat(400),
-            reason2,
-            ContextCategory::UserQuery,
-        );
+        let piece2 = ContextPiece::new("x".repeat(400), reason2, ContextCategory::UserQuery);
         assert_eq!(piece2.tokens_estimate(), 100);
     }
 

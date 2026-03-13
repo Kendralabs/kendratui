@@ -3,18 +3,15 @@
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
-use futures::stream::StreamExt;
 use futures::SinkExt;
+use futures::stream::StreamExt;
 use tracing::{debug, error, info, warn};
 
 use crate::protocol::WsMessageType;
 use crate::state::{AppState, WsBroadcast};
 
 /// WebSocket upgrade handler.
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
@@ -70,10 +67,7 @@ async fn handle_client_message(state: &AppState, text: &str) {
         }
     };
 
-    let msg_type_str = parsed
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let msg_type_str = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     let msg_type = WsMessageType::from_str_opt(msg_type_str);
 
@@ -265,7 +259,9 @@ async fn handle_approval(state: &AppState, data: &serde_json::Value) {
         return;
     }
 
-    let resolved = state.resolve_approval(approval_id, approved, auto_approve).await;
+    let resolved = state
+        .resolve_approval(approval_id, approved, auto_approve)
+        .await;
 
     if let Some(approval) = resolved {
         info!("Approval {} resolved: approved={}", approval_id, approved);
@@ -350,10 +346,7 @@ async fn handle_plan_approval_response(state: &AppState, data: &serde_json::Valu
         .await;
 
     if let Some(plan_approval) = resolved {
-        info!(
-            "Plan approval {} resolved: action={}",
-            request_id, action
-        );
+        info!("Plan approval {} resolved: action={}", request_id, action);
         state.broadcast(WsBroadcast {
             msg_type: WsMessageType::PlanApprovalResolved.as_str().to_string(),
             data: serde_json::json!({

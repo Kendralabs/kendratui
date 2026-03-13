@@ -100,14 +100,15 @@ impl MessagePairValidator {
                 .to_string();
 
             // Check consecutive same role (warning only, skip tool role)
-            if let Some(ref prev) = prev_role {
-                if *prev == role && role != "tool" {
-                    result.violations.push(Violation {
-                        violation_type: ViolationType::ConsecutiveSameRole,
-                        index: i,
-                        detail: format!("Consecutive '{}' at index {}", role, i),
-                    });
-                }
+            if let Some(ref prev) = prev_role
+                && *prev == role
+                && role != "tool"
+            {
+                result.violations.push(Violation {
+                    violation_type: ViolationType::ConsecutiveSameRole,
+                    index: i,
+                    detail: format!("Consecutive '{}' at index {}", role, i),
+                });
             }
 
             if role == "assistant" {
@@ -128,10 +129,7 @@ impl MessagePairValidator {
                     result.violations.push(Violation {
                         violation_type: ViolationType::OrphanedToolResult,
                         index: i,
-                        detail: format!(
-                            "Orphaned tool result for id={} at index {}",
-                            tc_id, i
-                        ),
+                        detail: format!("Orphaned tool result for id={} at index {}", tc_id, i),
                     });
                 }
             }
@@ -183,10 +181,7 @@ impl MessagePairValidator {
                     let rest = &v.detail[pos + 3..];
                     let tc_id: String = rest.chars().take_while(|c| *c != ' ').collect();
                     if !tc_id.is_empty() {
-                        missing_by_assistant
-                            .entry(v.index)
-                            .or_default()
-                            .push(tc_id);
+                        missing_by_assistant.entry(v.index).or_default().push(tc_id);
                     }
                 }
             }
@@ -326,10 +321,12 @@ mod tests {
         ];
         let result = MessagePairValidator::validate(&messages);
         assert!(!result.is_valid());
-        assert!(result
-            .violations
-            .iter()
-            .any(|v| v.violation_type == ViolationType::MissingToolResult));
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.violation_type == ViolationType::MissingToolResult)
+        );
     }
 
     #[test]
@@ -341,23 +338,24 @@ mod tests {
         ];
         let result = MessagePairValidator::validate(&messages);
         assert!(!result.is_valid());
-        assert!(result
-            .violations
-            .iter()
-            .any(|v| v.violation_type == ViolationType::OrphanedToolResult));
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.violation_type == ViolationType::OrphanedToolResult)
+        );
     }
 
     #[test]
     fn test_consecutive_same_role() {
-        let messages = vec![
-            make_msg("user", "hello"),
-            make_msg("user", "hello again"),
-        ];
+        let messages = vec![make_msg("user", "hello"), make_msg("user", "hello again")];
         let result = MessagePairValidator::validate(&messages);
-        assert!(result
-            .violations
-            .iter()
-            .any(|v| v.violation_type == ViolationType::ConsecutiveSameRole));
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.violation_type == ViolationType::ConsecutiveSameRole)
+        );
     }
 
     #[test]
@@ -371,10 +369,12 @@ mod tests {
         ];
         let result = MessagePairValidator::validate(&messages);
         // Should not have ConsecutiveSameRole for tool messages
-        assert!(!result
-            .violations
-            .iter()
-            .any(|v| v.violation_type == ViolationType::ConsecutiveSameRole));
+        assert!(
+            !result
+                .violations
+                .iter()
+                .any(|v| v.violation_type == ViolationType::ConsecutiveSameRole)
+        );
     }
 
     #[test]
@@ -388,11 +388,9 @@ mod tests {
         let (repaired, vr) = MessagePairValidator::repair(&messages);
         assert!(vr.repaired);
         // Should have inserted synthetic result
-        let has_synthetic = repaired.iter().any(|m| {
-            m.get("content")
-                .and_then(|v| v.as_str())
-                == Some(SYNTHETIC_TOOL_RESULT)
-        });
+        let has_synthetic = repaired
+            .iter()
+            .any(|m| m.get("content").and_then(|v| v.as_str()) == Some(SYNTHETIC_TOOL_RESULT));
         assert!(has_synthetic);
     }
 
@@ -421,9 +419,6 @@ mod tests {
 
         MessagePairValidator::validate_tool_results_complete(&tool_calls, &mut results);
         assert!(results.contains_key("tc-2"));
-        assert_eq!(
-            results["tc-2"]["synthetic"].as_bool(),
-            Some(true)
-        );
+        assert_eq!(results["tc-2"]["synthetic"].as_bool(), Some(true));
     }
 }

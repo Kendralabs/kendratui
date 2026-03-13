@@ -41,13 +41,11 @@ pub fn router() -> Router<AppState> {
 }
 
 /// Get messages for the current session.
-async fn get_messages(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, WebError> {
+async fn get_messages(State(state): State<AppState>) -> Result<Json<serde_json::Value>, WebError> {
     let mgr = state.session_manager().await;
-    let session = mgr.current_session().ok_or_else(|| {
-        WebError::NotFound("No active session".to_string())
-    })?;
+    let session = mgr
+        .current_session()
+        .ok_or_else(|| WebError::NotFound("No active session".to_string()))?;
 
     let messages: Vec<serde_json::Value> = session
         .messages
@@ -79,28 +77,20 @@ async fn send_query(
     // Case 1: Empty message.
     let message = payload.message.trim().to_string();
     if message.is_empty() {
-        return Err(WebError::BadRequest(
-            "Message cannot be empty.".to_string(),
-        ));
+        return Err(WebError::BadRequest("Message cannot be empty.".to_string()));
     }
 
     // Resolve session ID.
     let session_id = match payload.session_id {
         Some(id) => id,
-        None => state
-            .current_session_id()
-            .await
-            .ok_or_else(|| {
-                WebError::BadRequest("No active session. Create a session first.".to_string())
-            })?,
+        None => state.current_session_id().await.ok_or_else(|| {
+            WebError::BadRequest("No active session. Create a session first.".to_string())
+        })?,
     };
 
     // Case 2: Session already running -> inject into live queue.
     if state.is_session_running(&session_id).await {
-        match state
-            .try_inject_message(&session_id, message.clone())
-            .await
-        {
+        match state.try_inject_message(&session_id, message.clone()).await {
             Ok(()) => {
                 // Broadcast the injected user message.
                 state.broadcast(WsBroadcast {
@@ -206,17 +196,15 @@ async fn clear_chat(
     let session_id = session.id.clone();
 
     // Set working directory if provided.
-    if let Some(Json(req)) = body {
-        if let Some(wd) = req.workspace {
-            if let Some(session) = mgr.current_session_mut() {
-                session.working_directory = Some(wd);
-            }
-        }
+    if let Some(Json(req)) = body
+        && let Some(wd) = req.workspace
+        && let Some(session) = mgr.current_session_mut()
+    {
+        session.working_directory = Some(wd);
     }
 
-    mgr.save_current().map_err(|e| {
-        WebError::Internal(format!("Failed to save new session: {}", e))
-    })?;
+    mgr.save_current()
+        .map_err(|e| WebError::Internal(format!("Failed to save new session: {}", e)))?;
 
     Ok(Json(serde_json::json!({
         "status": "success",
@@ -244,7 +232,13 @@ mod tests {
         let config = AppConfig::default();
         let user_store = UserStore::new(tmp_path).unwrap();
         let model_registry = ModelRegistry::new();
-        AppState::new(session_manager, config, "/tmp/test".to_string(), user_store, model_registry)
+        AppState::new(
+            session_manager,
+            config,
+            "/tmp/test".to_string(),
+            user_store,
+            model_registry,
+        )
     }
 
     #[tokio::test]
@@ -367,9 +361,7 @@ mod tests {
             session_id: None,
         };
 
-        let rx = state
-            .add_pending_approval("a1".to_string(), approval)
-            .await;
+        let rx = state.add_pending_approval("a1".to_string(), approval).await;
 
         let app = crate::server::build_app(state, None);
         let response = app

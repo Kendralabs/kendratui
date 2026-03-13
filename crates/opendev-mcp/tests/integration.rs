@@ -88,10 +88,7 @@ fn jsonrpc_response_with_result() {
     assert_eq!(resp.id, Some(1));
     assert!(resp.result.is_some());
     assert!(resp.error.is_none());
-    assert_eq!(
-        resp.result.unwrap()["serverInfo"]["name"],
-        "test"
-    );
+    assert_eq!(resp.result.unwrap()["serverInfo"]["name"], "test");
 }
 
 /// JsonRpcResponse with error deserializes correctly.

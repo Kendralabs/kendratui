@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use super::file_finder::FileFinder;
 use super::{CompletionItem, CompletionKind};
-use crate::controllers::{SlashCommand, BUILTIN_COMMANDS};
+use crate::controllers::{BUILTIN_COMMANDS, SlashCommand};
 
 // ── Completer trait ────────────────────────────────────────────────
 
@@ -87,11 +87,7 @@ impl Completer for FileCompleter {
         paths
             .into_iter()
             .map(|rel| {
-                let is_dir = self
-                    .finder
-                    .working_dir()
-                    .join(&rel)
-                    .is_dir();
+                let is_dir = self.finder.working_dir().join(&rel).is_dir();
                 let display = if is_dir {
                     format!("{}/", rel.display())
                 } else {

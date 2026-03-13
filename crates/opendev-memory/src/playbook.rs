@@ -124,12 +124,7 @@ impl Playbook {
     }
 
     /// Tag a bullet to update its counters.
-    pub fn tag_bullet(
-        &mut self,
-        bullet_id: &str,
-        tag: &str,
-        increment: i64,
-    ) -> Option<&Bullet> {
+    pub fn tag_bullet(&mut self, bullet_id: &str, tag: &str, increment: i64) -> Option<&Bullet> {
         let bullet = self.bullets.get_mut(bullet_id)?;
         let _ = bullet.tag(tag, increment);
         self.bullets.get(bullet_id)
@@ -137,12 +132,12 @@ impl Playbook {
 
     /// Remove a bullet from the playbook.
     pub fn remove_bullet(&mut self, bullet_id: &str) {
-        if let Some(bullet) = self.bullets.remove(bullet_id) {
-            if let Some(section_ids) = self.sections.get_mut(&bullet.section) {
-                section_ids.retain(|id| id != bullet_id);
-                if section_ids.is_empty() {
-                    self.sections.remove(&bullet.section);
-                }
+        if let Some(bullet) = self.bullets.remove(bullet_id)
+            && let Some(section_ids) = self.sections.get_mut(&bullet.section)
+        {
+            section_ids.retain(|id| id != bullet_id);
+            if section_ids.is_empty() {
+                self.sections.remove(&bullet.section);
             }
         }
     }
@@ -176,9 +171,7 @@ impl Playbook {
         let bullets_map: serde_json::Map<String, serde_json::Value> = self
             .bullets
             .iter()
-            .map(|(id, bullet)| {
-                (id.clone(), serde_json::to_value(bullet).unwrap_or_default())
-            })
+            .map(|(id, bullet)| (id.clone(), serde_json::to_value(bullet).unwrap_or_default()))
             .collect();
         serde_json::json!({
             "bullets": bullets_map,
@@ -211,10 +204,7 @@ impl Playbook {
             }
         }
 
-        instance.next_id = payload
-            .get("next_id")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+        instance.next_id = payload.get("next_id").and_then(|v| v.as_u64()).unwrap_or(0);
 
         instance
     }
@@ -610,8 +600,14 @@ mod tests {
     #[test]
     fn test_playbook_generate_id() {
         let mut pb = Playbook::new();
-        let b1_id = pb.add_bullet("file operations", "First", None, None).id.clone();
-        let b2_id = pb.add_bullet("file operations", "Second", None, None).id.clone();
+        let b1_id = pb
+            .add_bullet("file operations", "First", None, None)
+            .id
+            .clone();
+        let b2_id = pb
+            .add_bullet("file operations", "Second", None, None)
+            .id
+            .clone();
 
         assert!(b1_id.starts_with("file-"));
         assert!(b2_id.starts_with("file-"));

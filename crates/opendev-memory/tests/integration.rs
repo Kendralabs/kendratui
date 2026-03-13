@@ -23,9 +23,19 @@ fn playbook_save_and_load_cycle() {
 
     // Create and populate
     let mut pb = Playbook::new();
-    pb.add_bullet("testing", "Always run tests after changes", Some("t-001"), None);
+    pb.add_bullet(
+        "testing",
+        "Always run tests after changes",
+        Some("t-001"),
+        None,
+    );
     pb.add_bullet("testing", "Check edge cases", Some("t-002"), None);
-    pb.add_bullet("code_nav", "Use search before reading files", Some("cn-001"), None);
+    pb.add_bullet(
+        "code_nav",
+        "Use search before reading files",
+        Some("cn-001"),
+        None,
+    );
     pb.tag_bullet("t-001", "helpful", 5);
     pb.tag_bullet("t-001", "harmful", 1);
     pb.tag_bullet("cn-001", "helpful", 3);
@@ -53,7 +63,12 @@ fn playbook_save_and_load_cycle() {
 fn playbook_dumps_loads_roundtrip() {
     let mut pb = Playbook::new();
     pb.add_bullet("debugging", "Check logs first", Some("d-001"), None);
-    pb.add_bullet("performance", "Profile before optimizing", Some("p-001"), None);
+    pb.add_bullet(
+        "performance",
+        "Profile before optimizing",
+        Some("p-001"),
+        None,
+    );
 
     let json = pb.dumps();
     assert!(!json.is_empty());
@@ -132,10 +147,16 @@ fn playbook_stats() {
 #[test]
 fn playbook_auto_id_uses_section_prefix() {
     let mut pb = Playbook::new();
-    let b1_id = pb.add_bullet("file operations", "First", None, None).id.clone();
+    let b1_id = pb
+        .add_bullet("file operations", "First", None, None)
+        .id
+        .clone();
     assert!(b1_id.starts_with("file-"));
 
-    let b2_id = pb.add_bullet("file operations", "Second", None, None).id.clone();
+    let b2_id = pb
+        .add_bullet("file operations", "Second", None, None)
+        .id
+        .clone();
     assert!(b2_id.starts_with("file-"));
     assert_ne!(b1_id, b2_id);
 }

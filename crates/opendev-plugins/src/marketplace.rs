@@ -1,7 +1,7 @@
 //! Marketplace client: fetch plugin listings, search, download/install from marketplace.
 
-use crate::models::{MarketplaceCatalog, MarketplaceInfo, PluginMetadata};
 use crate::manager::{PluginError, PluginManager, Result};
+use crate::models::{MarketplaceCatalog, MarketplaceInfo, PluginMetadata};
 use chrono::Utc;
 use std::path::Path;
 use tracing::info;
@@ -113,8 +113,9 @@ impl PluginManager {
     }
 
     /// Sync all registered marketplaces. Returns a map of name to optional error message.
-    pub fn sync_all_marketplaces(&self) -> Result<std::collections::HashMap<String, Option<String>>>
-    {
+    pub fn sync_all_marketplaces(
+        &self,
+    ) -> Result<std::collections::HashMap<String, Option<String>>> {
         let mut results = std::collections::HashMap::new();
         let marketplaces = self.list_marketplaces()?;
         for m in marketplaces {
@@ -191,8 +192,7 @@ impl PluginManager {
                     if plugins.iter().any(|p| p.name == *skill_name) {
                         continue;
                     }
-                    let (_name, desc) =
-                        Self::parse_skill_metadata(&skill_dir.join("SKILL.md"));
+                    let (_name, desc) = Self::parse_skill_metadata(&skill_dir.join("SKILL.md"));
                     plugins.push(PluginMetadata {
                         name: skill_name.clone(),
                         version: "0.0.0".to_string(),
@@ -294,29 +294,32 @@ impl PluginManager {
 
         // Check plugins/ directory
         let plugins_dir = marketplace_dir.join("plugins");
-        if plugins_dir.exists() && plugins_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
-                for entry in entries.flatten() {
-                    if entry.path().is_dir() {
-                        if let Some(name) = entry.file_name().to_str() {
-                            plugin_names.push(name.to_string());
-                        }
-                    }
+        if plugins_dir.exists()
+            && plugins_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&plugins_dir)
+        {
+            for entry in entries.flatten() {
+                if entry.path().is_dir()
+                    && let Some(name) = entry.file_name().to_str()
+                {
+                    plugin_names.push(name.to_string());
                 }
             }
         }
 
         // Check skills/ directory
         let skills_dir = marketplace_dir.join("skills");
-        if skills_dir.exists() && skills_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&skills_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() && path.join("SKILL.md").exists() {
-                        if let Some(name) = entry.file_name().to_str() {
-                            plugin_names.push(name.to_string());
-                        }
-                    }
+        if skills_dir.exists()
+            && skills_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&skills_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir()
+                    && path.join("SKILL.md").exists()
+                    && let Some(name) = entry.file_name().to_str()
+                {
+                    plugin_names.push(name.to_string());
                 }
             }
         }

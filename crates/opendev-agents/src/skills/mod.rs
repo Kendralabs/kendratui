@@ -154,17 +154,13 @@ impl SkillLoader {
         }
 
         // Look up by full name first.
-        let metadata = self
-            .metadata_cache
-            .get(name)
-            .cloned()
-            .or_else(|| {
-                // Fall back: search by bare name.
-                self.metadata_cache
-                    .values()
-                    .find(|m| m.name == name)
-                    .cloned()
-            });
+        let metadata = self.metadata_cache.get(name).cloned().or_else(|| {
+            // Fall back: search by bare name.
+            self.metadata_cache
+                .values()
+                .find(|m| m.name == name)
+                .cloned()
+        });
 
         let metadata = match metadata {
             Some(m) => m,
@@ -226,8 +222,7 @@ impl SkillLoader {
         let mut lines = vec![
             "## Available Skills".to_string(),
             String::new(),
-            "Use `invoke_skill` to load skill content into conversation context."
-                .to_string(),
+            "Use `invoke_skill` to load skill content into conversation context.".to_string(),
             String::new(),
         ];
 
@@ -438,8 +433,7 @@ mod tests {
 
     #[test]
     fn test_parse_frontmatter_with_namespace() {
-        let content =
-            "---\nname: rebase\ndescription: Rebase skill\nnamespace: git\n---\n\nBody\n";
+        let content = "---\nname: rebase\ndescription: Rebase skill\nnamespace: git\n---\n\nBody\n";
         let meta = parse_frontmatter_str(content).unwrap();
         assert_eq!(meta.name, "rebase");
         assert_eq!(meta.namespace, "git");
@@ -447,8 +441,7 @@ mod tests {
 
     #[test]
     fn test_parse_frontmatter_quoted_values() {
-        let content =
-            "---\nname: \"my-skill\"\ndescription: 'Use when testing'\n---\n\nBody\n";
+        let content = "---\nname: \"my-skill\"\ndescription: 'Use when testing'\n---\n\nBody\n";
         let meta = parse_frontmatter_str(content).unwrap();
         assert_eq!(meta.name, "my-skill");
         assert_eq!(meta.description, "Use when testing");

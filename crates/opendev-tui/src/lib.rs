@@ -18,12 +18,12 @@ pub mod widgets;
 
 pub use app::{App, AppState, AutonomyLevel, OperationMode, ThinkingLevel};
 pub use controllers::{
-    find_matching_commands, is_command, ApprovalController, SlashCommand, BUILTIN_COMMANDS,
+    ApprovalController, BUILTIN_COMMANDS, SlashCommand, find_matching_commands, is_command,
 };
 pub use event::{AppEvent, EventHandler};
 pub use formatters::{
-    categorize_tool, format_error, format_info, format_tool_call_display, format_warning,
-    strip_system_reminders, tool_color, truncate_output, ToolCategory,
+    ToolCategory, categorize_tool, format_error, format_info, format_tool_call_display,
+    format_warning, strip_system_reminders, tool_color, truncate_output,
 };
 pub use widgets::{
     NestedToolWidget, SpinnerState, SubagentDisplayState, TaskProgress, TaskProgressWidget,

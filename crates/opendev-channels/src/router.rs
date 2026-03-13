@@ -184,10 +184,7 @@ impl MessageRouter {
             match exec.execute(&session_id, &message.text).await {
                 Ok(response) => {
                     let contexts = self.delivery_contexts.read().await;
-                    let delivery_context = contexts
-                        .get(&session_id)
-                        .cloned()
-                        .unwrap_or_default();
+                    let delivery_context = contexts.get(&session_id).cloned().unwrap_or_default();
 
                     let outbound = OutboundMessage {
                         text: response,
@@ -201,10 +198,7 @@ impl MessageRouter {
                 Err(e) => {
                     error!("Error dispatching to agent: {}", e);
                     let contexts = self.delivery_contexts.read().await;
-                    let delivery_context = contexts
-                        .get(&session_id)
-                        .cloned()
-                        .unwrap_or_default();
+                    let delivery_context = contexts.get(&session_id).cloned().unwrap_or_default();
 
                     let error_msg = OutboundMessage {
                         text: format!("Sorry, I encountered an error: {}", e),

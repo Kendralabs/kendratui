@@ -137,9 +137,7 @@ impl WorktreeManager {
         branch: Option<&str>,
         base_branch: &str,
     ) -> Result<WorktreeInfo, WorktreeError> {
-        let name = name
-            .map(String::from)
-            .unwrap_or_else(random_name);
+        let name = name.map(String::from).unwrap_or_else(random_name);
         let branch = branch
             .map(String::from)
             .unwrap_or_else(|| format!("worktree-{name}"));
@@ -439,9 +437,7 @@ branch refs/heads/worktree-calm-spike
         let mgr = WorktreeManager::new("/tmp/project");
         assert_eq!(mgr.project_dir(), Path::new("/tmp/project"));
         assert!(
-            mgr.worktree_base()
-                .to_string_lossy()
-                .contains("worktree"),
+            mgr.worktree_base().to_string_lossy().contains("worktree"),
             "base should contain 'worktree'"
         );
     }

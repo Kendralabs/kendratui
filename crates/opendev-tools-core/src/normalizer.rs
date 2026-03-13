@@ -95,9 +95,7 @@ pub fn normalize_params(
 
     for (key, mut value) in args {
         // 1. Key normalization
-        let new_key = camel_to_snake(&key)
-            .map(String::from)
-            .unwrap_or(key);
+        let new_key = camel_to_snake(&key).map(String::from).unwrap_or(key);
 
         // 2. Whitespace stripping
         if let Some(s) = value.as_str() {
@@ -108,13 +106,12 @@ pub fn normalize_params(
         }
 
         // 3. Path resolution
-        if PATH_PARAMS.contains(&new_key.as_str()) {
-            if let Some(s) = value.as_str() {
-                if !s.is_empty() {
-                    let resolved = resolve_path(s, working_dir);
-                    value = serde_json::Value::String(resolved);
-                }
-            }
+        if PATH_PARAMS.contains(&new_key.as_str())
+            && let Some(s) = value.as_str()
+            && !s.is_empty()
+        {
+            let resolved = resolve_path(s, working_dir);
+            value = serde_json::Value::String(resolved);
         }
 
         normalized.insert(new_key, value);
@@ -131,9 +128,9 @@ pub fn normalize_params(
 /// - Warns for paths outside workspace and home directory
 fn resolve_path(path_str: &str, working_dir: Option<&str>) -> String {
     // Expand ~ to home directory
-    let expanded = if path_str.starts_with('~') {
+    let expanded = if let Some(stripped) = path_str.strip_prefix('~') {
         if let Some(home) = dirs::home_dir() {
-            let rest = path_str.strip_prefix("~/").unwrap_or(&path_str[1..]);
+            let rest = stripped.strip_prefix('/').unwrap_or(stripped);
             home.join(rest).to_string_lossy().to_string()
         } else {
             path_str.to_string()

@@ -84,11 +84,7 @@ impl CostTracker {
     /// Record token usage from a single LLM call.
     ///
     /// Returns the incremental cost for this call in USD.
-    pub fn record_usage(
-        &mut self,
-        usage: &TokenUsage,
-        pricing: Option<&PricingInfo>,
-    ) -> f64 {
+    pub fn record_usage(&mut self, usage: &TokenUsage, pricing: Option<&PricingInfo>) -> f64 {
         self.total_input_tokens += usage.prompt_tokens;
         self.total_output_tokens += usage.completion_tokens;
         self.call_count += 1;
@@ -166,10 +162,7 @@ impl CostTracker {
             "total_output_tokens".into(),
             serde_json::json!(self.total_output_tokens),
         );
-        map.insert(
-            "api_call_count".into(),
-            serde_json::json!(self.call_count),
-        );
+        map.insert("api_call_count".into(), serde_json::json!(self.call_count));
         map
     }
 
@@ -223,7 +216,7 @@ mod tests {
 
     fn test_pricing() -> PricingInfo {
         PricingInfo {
-            input_price_per_million: 3.0, // $3 per 1M input tokens
+            input_price_per_million: 3.0,   // $3 per 1M input tokens
             output_price_per_million: 15.0, // $15 per 1M output tokens
         }
     }

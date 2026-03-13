@@ -177,9 +177,7 @@ impl BrowserTool {
                 ));
             }
             None => {
-                return ToolResult::fail(
-                    "Target (URL or CSS selector) is required for get_text",
-                );
+                return ToolResult::fail("Target (URL or CSS selector) is required for get_text");
             }
         };
 
@@ -247,10 +245,7 @@ impl BrowserTool {
         // Save HTML snapshot
         let screenshot_dir = std::env::temp_dir().join("opendev-screenshots");
         std::fs::create_dir_all(&screenshot_dir).ok();
-        let filename = format!(
-            "browser_{}.html",
-            std::process::id()
-        );
+        let filename = format!("browser_{}.html", std::process::id());
         let path = screenshot_dir.join(&filename);
 
         match std::fs::write(&path, &body) {
@@ -351,8 +346,10 @@ impl BrowserTool {
 
     /// List open tabs — no persistent browser state in HTTP mode.
     async fn tabs_list(&self) -> ToolResult {
-        ToolResult::ok("No browser context open (HTTP-only mode). \
-                        Use 'navigate' to fetch a page.")
+        ToolResult::ok(
+            "No browser context open (HTTP-only mode). \
+                        Use 'navigate' to fetch a page.",
+        )
     }
 
     /// Close a tab.
@@ -362,16 +359,12 @@ impl BrowserTool {
 
     /// Navigate back.
     async fn back(&self) -> ToolResult {
-        ToolResult::fail(
-            "Browser history navigation requires a persistent browser session.",
-        )
+        ToolResult::fail("Browser history navigation requires a persistent browser session.")
     }
 
     /// Navigate forward.
     async fn forward(&self) -> ToolResult {
-        ToolResult::fail(
-            "Browser history navigation requires a persistent browser session.",
-        )
+        ToolResult::fail("Browser history navigation requires a persistent browser session.")
     }
 
     /// Reload the current page.
@@ -497,18 +490,9 @@ mod tests {
     #[test]
     fn test_normalize_url() {
         assert_eq!(normalize_url("example.com"), "https://example.com");
-        assert_eq!(
-            normalize_url("https://example.com"),
-            "https://example.com"
-        );
-        assert_eq!(
-            normalize_url("http://example.com"),
-            "http://example.com"
-        );
-        assert_eq!(
-            normalize_url("https:/example.com"),
-            "https://example.com"
-        );
+        assert_eq!(normalize_url("https://example.com"), "https://example.com");
+        assert_eq!(normalize_url("http://example.com"), "http://example.com");
+        assert_eq!(normalize_url("https:/example.com"), "https://example.com");
     }
 
     #[test]

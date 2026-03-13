@@ -61,152 +61,12 @@ impl<'a> ConversationWidget<'a> {
         self
     }
 
-    /// Build the welcome panel displayed when the conversation is empty.
-    fn build_welcome_panel(&self) -> Vec<Line<'static>> {
-        let mut lines: Vec<Line<'static>> = Vec::new();
-        // Use a width that fits inside the conversation border (minus 2 for border chars)
-        let inner_w = (self.terminal_width.saturating_sub(4) as usize).clamp(80, 110);
-        let h_bar: String = style_tokens::BOX_H.repeat(inner_w);
-        let border_style = Style::default().fg(style_tokens::BORDER);
-
-        // Top border
-        lines.push(Line::from(Span::styled(
-            format!("{}{}{}", style_tokens::BOX_TL, h_bar, style_tokens::BOX_TR),
-            border_style,
-        )));
-
-        // Helper to build a padded line inside the box
-        let box_line = |spans: Vec<Span<'static>>| -> Line<'static> {
-            let content_len: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-            let padding = inner_w.saturating_sub(content_len);
-            let mut all = vec![Span::styled(
-                format!("{} ", style_tokens::BOX_V),
-                border_style,
-            )];
-            all.extend(spans);
-            all.push(Span::styled(
-                format!("{}{}", " ".repeat(padding), style_tokens::BOX_V),
-                border_style,
-            ));
-            Line::from(all)
-        };
-
-        let empty_line = box_line(vec![]);
-
-        // Blank line
-        lines.push(empty_line.clone());
-
-        // Title line
-        lines.push(box_line(vec![
-            Span::raw("  "),
-            Span::styled(
-                "OpenDev".to_string(),
-                Style::default()
-                    .fg(style_tokens::ACCENT)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!(" v{}", self.version),
-                Style::default().fg(style_tokens::SUBTLE),
-            ),
-        ]));
-
-        // Blank line
-        lines.push(empty_line.clone());
-
-        // Workspace
-        lines.push(box_line(vec![
-            Span::raw("  "),
-            Span::styled(
-                "Workspace: ".to_string(),
-                Style::default().fg(style_tokens::SUBTLE),
-            ),
-            Span::styled(
-                self.working_dir.to_string(),
-                Style::default().fg(style_tokens::BLUE_PATH),
-            ),
-        ]));
-
-        // Mode
-        let mode_color = if self.mode == "PLAN" {
-            style_tokens::SUCCESS
-        } else {
-            style_tokens::WARNING
-        };
-        lines.push(box_line(vec![
-            Span::raw("  "),
-            Span::styled("Mode: ".to_string(), Style::default().fg(style_tokens::SUBTLE)),
-            Span::styled(self.mode.to_string(), Style::default().fg(mode_color)),
-        ]));
-
-        // Blank line
-        lines.push(empty_line.clone());
-
-        // Commands section
-        lines.push(box_line(vec![
-            Span::raw("  "),
-            Span::styled(
-                "Essential Commands".to_string(),
-                Style::default()
-                    .fg(style_tokens::PRIMARY)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("              "),
-            Span::styled(
-                "Keyboard Shortcuts".to_string(),
-                Style::default()
-                    .fg(style_tokens::PRIMARY)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]));
-
-        let cmd_rows: &[(&str, &str, &str, &str)] = &[
-            ("/help", "Show help", "Shift+Tab", "Toggle mode"),
-            ("/mode", "Toggle mode", "Ctrl+C", "Clear/interrupt/quit"),
-            ("/clear", "Clear conversation", "PageUp/Dn", "Scroll conversation"),
-            ("/exit", "Quit OpenDev", "Esc", "Interrupt agent"),
-        ];
-
-        for (cmd, cmd_desc, key, key_desc) in cmd_rows {
-            lines.push(box_line(vec![
-                Span::raw("  "),
-                Span::styled(
-                    format!("{:<10}", cmd),
-                    Style::default().fg(style_tokens::ACCENT),
-                ),
-                Span::styled(
-                    format!("{:<20}", cmd_desc),
-                    Style::default().fg(style_tokens::SUBTLE),
-                ),
-                Span::styled(
-                    format!("{:<11}", key),
-                    Style::default().fg(style_tokens::GOLD),
-                ),
-                Span::styled(key_desc.to_string(), Style::default().fg(style_tokens::SUBTLE)),
-            ]));
-        }
-
-        // Blank line
-        lines.push(empty_line);
-
-        // Bottom border
-        lines.push(Line::from(Span::styled(
-            format!("{}{}{}", style_tokens::BOX_BL, h_bar, style_tokens::BOX_BR),
-            border_style,
-        )));
-
-        lines
-    }
-
     /// Build styled lines from messages.
     fn build_lines(&self) -> Vec<Line<'a>> {
         let mut lines: Vec<Line> = Vec::new();
 
         if self.messages.is_empty() {
-            // Convert 'static lines to 'a lines (safe because 'static outlives 'a)
-            for line in self.build_welcome_panel() {
-                lines.push(line);
-            }
+            // Welcome panel is now rendered as a separate widget (WelcomePanelWidget)
             return lines;
         }
 
@@ -226,19 +86,19 @@ impl<'a> ConversationWidget<'a> {
                     let mut leading_consumed = false;
                     for md_line in md_lines.into_iter() {
                         // Check if this line has non-empty content
-                        let line_text: String = md_line.spans.iter()
+                        let line_text: String = md_line
+                            .spans
+                            .iter()
                             .map(|s| s.content.to_string())
                             .collect();
                         let has_content = !line_text.trim().is_empty();
 
                         if !leading_consumed && has_content {
                             // First non-empty line gets ⏺ leading marker (green)
-                            let mut spans = vec![
-                                Span::styled(
-                                    format!("{} ", COMPLETED_CHAR),
-                                    Style::default().fg(style_tokens::GREEN_BRIGHT),
-                                ),
-                            ];
+                            let mut spans = vec![Span::styled(
+                                format!("{} ", COMPLETED_CHAR),
+                                Style::default().fg(style_tokens::GREEN_BRIGHT),
+                            )];
                             spans.extend(md_line.spans);
                             lines.push(Line::from(spans));
                             leading_consumed = true;
@@ -311,10 +171,7 @@ impl<'a> ConversationWidget<'a> {
                             "    ".to_string()
                         };
                         lines.push(Line::from(vec![
-                            Span::styled(
-                                prefix,
-                                Style::default().fg(style_tokens::THINKING_BG),
-                            ),
+                            Span::styled(prefix, Style::default().fg(style_tokens::THINKING_BG)),
                             Span::styled(
                                 content_line.to_string(),
                                 Style::default()
@@ -340,10 +197,7 @@ impl<'a> ConversationWidget<'a> {
                             "     ".to_string()
                         };
                         lines.push(Line::from(vec![
-                            Span::styled(
-                                prefix_char,
-                                Style::default().fg(style_tokens::SUBTLE),
-                            ),
+                            Span::styled(prefix_char, Style::default().fg(style_tokens::SUBTLE)),
                             Span::styled(
                                 result_line.clone(),
                                 Style::default().fg(style_tokens::SUBTLE),
@@ -393,15 +247,10 @@ fn format_tool_call(tc: &DisplayToolCall) -> Line<'static> {
     let display = format_tool_call_display(&tc.name, &tc.arguments);
 
     Line::from(vec![
-        Span::styled(
-            format!("  {icon} "),
-            Style::default().fg(icon_color),
-        ),
+        Span::styled(format!("  {icon} "), Style::default().fg(icon_color)),
         Span::styled(
             display,
-            Style::default()
-                .fg(color)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
     ])
 }
@@ -425,14 +274,8 @@ fn format_nested_tool_call(tc: &DisplayToolCall, depth: usize) -> Line<'static> 
             format!("{indent}\u{2514}\u{2500} "),
             Style::default().fg(style_tokens::SUBTLE),
         ),
-        Span::styled(
-            format!("{icon} "),
-            Style::default().fg(icon_color),
-        ),
-        Span::styled(
-            display,
-            Style::default().fg(color),
-        ),
+        Span::styled(format!("{icon} "), Style::default().fg(icon_color)),
+        Span::styled(display, Style::default().fg(color)),
     ])
 }
 
@@ -468,13 +311,8 @@ mod tests {
         let msgs: Vec<DisplayMessage> = vec![];
         let widget = ConversationWidget::new(&msgs, 0);
         let lines = widget.build_lines();
-        assert!(lines.len() > 5); // welcome panel with box
-        let text: String = lines
-            .iter()
-            .flat_map(|l| l.spans.iter())
-            .map(|s| s.content.to_string())
-            .collect();
-        assert!(text.contains("OpenDev"));
+        // Welcome panel is now a separate widget; empty conversation returns no lines
+        assert!(lines.is_empty());
     }
 
     #[test]
@@ -567,17 +405,15 @@ mod tests {
                 success: true,
                 collapsed: false,
                 result_lines: vec![],
-                nested_calls: vec![
-                    DisplayToolCall {
-                        name: "read_file".into(),
-                        arguments: std::collections::HashMap::new(),
-                        summary: Some("src/main.rs".into()),
-                        success: true,
-                        collapsed: false,
-                        result_lines: vec![],
-                        nested_calls: vec![],
-                    },
-                ],
+                nested_calls: vec![DisplayToolCall {
+                    name: "read_file".into(),
+                    arguments: std::collections::HashMap::new(),
+                    summary: Some("src/main.rs".into()),
+                    success: true,
+                    collapsed: false,
+                    result_lines: vec![],
+                    nested_calls: vec![],
+                }],
             }),
         }];
         let widget = ConversationWidget::new(&msgs, 0);

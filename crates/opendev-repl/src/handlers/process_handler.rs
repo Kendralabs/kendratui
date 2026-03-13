@@ -90,32 +90,28 @@ impl ToolHandler for ProcessHandler {
         &["Bash", "bash"]
     }
 
-    fn pre_check(
-        &self,
-        _tool_name: &str,
-        args: &HashMap<String, Value>,
-    ) -> PreCheckResult {
+    fn pre_check(&self, _tool_name: &str, args: &HashMap<String, Value>) -> PreCheckResult {
         let command = match args.get("command").and_then(|v| v.as_str()) {
             Some(cmd) => cmd,
             None => return PreCheckResult::Deny("Missing 'command' argument".to_string()),
         };
 
         // Check approval rules if manager is available.
-        if let Some(ref mgr) = self.approval_manager {
-            if let Some(rule) = mgr.evaluate_command(command) {
-                use opendev_runtime::approval::RuleAction;
-                match rule.action {
-                    RuleAction::AutoDeny => {
-                        return PreCheckResult::Deny(format!(
-                            "Command denied by rule: {}",
-                            &rule.description,
-                        ));
-                    }
-                    RuleAction::AutoApprove => {
-                        debug!(command, "Command auto-approved by rule");
-                    }
-                    _ => {} // RequireApproval, RequireEdit handled upstream
+        if let Some(ref mgr) = self.approval_manager
+            && let Some(rule) = mgr.evaluate_command(command)
+        {
+            use opendev_runtime::approval::RuleAction;
+            match rule.action {
+                RuleAction::AutoDeny => {
+                    return PreCheckResult::Deny(format!(
+                        "Command denied by rule: {}",
+                        &rule.description,
+                    ));
                 }
+                RuleAction::AutoApprove => {
+                    debug!(command, "Command auto-approved by rule");
+                }
+                _ => {} // RequireApproval, RequireEdit handled upstream
             }
         }
 
@@ -127,10 +123,7 @@ impl ToolHandler for ProcessHandler {
         if !background && self.is_server_command(command) {
             debug!(command, "Auto-promoting server command to background");
             let mut new_args = args.clone();
-            new_args.insert(
-                "background".to_string(),
-                Value::Bool(true),
-            );
+            new_args.insert("background".to_string(), Value::Bool(true));
             return PreCheckResult::ModifyArgs(new_args);
         }
 
@@ -150,7 +143,7 @@ impl ToolHandler for ProcessHandler {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let truncated_output = output.map(|o| Self::truncate_output(o));
+        let truncated_output = output.map(Self::truncate_output);
 
         HandlerResult {
             output: truncated_output,

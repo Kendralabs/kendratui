@@ -45,15 +45,18 @@ pub fn categorize_tool(tool_name: &str) -> ToolCategory {
         "write_file" | "edit_file" | "patch_file" => ToolCategory::FileWrite,
         "run_command" | "bash_execute" | "Bash" => ToolCategory::Bash,
         "search" | "web_search" => ToolCategory::Search,
-        "fetch_url" | "open_browser" | "capture_screenshot"
-        | "capture_web_screenshot" => ToolCategory::Web,
-        "spawn_subagent" | "get_subagent_output" => ToolCategory::Agent,
-        "find_symbol" | "find_referencing_symbols" | "insert_before_symbol"
-        | "insert_after_symbol" | "replace_symbol_body" | "rename_symbol" => {
-            ToolCategory::Symbol
+        "fetch_url" | "open_browser" | "capture_screenshot" | "capture_web_screenshot" => {
+            ToolCategory::Web
         }
-        "present_plan" | "write_todos" | "update_todo" | "complete_todo"
-        | "list_todos" | "clear_todos" | "task_complete" => ToolCategory::Plan,
+        "spawn_subagent" | "get_subagent_output" => ToolCategory::Agent,
+        "find_symbol"
+        | "find_referencing_symbols"
+        | "insert_before_symbol"
+        | "insert_after_symbol"
+        | "replace_symbol_body"
+        | "rename_symbol" => ToolCategory::Symbol,
+        "present_plan" | "write_todos" | "update_todo" | "complete_todo" | "list_todos"
+        | "clear_todos" | "task_complete" => ToolCategory::Plan,
         "ask_user" => ToolCategory::UserInteraction,
         "notebook_edit" => ToolCategory::Notebook,
         s if s.starts_with("mcp__") => ToolCategory::Mcp,
@@ -169,18 +172,26 @@ fn extract_arg_summary(
         "fetch_url" | "open_browser" | "capture_web_screenshot" => &["url"],
         "spawn_subagent" => &["description"],
         "find_symbol" | "rename_symbol" => &["name", "symbol"],
-        _ => &["command", "file_path", "path", "url", "query", "pattern", "name"],
+        _ => &[
+            "command",
+            "file_path",
+            "path",
+            "url",
+            "query",
+            "pattern",
+            "name",
+        ],
     };
 
     for key in primary_keys {
-        if let Some(val) = args.get(*key) {
-            if let Some(s) = val.as_str() {
-                let display = s.replace('\n', " ");
-                if display.len() > 80 {
-                    return Some(format!("{}...", &display[..77]));
-                }
-                return Some(display);
+        if let Some(val) = args.get(*key)
+            && let Some(s) = val.as_str()
+        {
+            let display = s.replace('\n', " ");
+            if display.len() > 80 {
+                return Some(format!("{}...", &display[..77]));
             }
+            return Some(display);
         }
     }
 

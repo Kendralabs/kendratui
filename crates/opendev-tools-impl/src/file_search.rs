@@ -142,14 +142,11 @@ impl SearchArgs {
             Some(other) => {
                 return Err(format!(
                     "Invalid output_mode '{other}'. Use 'content', 'files_with_matches', or 'count'"
-                ))
+                ));
             }
         };
 
-        let line_numbers = args
-            .get("-n")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
+        let line_numbers = args.get("-n").and_then(|v| v.as_bool()).unwrap_or(true);
 
         Ok(Self {
             pattern,
@@ -161,8 +158,14 @@ impl SearchArgs {
                 .and_then(|v| v.as_str())
                 .map(String::from),
             case_insensitive: args.get("-i").and_then(|v| v.as_bool()).unwrap_or(false),
-            multiline: args.get("multiline").and_then(|v| v.as_bool()).unwrap_or(false),
-            fixed_string: args.get("fixed_string").and_then(|v| v.as_bool()).unwrap_or(false),
+            multiline: args
+                .get("multiline")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            fixed_string: args
+                .get("fixed_string")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             output_mode,
             context: args
                 .get("context")
@@ -172,14 +175,8 @@ impl SearchArgs {
             after_context: args.get("-A").and_then(|v| v.as_u64()).map(|v| v as u32),
             before_context: args.get("-B").and_then(|v| v.as_u64()).map(|v| v as u32),
             line_numbers,
-            head_limit: args
-                .get("head_limit")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize,
-            offset: args
-                .get("offset")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize,
+            head_limit: args.get("head_limit").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+            offset: args.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
         })
     }
 }
@@ -298,9 +295,9 @@ impl BaseTool for FileSearchTool {
                 tracing::warn!("ripgrep (rg) not found, falling back to built-in search");
                 self.fallback_search(&search_args, &search_path)
             }
-            Err(RgError::Timeout) => {
-                ToolResult::fail("Search timed out after 30 seconds. Try a more specific pattern or path.")
-            }
+            Err(RgError::Timeout) => ToolResult::fail(
+                "Search timed out after 30 seconds. Try a more specific pattern or path.",
+            ),
             Err(RgError::Other(e)) => ToolResult::fail(format!("Search failed: {e}")),
         }
     }
@@ -391,10 +388,10 @@ impl FileSearchTool {
                 if matches.len() >= MAX_RESULTS {
                     break;
                 }
-                if let Ok(path) = entry {
-                    if path.is_file() {
-                        search_file_fallback(&path, &regex, &mut matches, MAX_RESULTS);
-                    }
+                if let Ok(path) = entry
+                    && path.is_file()
+                {
+                    search_file_fallback(&path, &regex, &mut matches, MAX_RESULTS);
                 }
             }
         }
@@ -510,7 +507,10 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_args(pairs: &[(&str, serde_json::Value)]) -> HashMap<String, serde_json::Value> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     // --- Unit tests for argument parsing ---
@@ -620,10 +620,8 @@ mod tests {
 
     #[test]
     fn test_build_rg_command_basic() {
-        let args = SearchArgs::from_map(&make_args(&[
-            ("pattern", serde_json::json!("hello")),
-        ]))
-        .unwrap();
+        let args =
+            SearchArgs::from_map(&make_args(&[("pattern", serde_json::json!("hello"))])).unwrap();
         let cmd = FileSearchTool::build_rg_command(&args, Path::new("/tmp"));
         let prog = cmd.as_std().get_program();
         assert_eq!(prog, "rg");

@@ -225,8 +225,14 @@ mod tests {
     #[test]
     fn test_message_type_display() {
         assert_eq!(WsMessageType::ToolCall.to_string(), "tool_call");
-        assert_eq!(WsMessageType::PlanApprovalResolved.to_string(), "plan_approval_resolved");
-        assert_eq!(WsMessageType::McpStatusChanged.to_string(), "mcp:status_changed");
+        assert_eq!(
+            WsMessageType::PlanApprovalResolved.to_string(),
+            "plan_approval_resolved"
+        );
+        assert_eq!(
+            WsMessageType::McpStatusChanged.to_string(),
+            "mcp:status_changed"
+        );
     }
 
     #[test]

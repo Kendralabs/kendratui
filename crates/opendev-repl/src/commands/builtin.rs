@@ -168,7 +168,10 @@ impl BuiltinCommands {
                     println!("Usage: /mcp add <name> <command> [args...]");
                 } else {
                     let name = sub_args.split_whitespace().next().unwrap_or(sub_args);
-                    println!("MCP server '{}' registered (restart required to activate).", name);
+                    println!(
+                        "MCP server '{}' registered (restart required to activate).",
+                        name
+                    );
                 }
             }
             "remove" => {
@@ -200,7 +203,7 @@ impl BuiltinCommands {
     }
 
     fn handle_agents(&self, args: &str) {
-        let subcommand = args.trim().split_whitespace().next().unwrap_or("list");
+        let subcommand = args.split_whitespace().next().unwrap_or("list");
         match subcommand {
             "list" | "" => {
                 println!("Available agents:");
@@ -219,7 +222,7 @@ impl BuiltinCommands {
     }
 
     fn handle_skills(&self, args: &str) {
-        let subcommand = args.trim().split_whitespace().next().unwrap_or("list");
+        let subcommand = args.split_whitespace().next().unwrap_or("list");
         match subcommand {
             "list" | "" => {
                 println!("Built-in skills:");
@@ -257,7 +260,10 @@ impl BuiltinCommands {
                 if sub_args.is_empty() {
                     println!("Usage: /plugins remove <name>");
                 } else {
-                    println!("Plugin '{}' not found in installed plugins.", sub_args.trim());
+                    println!(
+                        "Plugin '{}' not found in installed plugins.",
+                        sub_args.trim()
+                    );
                 }
             }
             _ => {
@@ -276,8 +282,12 @@ impl BuiltinCommands {
             "" | "show" => {
                 println!("No session model overrides set.");
                 println!();
-                println!("Available slots: model, model_thinking, model_vlm, model_critique, model_compact");
-                println!("Use /session-models set <slot> <value> to override a model for this session.");
+                println!(
+                    "Available slots: model, model_thinking, model_vlm, model_critique, model_compact"
+                );
+                println!(
+                    "Use /session-models set <slot> <value> to override a model for this session."
+                );
             }
             "set" => {
                 let set_parts: Vec<&str> = sub_args.splitn(2, ' ').collect();
@@ -287,11 +297,16 @@ impl BuiltinCommands {
                     let slot = set_parts[0];
                     let value = set_parts[1];
                     let valid_slots = [
-                        "model", "model_provider",
-                        "model_thinking", "model_thinking_provider",
-                        "model_vlm", "model_vlm_provider",
-                        "model_critique", "model_critique_provider",
-                        "model_compact", "model_compact_provider",
+                        "model",
+                        "model_provider",
+                        "model_thinking",
+                        "model_thinking_provider",
+                        "model_vlm",
+                        "model_vlm_provider",
+                        "model_critique",
+                        "model_critique_provider",
+                        "model_compact",
+                        "model_compact_provider",
                     ];
                     if valid_slots.contains(&slot) {
                         println!("Session override: {} = {}", slot, value);
@@ -416,14 +431,8 @@ mod tests {
         let cmds = BuiltinCommands::new();
         let mut state = ReplState::default();
 
-        assert_eq!(
-            cmds.dispatch("/exit", "", &mut state),
-            CommandOutcome::Exit
-        );
-        assert_eq!(
-            cmds.dispatch("/quit", "", &mut state),
-            CommandOutcome::Exit
-        );
+        assert_eq!(cmds.dispatch("/exit", "", &mut state), CommandOutcome::Exit);
+        assert_eq!(cmds.dispatch("/quit", "", &mut state), CommandOutcome::Exit);
     }
 
     #[test]

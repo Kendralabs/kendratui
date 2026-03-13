@@ -277,10 +277,8 @@ pub fn classify_api_error(
                     "Authentication failed at gateway. Check your API key and proxy settings."
                         .to_string()
                 }
-                Some(403) => {
-                    "Access denied at gateway. Check your permissions and proxy settings."
-                        .to_string()
-                }
+                Some(403) => "Access denied at gateway. Check your permissions and proxy settings."
+                    .to_string(),
                 _ => "API returned an HTML error page. Check your proxy/VPN settings or try again."
                     .to_string(),
             };
@@ -308,9 +306,10 @@ pub fn classify_api_error(
     // Rate limiting
     for re in &patterns.rate_limit {
         if re.is_match(error_message) {
-            let retry_after = Regex::new(r"(?i)retry.?after[:\s]+(\d+\.?\d*)")
-                .ok()
-                .and_then(|ra_re| ra_re.captures(error_message))
+            static RETRY_AFTER_RE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"(?i)retry.?after[:\s]+(\d+\.?\d*)").unwrap());
+            let retry_after = RETRY_AFTER_RE
+                .captures(error_message)
                 .and_then(|caps| caps.get(1))
                 .and_then(|m| m.as_str().parse::<f64>().ok());
             return StructuredError::rate_limit(error_message, provider_owned, retry_after);
@@ -370,11 +369,7 @@ mod tests {
 
     #[test]
     fn test_classify_context_overflow_google() {
-        let err = classify_api_error(
-            "GenerateContentRequest is too large",
-            None,
-            Some("google"),
-        );
+        let err = classify_api_error("GenerateContentRequest is too large", None, Some("google"));
         assert_eq!(err.category, ErrorCategory::ContextOverflow);
     }
 
@@ -426,9 +421,7 @@ mod tests {
     fn test_classify_gateway_401_html() {
         let err = classify_api_error("<html>Unauthorized</html>", Some(401), None);
         assert_eq!(err.category, ErrorCategory::Gateway);
-        assert!(err
-            .message
-            .contains("Authentication failed at gateway"));
+        assert!(err.message.contains("Authentication failed at gateway"));
     }
 
     #[test]

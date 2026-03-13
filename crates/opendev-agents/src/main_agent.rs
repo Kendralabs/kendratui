@@ -133,10 +133,7 @@ impl MainAgent {
     }
 
     /// Build tool schemas, optionally filtering to allowed tools only.
-    fn build_schemas(
-        registry: &ToolRegistry,
-        allowed_tools: Option<&[String]>,
-    ) -> Vec<Value> {
+    fn build_schemas(registry: &ToolRegistry, allowed_tools: Option<&[String]>) -> Vec<Value> {
         let all_schemas = registry.get_schemas();
         match allowed_tools {
             Some(allowed) => all_schemas
@@ -229,14 +226,9 @@ impl BaseAgent for MainAgent {
     }
 
     fn refresh_tools(&mut self) {
-        self.tool_schemas = Self::build_schemas(
-            &self.tool_registry,
-            self.config.allowed_tools.as_deref(),
-        );
-        debug!(
-            count = self.tool_schemas.len(),
-            "Refreshed tool schemas"
-        );
+        self.tool_schemas =
+            Self::build_schemas(&self.tool_registry, self.config.allowed_tools.as_deref());
+        debug!(count = self.tool_schemas.len(), "Refreshed tool schemas");
     }
 
     async fn call_llm(
@@ -281,12 +273,11 @@ impl BaseAgent for MainAgent {
         let response = self.llm_caller.parse_action_response(&body);
 
         // Track token usage
-        if let Some(monitor) = task_monitor {
-            if let Some(ref usage) = response.usage {
-                if let Some(total) = usage.get("total_tokens").and_then(|t| t.as_u64()) {
-                    monitor.update_tokens(total);
-                }
-            }
+        if let Some(monitor) = task_monitor
+            && let Some(ref usage) = response.usage
+            && let Some(total) = usage.get("total_tokens").and_then(|t| t.as_u64())
+        {
+            monitor.update_tokens(total);
         }
 
         response
@@ -329,11 +320,7 @@ impl BaseAgent for MainAgent {
         );
 
         // Build tool context from deps and config
-        let working_dir = self
-            .config
-            .working_dir
-            .as_deref()
-            .unwrap_or(".");
+        let working_dir = self.config.working_dir.as_deref().unwrap_or(".");
         let tool_context = ToolContext::new(working_dir);
 
         // Run the full ReAct loop
@@ -436,9 +423,7 @@ mod tests {
 
     #[test]
     fn test_messages_contain_images_false() {
-        let messages = vec![
-            serde_json::json!({"role": "user", "content": "hello"}),
-        ];
+        let messages = vec![serde_json::json!({"role": "user", "content": "hello"})];
         assert!(!MainAgent::messages_contain_images(&messages));
     }
 
@@ -480,7 +465,12 @@ mod tests {
         let resp = agent.call_llm(&messages, None).await;
         // No HTTP client configured → returns failure
         assert!(!resp.success);
-        assert!(resp.error.as_deref().unwrap_or("").contains("HTTP client not configured"));
+        assert!(
+            resp.error
+                .as_deref()
+                .unwrap_or("")
+                .contains("HTTP client not configured")
+        );
     }
 
     #[tokio::test]
@@ -501,7 +491,12 @@ mod tests {
     #[tokio::test]
     async fn test_with_http_client() {
         use reqwest::header::HeaderMap;
-        let raw = opendev_http::HttpClient::new("https://api.example.com/v1/chat/completions", HeaderMap::new(), None).unwrap();
+        let raw = opendev_http::HttpClient::new(
+            "https://api.example.com/v1/chat/completions",
+            HeaderMap::new(),
+            None,
+        )
+        .unwrap();
         let http = AdaptedClient::new(raw);
         let agent = make_agent().with_http_client(Arc::new(http));
         assert!(agent.http_client.is_some());
@@ -512,7 +507,12 @@ mod tests {
         // Without HTTP client, run() returns an error.
         // We test that with_http_client stores the client.
         use reqwest::header::HeaderMap;
-        let raw = opendev_http::HttpClient::new("https://api.example.com/v1/chat/completions", HeaderMap::new(), None).unwrap();
+        let raw = opendev_http::HttpClient::new(
+            "https://api.example.com/v1/chat/completions",
+            HeaderMap::new(),
+            None,
+        )
+        .unwrap();
         let http = AdaptedClient::new(raw);
         let mut agent = make_agent();
         agent.set_http_client(Arc::new(http));
@@ -548,7 +548,8 @@ mod tests {
     #[test]
     fn test_require_http_client_ok() {
         use reqwest::header::HeaderMap;
-        let raw = opendev_http::HttpClient::new("https://example.com", HeaderMap::new(), None).unwrap();
+        let raw =
+            opendev_http::HttpClient::new("https://example.com", HeaderMap::new(), None).unwrap();
         let http = AdaptedClient::new(raw);
         let agent = make_agent().with_http_client(Arc::new(http));
         assert!(agent.require_http_client().is_ok());

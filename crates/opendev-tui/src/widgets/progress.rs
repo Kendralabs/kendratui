@@ -11,8 +11,8 @@ use ratatui::{
     widgets::Widget,
 };
 
-use crate::formatters::style_tokens;
 use super::spinner::SpinnerState;
+use crate::formatters::style_tokens;
 
 /// Task progress display data.
 #[derive(Debug, Clone)]

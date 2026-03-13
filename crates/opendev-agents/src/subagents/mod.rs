@@ -7,4 +7,4 @@ pub use manager::{
     NoopProgressCallback, SubagentManager, SubagentProgressCallback, SubagentRunResult,
     SubagentType,
 };
-pub use spec::{builtins, SubAgentSpec};
+pub use spec::{SubAgentSpec, builtins};

@@ -99,13 +99,13 @@ impl BaseTool for FileListTool {
                 Ok(path) => {
                     if path.is_file() {
                         // Apply max_depth filter: count components relative to base_dir
-                        if let Some(depth) = max_depth {
-                            if let Ok(rel) = path.strip_prefix(&base_dir) {
-                                // Depth is number of parent directories (components - 1 for the file itself)
-                                let rel_depth = rel.components().count().saturating_sub(1);
-                                if rel_depth > depth {
-                                    continue;
-                                }
+                        if let Some(depth) = max_depth
+                            && let Ok(rel) = path.strip_prefix(&base_dir)
+                        {
+                            // Depth is number of parent directories (components - 1 for the file itself)
+                            let rel_depth = rel.components().count().saturating_sub(1);
+                            if rel_depth > depth {
+                                continue;
                             }
                         }
                         let mtime = path
@@ -138,10 +138,7 @@ impl BaseTool for FileListTool {
         let mut output = String::new();
         for (path, _) in files {
             // Try to make path relative to base_dir
-            let display = path
-                .strip_prefix(&base_dir)
-                .unwrap_or(path)
-                .display();
+            let display = path.strip_prefix(&base_dir).unwrap_or(path).display();
             output.push_str(&format!("{display}\n"));
         }
 
@@ -168,7 +165,10 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_args(pairs: &[(&str, serde_json::Value)]) -> HashMap<String, serde_json::Value> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     #[tokio::test]

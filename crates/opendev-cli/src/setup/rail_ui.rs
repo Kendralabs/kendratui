@@ -167,7 +167,10 @@ pub fn rail_info_box(title: &str, lines: &[String], step_label: Option<&str>) {
         SetAttribute(Attribute::Reset),
         Print(" ")
     );
-    let _ = print_accent(&mut w, &format!("{}{}", dashes(top_dashes_count), RAIL_BOX_TR));
+    let _ = print_accent(
+        &mut w,
+        &format!("{}{}", dashes(top_dashes_count), RAIL_BOX_TR),
+    );
     let _ = writeln!(w);
 
     // Empty line
@@ -381,11 +384,7 @@ fn read_password() -> io::Result<String> {
 }
 
 /// Render a summary table in info-box style.
-pub fn rail_summary_box(
-    title: &str,
-    rows: &[(&str, &str)],
-    extra_lines: Option<&[String]>,
-) {
+pub fn rail_summary_box(title: &str, rows: &[(&str, &str)], extra_lines: Option<&[String]>) {
     let mut content_lines: Vec<String> = Vec::new();
     for (label, value) in rows {
         content_lines.push(format!("{:<12}{}", label, value));
@@ -396,4 +395,3 @@ pub fn rail_summary_box(
     }
     rail_info_box(title, &content_lines, None);
 }
-

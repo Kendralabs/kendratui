@@ -9,13 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Autonomy levels for command approval.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum AutonomyLevel {
     /// Every command requires manual approval.
     #[serde(rename = "Manual")]
     Manual,
     /// Safe commands auto-approved; others require approval.
     #[serde(rename = "Semi-Auto")]
+    #[default]
     SemiAuto,
     /// All commands auto-approved (dangerous still flagged).
     #[serde(rename = "Auto")]
@@ -32,12 +33,6 @@ impl fmt::Display for AutonomyLevel {
     }
 }
 
-impl Default for AutonomyLevel {
-    fn default() -> Self {
-        Self::SemiAuto
-    }
-}
-
 impl AutonomyLevel {
     /// Parse from string (case-insensitive).
     pub fn from_str_loose(s: &str) -> Option<Self> {
@@ -51,13 +46,14 @@ impl AutonomyLevel {
 }
 
 /// Thinking depth levels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ThinkingLevel {
     #[serde(rename = "Off")]
     Off,
     #[serde(rename = "Low")]
     Low,
     #[serde(rename = "Medium")]
+    #[default]
     Medium,
     #[serde(rename = "High")]
     High,
@@ -71,12 +67,6 @@ impl fmt::Display for ThinkingLevel {
             ThinkingLevel::Medium => write!(f, "Medium"),
             ThinkingLevel::High => write!(f, "High"),
         }
-    }
-}
-
-impl Default for ThinkingLevel {
-    fn default() -> Self {
-        Self::Medium
     }
 }
 

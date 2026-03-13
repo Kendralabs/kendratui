@@ -122,9 +122,7 @@ impl BaseTool for AgentsTool {
 
         match action {
             "list" => self.list_agents(ctx),
-            other => ToolResult::fail(format!(
-                "Unknown action: {other}. Available actions: list"
-            )),
+            other => ToolResult::fail(format!("Unknown action: {other}. Available actions: list")),
         }
     }
 }
@@ -177,10 +175,7 @@ impl AgentsTool {
 #[derive(Debug, Clone)]
 pub enum SubagentEvent {
     /// Subagent started.
-    Started {
-        subagent_name: String,
-        task: String,
-    },
+    Started { subagent_name: String, task: String },
     /// Subagent made a tool call.
     ToolCall {
         subagent_name: String,
@@ -240,13 +235,7 @@ impl opendev_agents::SubagentProgressCallback for ChannelProgressCallback {
         });
     }
 
-    fn on_tool_complete(
-        &self,
-        subagent_name: &str,
-        tool_name: &str,
-        tool_id: &str,
-        success: bool,
-    ) {
+    fn on_tool_complete(&self, subagent_name: &str, tool_name: &str, tool_id: &str, success: bool) {
         let _ = self.tx.send(SubagentEvent::ToolComplete {
             subagent_name: subagent_name.to_string(),
             tool_name: tool_name.to_string(),
@@ -433,10 +422,7 @@ impl BaseTool for SpawnSubagentTool {
                         "tool_call_count".into(),
                         serde_json::json!(run_result.tool_call_count),
                     );
-                    metadata.insert(
-                        "subagent_type".into(),
-                        serde_json::json!(agent_type),
-                    );
+                    metadata.insert("subagent_type".into(), serde_json::json!(agent_type));
                     if run_result.agent_result.interrupted {
                         metadata.insert("interrupted".into(), serde_json::json!(true));
                     }

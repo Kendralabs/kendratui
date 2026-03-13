@@ -200,9 +200,7 @@ fn load_app_config(working_dir: &std::path::Path) -> opendev_models::AppConfig {
 }
 
 /// Load the merged MCP configuration (global + project).
-fn load_mcp_config(
-    working_dir: &std::path::Path,
-) -> opendev_mcp::McpConfig {
+fn load_mcp_config(working_dir: &std::path::Path) -> opendev_mcp::McpConfig {
     let paths = opendev_config::Paths::new(Some(working_dir.to_path_buf()));
     let global_mcp_path = paths.global_mcp_config();
     let project_mcp_path = get_project_config_path(working_dir);
@@ -215,9 +213,9 @@ fn load_mcp_config(
         }
     };
 
-    let project_config = project_mcp_path.as_deref().and_then(|p| {
-        load_mcp_config_file(p).ok()
-    });
+    let project_config = project_mcp_path
+        .as_deref()
+        .and_then(|p| load_mcp_config_file(p).ok());
 
     merge_configs(&global_config, project_config.as_ref())
 }
@@ -247,7 +245,10 @@ async fn main() {
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
 
     if !working_dir.exists() {
-        eprintln!("Error: Working directory does not exist: {}", working_dir.display());
+        eprintln!(
+            "Error: Working directory does not exist: {}",
+            working_dir.display()
+        );
         std::process::exit(1);
     }
 
@@ -340,8 +341,16 @@ fn handle_mcp(action: McpAction, working_dir: &std::path::Path) {
             names.sort();
             for name in names {
                 let server = &config.mcp_servers[name];
-                let status = if server.enabled { "enabled" } else { "disabled" };
-                let auto = if server.auto_start { "auto-start" } else { "manual" };
+                let status = if server.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                };
+                let auto = if server.auto_start {
+                    "auto-start"
+                } else {
+                    "manual"
+                };
                 println!(
                     "  {name}  [{status}, {auto}]  {} {}",
                     server.command,
@@ -366,11 +375,13 @@ fn handle_mcp(action: McpAction, working_dir: &std::path::Path) {
                         println!("  Environment:");
                         for (k, v) in &server.env {
                             // Mask values that look like secrets
-                            let display_val = if k.contains("KEY") || k.contains("SECRET") || k.contains("TOKEN") {
-                                "***".to_string()
-                            } else {
-                                v.clone()
-                            };
+                            let display_val =
+                                if k.contains("KEY") || k.contains("SECRET") || k.contains("TOKEN")
+                                {
+                                    "***".to_string()
+                                } else {
+                                    v.clone()
+                                };
                             println!("    {k}={display_val}");
                         }
                     }
@@ -411,8 +422,7 @@ fn handle_mcp(action: McpAction, working_dir: &std::path::Path) {
             // Load the global config, add the server, save back
             let paths = opendev_config::Paths::default();
             let global_mcp_path = paths.global_mcp_config();
-            let mut mcp_config = load_mcp_config_file(&global_mcp_path)
-                .unwrap_or_default();
+            let mut mcp_config = load_mcp_config_file(&global_mcp_path).unwrap_or_default();
             mcp_config.mcp_servers.insert(name.clone(), server_config);
             save_global_mcp_config(&mcp_config);
 
@@ -427,8 +437,7 @@ fn handle_mcp(action: McpAction, working_dir: &std::path::Path) {
         McpAction::Remove { name } => {
             let paths = opendev_config::Paths::default();
             let global_mcp_path = paths.global_mcp_config();
-            let mut mcp_config = load_mcp_config_file(&global_mcp_path)
-                .unwrap_or_default();
+            let mut mcp_config = load_mcp_config_file(&global_mcp_path).unwrap_or_default();
 
             if mcp_config.mcp_servers.remove(&name).is_some() {
                 save_global_mcp_config(&mcp_config);
@@ -441,8 +450,7 @@ fn handle_mcp(action: McpAction, working_dir: &std::path::Path) {
         McpAction::Enable { name } => {
             let paths = opendev_config::Paths::default();
             let global_mcp_path = paths.global_mcp_config();
-            let mut mcp_config = load_mcp_config_file(&global_mcp_path)
-                .unwrap_or_default();
+            let mut mcp_config = load_mcp_config_file(&global_mcp_path).unwrap_or_default();
 
             match mcp_config.mcp_servers.get_mut(&name) {
                 Some(server) => {
@@ -459,8 +467,7 @@ fn handle_mcp(action: McpAction, working_dir: &std::path::Path) {
         McpAction::Disable { name } => {
             let paths = opendev_config::Paths::default();
             let global_mcp_path = paths.global_mcp_config();
-            let mut mcp_config = load_mcp_config_file(&global_mcp_path)
-                .unwrap_or_default();
+            let mut mcp_config = load_mcp_config_file(&global_mcp_path).unwrap_or_default();
 
             match mcp_config.mcp_servers.get_mut(&name) {
                 Some(server) => {
@@ -516,21 +523,16 @@ async fn handle_run(action: RunAction, working_dir: &std::path::Path) {
             );
 
             // Serve static files from the bundled web-ui build directory (if present)
-            let static_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../web-ui/dist");
+            let static_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web-ui/dist");
             let static_path = if static_dir.exists() {
                 Some(static_dir)
             } else {
                 None
             };
 
-            if let Err(e) = opendev_web::server::start_server(
-                state,
-                &ui_host,
-                ui_port,
-                static_path.as_deref(),
-            )
-            .await
+            if let Err(e) =
+                opendev_web::server::start_server(state, &ui_host, ui_port, static_path.as_deref())
+                    .await
             {
                 eprintln!("Web server error: {e}");
                 std::process::exit(1);
@@ -737,11 +739,13 @@ async fn run_interactive(
         };
 
     // Populate initial TUI state from config
-    let mut app_state = opendev_tui::AppState::default();
-    app_state.model = config.model.clone();
-    app_state.working_dir = shorten_working_dir(working_dir);
-    app_state.git_branch = detect_git_branch(working_dir);
-    app_state.version = env!("CARGO_PKG_VERSION").to_string();
+    let mut app_state = opendev_tui::AppState {
+        model: config.model.clone(),
+        working_dir: shorten_working_dir(working_dir),
+        git_branch: detect_git_branch(working_dir),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        ..opendev_tui::AppState::default()
+    };
 
     // Inject initial message as first user submission (handled by the agent task)
     if let Some(ref msg) = initial_message {
@@ -753,8 +757,8 @@ async fn run_interactive(
     }
 
     // Create and run the TUI runner
-    let tui_runner =
-        tui_runner::TuiRunner::new(agent_runtime, system_prompt).with_initial_message(initial_message);
+    let tui_runner = tui_runner::TuiRunner::new(agent_runtime, system_prompt)
+        .with_initial_message(initial_message);
 
     if let Err(e) = tui_runner.run(app_state).await {
         eprintln!("TUI error: {e}");
@@ -764,10 +768,10 @@ async fn run_interactive(
 
 /// Shorten a working directory path for display.
 fn shorten_working_dir(path: &std::path::Path) -> String {
-    if let Some(home) = dirs_next::home_dir() {
-        if let Ok(rest) = path.strip_prefix(&home) {
-            return format!("~/{}", rest.display());
-        }
+    if let Some(home) = dirs_next::home_dir()
+        && let Ok(rest) = path.strip_prefix(&home)
+    {
+        return format!("~/{}", rest.display());
     }
     path.display().to_string()
 }

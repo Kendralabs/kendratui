@@ -21,5 +21,5 @@ pub use message::MessageController;
 pub use model_picker::{ModelOption, ModelPickerController};
 pub use plan_approval::{PlanApprovalController, PlanDecision, PlanStatus};
 pub use skill_creator::{SkillCreatorController, SkillSpec};
-pub use slash_commands::{find_matching_commands, is_command, SlashCommand, BUILTIN_COMMANDS};
+pub use slash_commands::{BUILTIN_COMMANDS, SlashCommand, find_matching_commands, is_command};
 pub use spinner::SpinnerController;

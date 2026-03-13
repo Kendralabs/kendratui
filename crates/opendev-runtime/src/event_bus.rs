@@ -130,10 +130,10 @@ impl FilteredSubscriber {
         loop {
             match self.receiver.recv().await {
                 Ok(event) => {
-                    if let Some(ref types) = self.event_types {
-                        if !types.iter().any(|t| t == &event.event_type) {
-                            continue;
-                        }
+                    if let Some(ref types) = self.event_types
+                        && !types.iter().any(|t| t == &event.event_type)
+                    {
+                        continue;
                     }
                     return Some(event);
                 }
@@ -208,10 +208,7 @@ mod tests {
     #[tokio::test]
     async fn test_filtered_subscriber() {
         let bus = EventBus::new();
-        let mut sub = FilteredSubscriber::new(
-            &bus,
-            Some(vec!["wanted".to_string()]),
-        );
+        let mut sub = FilteredSubscriber::new(&bus, Some(vec!["wanted".to_string()]));
 
         bus.emit("unwanted", "src", serde_json::json!(null));
         bus.emit("wanted", "src", serde_json::json!({"ok": true}));

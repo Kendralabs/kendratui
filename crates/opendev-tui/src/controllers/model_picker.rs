@@ -176,7 +176,10 @@ mod tests {
 
     #[test]
     fn test_format_context() {
-        assert_eq!(ModelPickerController::format_context(128_000), "128k context");
+        assert_eq!(
+            ModelPickerController::format_context(128_000),
+            "128k context"
+        );
         assert_eq!(ModelPickerController::format_context(500), "500 context");
     }
 }

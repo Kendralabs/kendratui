@@ -337,7 +337,9 @@ mod tests {
         let finder = FileFinder::new(dir.path().to_path_buf());
         let results = finder.find_files("", 100);
         // .gitignore itself may appear, but debug.log should not
-        let has_log = results.iter().any(|p| p.to_string_lossy().contains("debug.log"));
+        let has_log = results
+            .iter()
+            .any(|p| p.to_string_lossy().contains("debug.log"));
         assert!(!has_log, "debug.log should be excluded by .gitignore");
     }
 }

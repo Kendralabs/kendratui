@@ -12,10 +12,8 @@ use tracing::{debug, info, warn};
 use crate::cache::SymbolCache;
 use crate::error::LspError;
 use crate::handler::LspHandler;
-use crate::protocol::{
-    self, SourceLocation, SourceRange, UnifiedSymbolInfo, WorkspaceEdit,
-};
-use crate::servers::{default_server_configs, ServerConfig};
+use crate::protocol::{self, SourceLocation, UnifiedSymbolInfo, WorkspaceEdit};
+use crate::servers::{ServerConfig, default_server_configs};
 use crate::utils::PathUtils;
 
 /// LSP client wrapper managing language server lifecycles.
@@ -102,9 +100,7 @@ impl LspWrapper {
             "query": query
         });
 
-        let result = handler
-            .send_request("workspace/symbol", params)
-            .await?;
+        let result = handler.send_request("workspace/symbol", params).await?;
 
         let symbols = parse_symbol_response(&result);
 
@@ -198,9 +194,7 @@ impl LspWrapper {
             "newName": new_name
         });
 
-        let result = handler
-            .send_request("textDocument/rename", params)
-            .await?;
+        let result = handler.send_request("textDocument/rename", params).await?;
 
         let edit = WorkspaceEdit::from_json(&result);
 
@@ -322,10 +316,7 @@ fn parse_symbol_info(value: &serde_json::Value) -> Option<UnifiedSymbolInfo> {
 }
 
 /// Parse document symbols (can be DocumentSymbol or SymbolInformation).
-fn parse_document_symbols(
-    result: &serde_json::Value,
-    file_path: &Path,
-) -> Vec<UnifiedSymbolInfo> {
+fn parse_document_symbols(result: &serde_json::Value, file_path: &Path) -> Vec<UnifiedSymbolInfo> {
     let arr = match result.as_array() {
         Some(a) => a,
         None => return vec![],

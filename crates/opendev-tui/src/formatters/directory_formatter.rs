@@ -88,7 +88,12 @@ mod tests {
         let output = "src/main.rs\nsrc/lib.rs\ntests/test.rs";
         let result = f.format("Glob", output);
 
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("3 matching files"));
         assert_eq!(result.body.len(), 3);
         assert!(result.footer.is_none());
@@ -100,7 +105,12 @@ mod tests {
         let output = "src/main.rs:10:fn main()\nsrc/lib.rs:5:pub mod foo";
         let result = f.format("Grep", output);
 
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("2 matching results"));
     }
 
@@ -123,7 +133,12 @@ mod tests {
         let output = "file1.rs\n\nfile2.rs\n\n";
         let result = f.format("Glob", output);
 
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("2 matching files"));
     }
 }

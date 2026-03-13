@@ -270,15 +270,15 @@ impl ApprovalRulesManager {
         self.rules.retain(|r| r.id.starts_with("default_"));
         let removed = before - self.rules.len();
 
-        if matches!(scope, RuleScope::User | RuleScope::All) {
-            if let Some(path) = Self::user_permissions_path() {
-                Self::delete_permissions_file(&path);
-            }
+        if matches!(scope, RuleScope::User | RuleScope::All)
+            && let Some(path) = Self::user_permissions_path()
+        {
+            Self::delete_permissions_file(&path);
         }
-        if matches!(scope, RuleScope::Project | RuleScope::All) {
-            if let Some(ref dir) = self.project_dir {
-                Self::delete_permissions_file(&dir.join(".opendev").join("permissions.json"));
-            }
+        if matches!(scope, RuleScope::Project | RuleScope::All)
+            && let Some(ref dir) = self.project_dir
+        {
+            Self::delete_permissions_file(&dir.join(".opendev").join("permissions.json"));
         }
 
         removed
@@ -335,18 +335,29 @@ impl ApprovalRulesManager {
                     debug!("Loaded {} rules from {}", count, path.display());
                 }
                 Err(e) => {
-                    warn!("Failed to parse persistent rules from {}: {}", path.display(), e);
+                    warn!(
+                        "Failed to parse persistent rules from {}: {}",
+                        path.display(),
+                        e
+                    );
                 }
             },
             Err(e) => {
-                warn!("Failed to read persistent rules from {}: {}", path.display(), e);
+                warn!(
+                    "Failed to read persistent rules from {}: {}",
+                    path.display(),
+                    e
+                );
             }
         }
     }
 
     fn save_persistent_rules(&self, scope: RuleScope) {
-        let persistent: Vec<&ApprovalRule> =
-            self.rules.iter().filter(|r| !r.id.starts_with("default_")).collect();
+        let persistent: Vec<&ApprovalRule> = self
+            .rules
+            .iter()
+            .filter(|r| !r.id.starts_with("default_"))
+            .collect();
         let data = PermissionsFile {
             version: 1,
             rules: persistent.into_iter().cloned().collect(),
@@ -370,17 +381,21 @@ impl ApprovalRulesManager {
 
         let Some(path) = path else { return };
 
-        if let Some(parent) = path.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
-                warn!("Failed to create directory {}: {}", parent.display(), e);
-                return;
-            }
+        if let Some(parent) = path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            warn!("Failed to create directory {}: {}", parent.display(), e);
+            return;
         }
 
         match serde_json::to_string_pretty(&data) {
             Ok(json) => {
                 if let Err(e) = std::fs::write(&path, json) {
-                    warn!("Failed to save persistent rules to {}: {}", path.display(), e);
+                    warn!(
+                        "Failed to save persistent rules to {}: {}",
+                        path.display(),
+                        e
+                    );
                 } else {
                     debug!("Saved {} rules to {}", data.rules.len(), path.display());
                 }

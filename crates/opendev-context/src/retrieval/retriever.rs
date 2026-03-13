@@ -222,9 +222,7 @@ impl ContextRetriever {
         }
 
         // Search by filename
-        let target_name = Path::new(file_path)
-            .file_name()?
-            .to_str()?;
+        let target_name = Path::new(file_path).file_name()?.to_str()?;
 
         self.find_file_recursive(&self.working_dir, target_name)
     }
@@ -277,10 +275,10 @@ impl ContextRetriever {
                 if name_str == target_name {
                     return Some(path);
                 }
-            } else if path.is_dir() {
-                if let Some(found) = self.find_file_recursive(&path, target_name) {
-                    return Some(found);
-                }
+            } else if path.is_dir()
+                && let Some(found) = self.find_file_recursive(&path, target_name)
+            {
+                return Some(found);
             }
         }
         None
@@ -356,10 +354,7 @@ mod tests {
         let retriever = ContextRetriever::new(dir.path());
 
         let ctx = retriever.retrieve_context("Fix the broken login", 10);
-        assert!(ctx
-            .suggestions
-            .iter()
-            .any(|s| s.contains("test files")));
+        assert!(ctx.suggestions.iter().any(|s| s.contains("test files")));
         assert!(ctx.entities.actions.contains(&"fix".to_string()));
     }
 

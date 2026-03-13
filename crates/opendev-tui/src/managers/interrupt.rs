@@ -3,8 +3,8 @@
 //! Provides a thread-safe atomic boolean for interrupt signaling between
 //! the UI thread and agent/tool execution threads.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Thread-safe interrupt manager using an atomic boolean.
 #[derive(Clone)]

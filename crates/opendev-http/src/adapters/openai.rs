@@ -7,7 +7,7 @@
 //!
 //! See: https://platform.openai.com/docs/guides/migrate-to-responses
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const DEFAULT_API_URL: &str = "https://api.openai.com/v1/responses";
 
@@ -62,7 +62,10 @@ impl OpenAiAdapter {
             let role = msg.get("role").and_then(|r| r.as_str()).unwrap_or("");
             match role {
                 "system" => {
-                    instructions = msg.get("content").and_then(|c| c.as_str()).map(String::from);
+                    instructions = msg
+                        .get("content")
+                        .and_then(|c| c.as_str())
+                        .map(String::from);
                 }
                 "user" => {
                     let content = msg.get("content").cloned().unwrap_or(json!(""));
@@ -74,14 +77,15 @@ impl OpenAiAdapter {
                 }
                 "assistant" => {
                     // Text content → message item
-                    if let Some(content) = msg.get("content") {
-                        if content.is_string() && !content.as_str().unwrap_or("").is_empty() {
-                            input_items.push(json!({
-                                "type": "message",
-                                "role": "assistant",
-                                "content": content,
-                            }));
-                        }
+                    if let Some(content) = msg.get("content")
+                        && content.is_string()
+                        && !content.as_str().unwrap_or("").is_empty()
+                    {
+                        input_items.push(json!({
+                            "type": "message",
+                            "role": "assistant",
+                            "content": content,
+                        }));
                     }
                     // Tool calls → function_call items
                     if let Some(tool_calls) = msg.get("tool_calls").and_then(|tc| tc.as_array()) {
@@ -204,9 +208,7 @@ impl OpenAiAdapter {
                             for block in blocks {
                                 if block.get("type").and_then(|t| t.as_str()) == Some("output_text")
                                 {
-                                    if let Some(text) =
-                                        block.get("text").and_then(|t| t.as_str())
-                                    {
+                                    if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
                                         text_parts.push(text.to_string());
                                     }
                                 } else if let Some(s) = block.as_str() {
@@ -270,11 +272,7 @@ impl OpenAiAdapter {
         // Determine finish_reason
         let finish_reason = if !tool_calls.is_empty() {
             "tool_calls"
-        } else if responses_data
-            .get("status")
-            .and_then(|s| s.as_str())
-            == Some("incomplete")
-        {
+        } else if responses_data.get("status").and_then(|s| s.as_str()) == Some("incomplete") {
             "length"
         } else {
             "stop"
@@ -349,10 +347,10 @@ impl super::base::ProviderAdapter for OpenAiAdapter {
         }
 
         // Temperature (strip for reasoning models)
-        if !Self::is_reasoning_model(&payload) {
-            if let Some(temp) = payload.get("temperature") {
-                responses_payload["temperature"] = temp.clone();
-            }
+        if !Self::is_reasoning_model(&payload)
+            && let Some(temp) = payload.get("temperature")
+        {
+            responses_payload["temperature"] = temp.clone();
         }
 
         // Tools
@@ -397,11 +395,21 @@ mod tests {
 
     #[test]
     fn test_is_reasoning_model() {
-        assert!(OpenAiAdapter::is_reasoning_model(&json!({"model": "o1-preview"})));
-        assert!(OpenAiAdapter::is_reasoning_model(&json!({"model": "o1-mini"})));
-        assert!(OpenAiAdapter::is_reasoning_model(&json!({"model": "o3-mini"})));
-        assert!(!OpenAiAdapter::is_reasoning_model(&json!({"model": "gpt-4"})));
-        assert!(!OpenAiAdapter::is_reasoning_model(&json!({"model": "claude-3"})));
+        assert!(OpenAiAdapter::is_reasoning_model(
+            &json!({"model": "o1-preview"})
+        ));
+        assert!(OpenAiAdapter::is_reasoning_model(
+            &json!({"model": "o1-mini"})
+        ));
+        assert!(OpenAiAdapter::is_reasoning_model(
+            &json!({"model": "o3-mini"})
+        ));
+        assert!(!OpenAiAdapter::is_reasoning_model(
+            &json!({"model": "gpt-4"})
+        ));
+        assert!(!OpenAiAdapter::is_reasoning_model(
+            &json!({"model": "claude-3"})
+        ));
     }
 
     #[test]
@@ -645,10 +653,7 @@ mod tests {
         assert_eq!(content[0]["type"], "input_text");
         assert_eq!(content[0]["text"], "What is this?");
         assert_eq!(content[1]["type"], "input_image");
-        assert_eq!(
-            content[1]["image_url"],
-            "data:image/jpeg;base64,base64data"
-        );
+        assert_eq!(content[1]["image_url"], "data:image/jpeg;base64,base64data");
     }
 
     #[test]

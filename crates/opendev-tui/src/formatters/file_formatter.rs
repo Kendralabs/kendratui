@@ -8,7 +8,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
-use super::base::{truncate_lines, FormattedOutput, ToolFormatter};
+use super::base::{FormattedOutput, ToolFormatter, truncate_lines};
 use super::style_tokens;
 
 /// Formatter for file read/write/edit tool output.
@@ -24,7 +24,10 @@ impl FileFormatter {
         let total_lines = output.lines().count();
 
         let header = Line::from(vec![
-            Span::styled("  📄 ".to_string(), Style::default().fg(style_tokens::BLUE_PATH)),
+            Span::styled(
+                "  📄 ".to_string(),
+                Style::default().fg(style_tokens::BLUE_PATH),
+            ),
             Span::styled(
                 format!("File content ({total_lines} lines)"),
                 Style::default().fg(style_tokens::BLUE_PATH),
@@ -70,7 +73,10 @@ impl FileFormatter {
         };
 
         let header = Line::from(vec![
-            Span::styled("  ✎ ".to_string(), Style::default().fg(style_tokens::SUCCESS)),
+            Span::styled(
+                "  ✎ ".to_string(),
+                Style::default().fg(style_tokens::SUCCESS),
+            ),
             Span::styled(
                 format!("{verb} file"),
                 Style::default().fg(style_tokens::SUCCESS),
@@ -103,7 +109,7 @@ impl FileFormatter {
 
         let footer = Some(Line::from(vec![
             Span::styled(
-                format!("  +{additions} ", ),
+                format!("  +{additions} ",),
                 Style::default().fg(style_tokens::SUCCESS),
             ),
             Span::styled(
@@ -131,7 +137,13 @@ impl ToolFormatter for FileFormatter {
     fn handles(&self, tool_name: &str) -> bool {
         matches!(
             tool_name,
-            "Read" | "Write" | "Edit" | "read_file" | "write_file" | "edit_file" | "read_pdf"
+            "Read"
+                | "Write"
+                | "Edit"
+                | "read_file"
+                | "write_file"
+                | "edit_file"
+                | "read_pdf"
                 | "patch_file"
         )
     }
@@ -159,7 +171,12 @@ mod tests {
         let output = "fn main() {\n    println!(\"hello\");\n}";
         let result = f.format("Read", output);
 
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("3 lines"));
         assert_eq!(result.body.len(), 3);
     }
@@ -170,7 +187,12 @@ mod tests {
         let output = " context line\n-old line\n+new line\n context again";
         let result = f.format("Edit", output);
 
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("Edited"));
 
         // Check footer has +/- counts
@@ -185,7 +207,12 @@ mod tests {
         let f = FileFormatter;
         let result = f.format("Write", "+new content");
 
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("Written"));
     }
 

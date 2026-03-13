@@ -54,10 +54,10 @@ impl SkillMetadata {
     ///
     /// Uses a rough heuristic of ~4 characters per token.
     pub fn estimate_tokens(&self) -> Option<usize> {
-        if let Some(path) = &self.path {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                return Some(content.len() / 4);
-            }
+        if let Some(path) = &self.path
+            && let Ok(content) = std::fs::read_to_string(path)
+        {
+            return Some(content.len() / 4);
         }
         None
     }

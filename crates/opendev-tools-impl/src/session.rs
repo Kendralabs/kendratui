@@ -7,8 +7,14 @@ use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
 /// Patterns that look like secrets and should be redacted.
 const REDACTION_PATTERNS: &[&str] = &[
-    "sk-", "Bearer ", "token:", "password:", "secret:", "api_key:",
-    "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+    "sk-",
+    "Bearer ",
+    "token:",
+    "password:",
+    "secret:",
+    "api_key:",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
 ];
 
 /// Tool for listing and reading conversation sessions.
@@ -70,10 +76,7 @@ impl BaseTool for SessionTool {
 
         match action {
             "list" => {
-                let limit = args
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(20) as usize;
+                let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
                 session_list(&sessions_dir, limit)
             }
             "read" => {

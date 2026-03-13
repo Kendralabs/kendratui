@@ -64,9 +64,7 @@ pub fn router() -> Router<AppState> {
 }
 
 /// Get current configuration.
-async fn get_config(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, WebError> {
+async fn get_config(State(state): State<AppState>) -> Result<Json<serde_json::Value>, WebError> {
     let config = state.config().await;
 
     // Mask API key

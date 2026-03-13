@@ -9,12 +9,7 @@ use super::ServerConfig;
 pub fn default_server_configs() -> Vec<ServerConfig> {
     vec![
         // Rust
-        ServerConfig::new(
-            "rust-analyzer",
-            vec![],
-            "rust",
-            vec!["rs".to_string()],
-        ),
+        ServerConfig::new("rust-analyzer", vec![], "rust", vec!["rs".to_string()]),
         // Python (Pyright)
         ServerConfig::new(
             "pyright-langserver",
@@ -58,26 +53,11 @@ pub fn default_server_configs() -> Vec<ServerConfig> {
             ],
         ),
         // Java
-        ServerConfig::new(
-            "jdtls",
-            vec![],
-            "java",
-            vec!["java".to_string()],
-        ),
+        ServerConfig::new("jdtls", vec![], "java", vec!["java".to_string()]),
         // C#
-        ServerConfig::new(
-            "csharp-ls",
-            vec![],
-            "csharp",
-            vec!["cs".to_string()],
-        ),
+        ServerConfig::new("csharp-ls", vec![], "csharp", vec!["cs".to_string()]),
         // Ruby
-        ServerConfig::new(
-            "ruby-lsp",
-            vec![],
-            "ruby",
-            vec!["rb".to_string()],
-        ),
+        ServerConfig::new("ruby-lsp", vec![], "ruby", vec!["rb".to_string()]),
         // PHP
         ServerConfig::new(
             "intelephense",
@@ -123,20 +103,12 @@ pub fn default_server_configs() -> Vec<ServerConfig> {
         // Dart
         ServerConfig::new(
             "dart",
-            vec![
-                "language-server".to_string(),
-                "--protocol=lsp".to_string(),
-            ],
+            vec!["language-server".to_string(), "--protocol=lsp".to_string()],
             "dart",
             vec!["dart".to_string()],
         ),
         // Swift
-        ServerConfig::new(
-            "sourcekit-lsp",
-            vec![],
-            "swift",
-            vec!["swift".to_string()],
-        ),
+        ServerConfig::new("sourcekit-lsp", vec![], "swift", vec!["swift".to_string()]),
         // Bash
         ServerConfig::new(
             "bash-language-server",
@@ -159,12 +131,7 @@ pub fn default_server_configs() -> Vec<ServerConfig> {
             vec!["tf".to_string(), "tfvars".to_string()],
         ),
         // Zig
-        ServerConfig::new(
-            "zls",
-            vec![],
-            "zig",
-            vec!["zig".to_string()],
-        ),
+        ServerConfig::new("zls", vec![], "zig", vec!["zig".to_string()]),
         // Markdown
         ServerConfig::new(
             "marksman",
@@ -193,11 +160,7 @@ mod tests {
         let mut all_exts = HashSet::new();
         for config in &configs {
             for ext in &config.extensions {
-                assert!(
-                    all_exts.insert(ext.clone()),
-                    "Duplicate extension: {}",
-                    ext
-                );
+                assert!(all_exts.insert(ext.clone()), "Duplicate extension: {}", ext);
             }
         }
     }
@@ -219,7 +182,11 @@ mod tests {
         for config in &configs {
             assert!(!config.command.is_empty(), "Empty command");
             assert!(!config.language_id.is_empty(), "Empty language_id");
-            assert!(!config.extensions.is_empty(), "No extensions for {}", config.language_id);
+            assert!(
+                !config.extensions.is_empty(),
+                "No extensions for {}",
+                config.language_id
+            );
         }
     }
 }

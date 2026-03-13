@@ -310,11 +310,18 @@ mod tests {
         let args = make_args(&[
             ("file_path", serde_json::json!(file_path.to_str().unwrap())),
             ("old_string", serde_json::json!("let x = 1;\nlet y = 2;")),
-            ("new_string", serde_json::json!("    let x = 10;\n    let y = 20;")),
+            (
+                "new_string",
+                serde_json::json!("    let x = 10;\n    let y = 20;"),
+            ),
         ]);
 
         let result = tool.execute(args, &ctx).await;
-        assert!(result.success, "fuzzy match should succeed: {:?}", result.error);
+        assert!(
+            result.success,
+            "fuzzy match should succeed: {:?}",
+            result.error
+        );
         let content = std::fs::read_to_string(&file_path).unwrap();
         assert!(content.contains("let x = 10;"));
         assert!(content.contains("let y = 20;"));

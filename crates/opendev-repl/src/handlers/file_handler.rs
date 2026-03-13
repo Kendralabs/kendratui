@@ -60,11 +60,7 @@ impl ToolHandler for FileHandler {
         &["Read", "Write", "Edit", "Patch", "Glob", "Grep"]
     }
 
-    fn pre_check(
-        &self,
-        tool_name: &str,
-        args: &HashMap<String, Value>,
-    ) -> PreCheckResult {
+    fn pre_check(&self, tool_name: &str, args: &HashMap<String, Value>) -> PreCheckResult {
         // Track reads
         if READ_TOOLS.contains(&tool_name) {
             if let Some(path) = args.get("file_path").and_then(|v| v.as_str()) {
@@ -99,11 +95,7 @@ impl ToolHandler for FileHandler {
         }
     }
 
-    fn extract_changed_files(
-        &self,
-        tool_name: &str,
-        args: &HashMap<String, Value>,
-    ) -> Vec<String> {
+    fn extract_changed_files(&self, tool_name: &str, args: &HashMap<String, Value>) -> Vec<String> {
         if !WRITE_TOOLS.contains(&tool_name) {
             return Vec::new();
         }
@@ -116,10 +108,10 @@ impl ToolHandler for FileHandler {
         }
 
         // path is used by some tools
-        if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
-            if !files.contains(&path.to_string()) {
-                files.push(path.to_string());
-            }
+        if let Some(path) = args.get("path").and_then(|v| v.as_str())
+            && !files.contains(&path.to_string())
+        {
+            files.push(path.to_string());
         }
 
         files

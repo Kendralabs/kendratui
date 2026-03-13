@@ -97,10 +97,7 @@ pub fn format_symbol_results(symbols: &[UnifiedSymbolInfo], workspace_root: &Pat
         }));
     }
 
-    ToolResult::ok_with(
-        output,
-        serde_json::json!({ "symbols": symbol_dicts }),
-    )
+    ToolResult::ok_with(output, serde_json::json!({ "symbols": symbol_dicts }))
 }
 
 /// Extract a body preview from the source file at the given range.
@@ -125,11 +122,7 @@ fn get_body_preview(file_path: &Path, range: &SourceRange) -> Option<String> {
     let preview_lines: Vec<&str> = lines[start..=preview_end].to_vec();
     let mut preview = preview_lines.join("\n");
 
-    if preview_end < end {
-        preview = truncate(&preview, MAX_PREVIEW_CHARS);
-    } else {
-        preview = truncate(&preview, MAX_PREVIEW_CHARS);
-    }
+    preview = truncate(&preview, MAX_PREVIEW_CHARS);
 
     Some(preview)
 }

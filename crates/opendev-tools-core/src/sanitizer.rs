@@ -143,7 +143,7 @@ impl ToolResultSanitizer {
                     output: output.map(String::from),
                     error: error.map(String::from),
                     was_truncated: false,
-                }
+                };
             }
         };
 
@@ -154,7 +154,7 @@ impl ToolResultSanitizer {
                     output: Some(output_str.to_string()),
                     error: None,
                     was_truncated: false,
-                }
+                };
             }
         };
 
@@ -286,7 +286,10 @@ fn truncate_head_tail(text: &str, max_chars: usize, head_ratio: f64) -> String {
     let char_count = text.chars().count();
 
     let head: String = text.chars().take(head_size).collect();
-    let tail: String = text.chars().skip(char_count.saturating_sub(tail_size)).collect();
+    let tail: String = text
+        .chars()
+        .skip(char_count.saturating_sub(tail_size))
+        .collect();
     format!("{head}\n\n... [middle truncated] ...\n\n{tail}")
 }
 

@@ -9,8 +9,8 @@ pub mod embedded;
 pub mod loader;
 
 pub use composer::{
-    create_composer, create_default_composer, create_thinking_composer, strip_frontmatter,
-    substitute_variables, ConditionFn, PromptComposer, PromptContext, PromptSection,
+    ConditionFn, PromptComposer, PromptContext, PromptSection, create_composer,
+    create_default_composer, create_thinking_composer, strip_frontmatter, substitute_variables,
 };
-pub use embedded::{get_embedded, TEMPLATES, TEMPLATE_COUNT};
+pub use embedded::{TEMPLATE_COUNT, TEMPLATES, get_embedded};
 pub use loader::{PromptLoadError, PromptLoader};

@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" /></a>
-  <a href="https://www.rust-lang.org/"><img alt="Rust" src="https://img.shields.io/badge/rust-%3E%3D1.75-orange.svg?style=flat-square" /></a>
+  <a href="https://www.rust-lang.org/"><img alt="Rust" src="https://img.shields.io/badge/rust-%3E%3D1.94-orange.svg?style=flat-square" /></a>
   <a href="https://arxiv.org/pdf/2603.05344"><img alt="Technical Report" src="https://img.shields.io/badge/Technical%20Report-arXiv-b31b1b.svg?style=flat-square" /></a>
 </p>
 

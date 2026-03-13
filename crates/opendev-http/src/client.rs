@@ -1,6 +1,6 @@
 //! HTTP client with retry logic and cancellation support.
 
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -78,10 +78,10 @@ impl HttpClient {
 
         for attempt in 0..=self.retry_config.max_retries {
             // Check cancellation before each attempt
-            if let Some(token) = cancel {
-                if token.is_cancelled() {
-                    return Ok(HttpResult::interrupted());
-                }
+            if let Some(token) = cancel
+                && token.is_cancelled()
+            {
+                return Ok(HttpResult::interrupted());
             }
 
             let result = self.execute_request(payload, cancel).await;
@@ -89,27 +89,27 @@ impl HttpClient {
             match result {
                 Ok(hr) if hr.success => {
                     // Check if status is retryable (429/503 with a body)
-                    if let Some(status) = hr.status {
-                        if self.retry_config.is_retryable_status(status) {
-                            let delay = self.get_retry_delay(None, attempt);
-                            last_result = Some(hr);
-                            if attempt < self.retry_config.max_retries {
-                                warn!(
-                                    status,
-                                    attempt = attempt + 1,
-                                    max = self.retry_config.max_retries,
-                                    "Retryable HTTP status, backing off for {:.1}s",
-                                    delay.as_secs_f64()
-                                );
-                                self.interruptible_sleep(delay, cancel).await?;
-                                continue;
-                            }
+                    if let Some(status) = hr.status
+                        && self.retry_config.is_retryable_status(status)
+                    {
+                        let delay = self.get_retry_delay(None, attempt);
+                        last_result = Some(hr);
+                        if attempt < self.retry_config.max_retries {
                             warn!(
                                 status,
-                                "Exhausted {} retries", self.retry_config.max_retries
+                                attempt = attempt + 1,
+                                max = self.retry_config.max_retries,
+                                "Retryable HTTP status, backing off for {:.1}s",
+                                delay.as_secs_f64()
                             );
-                            return Ok(last_result.unwrap());
+                            self.interruptible_sleep(delay, cancel).await?;
+                            continue;
                         }
+                        warn!(
+                            status,
+                            "Exhausted {} retries", self.retry_config.max_retries
+                        );
+                        return Ok(last_result.unwrap());
                     }
                     return Ok(hr);
                 }
@@ -135,9 +135,7 @@ impl HttpClient {
             }
         }
 
-        Ok(last_result.unwrap_or_else(|| {
-            HttpResult::fail("Unexpected retry exhaustion", false)
-        }))
+        Ok(last_result.unwrap_or_else(|| HttpResult::fail("Unexpected retry exhaustion", false)))
     }
 
     /// Execute a single POST request, racing against cancellation.
@@ -192,21 +190,18 @@ impl HttpClient {
                 }
                 Ok(HttpResult::ok(status, body))
             }
-            Err(e) if is_retryable_error(&e) => {
-                Ok(HttpResult::fail(e.to_string(), true))
-            }
+            Err(e) if is_retryable_error(&e) => Ok(HttpResult::fail(e.to_string(), true)),
             Err(e) => Ok(HttpResult::fail(e.to_string(), false)),
         }
     }
 
     /// Determine retry delay from Retry-After header value or default backoff.
     fn get_retry_delay(&self, retry_after: Option<&str>, attempt: u32) -> Duration {
-        if let Some(val) = retry_after {
-            if let Ok(secs) = val.parse::<f64>() {
-                if secs > 0.0 {
-                    return Duration::from_secs_f64(secs);
-                }
-            }
+        if let Some(val) = retry_after
+            && let Ok(secs) = val.parse::<f64>()
+            && secs > 0.0
+        {
+            return Duration::from_secs_f64(secs);
         }
         self.retry_config.delay_for_attempt(attempt)
     }
@@ -265,12 +260,8 @@ mod tests {
 
     #[test]
     fn test_http_client_debug() {
-        let client = HttpClient::new(
-            "https://api.example.com/v1/chat",
-            HeaderMap::new(),
-            None,
-        )
-        .unwrap();
+        let client =
+            HttpClient::new("https://api.example.com/v1/chat", HeaderMap::new(), None).unwrap();
         let debug = format!("{:?}", client);
         assert!(debug.contains("api.example.com"));
     }

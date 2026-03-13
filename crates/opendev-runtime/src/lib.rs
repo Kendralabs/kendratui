@@ -12,9 +12,9 @@
 
 pub mod action_summarizer;
 pub mod approval;
-pub mod custom_commands;
 pub mod constants;
 pub mod cost_tracker;
+pub mod custom_commands;
 pub mod debug_logger;
 pub mod error_handler;
 pub mod errors;
@@ -30,20 +30,20 @@ pub mod todo;
 
 // Re-export key types at crate root for convenience.
 pub use approval::{ApprovalRule, ApprovalRulesManager, RuleAction, RuleScope, RuleType};
-pub use constants::{is_safe_command, AutonomyLevel, ThinkingLevel, SAFE_COMMANDS};
+pub use constants::{AutonomyLevel, SAFE_COMMANDS, ThinkingLevel, is_safe_command};
 pub use cost_tracker::{CostTracker, PricingInfo, TokenUsage};
 pub use error_handler::{ErrorAction, ErrorResult, OperationError};
-pub use errors::{classify_api_error, ErrorCategory, StructuredError};
+pub use errors::{ErrorCategory, StructuredError, classify_api_error};
 pub use interrupt::{InterruptToken, InterruptedError};
 pub use plan_index::PlanIndex;
 pub use plan_names::generate_plan_name;
 pub use session_model::SessionModelManager;
-pub use todo::{parse_plan_steps, TodoItem, TodoManager, TodoStatus};
+pub use todo::{TodoItem, TodoManager, TodoStatus, parse_plan_steps};
 
 pub use action_summarizer::summarize_action;
 pub use custom_commands::{CustomCommand, CustomCommandLoader};
 pub use debug_logger::SessionDebugLogger;
-pub use gitignore::GitIgnoreParser;
 pub use event_bus::{Event, EventBus, FilteredSubscriber};
+pub use gitignore::GitIgnoreParser;
 pub use snapshot::SnapshotManager;
 pub use sound::play_finish_sound;

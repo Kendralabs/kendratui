@@ -137,7 +137,13 @@ mod tests {
         let config = AppConfig::default();
         let user_store = UserStore::new(tmp_path).unwrap();
         let model_registry = ModelRegistry::new();
-        AppState::new(session_manager, config, "/tmp/test".to_string(), user_store, model_registry)
+        AppState::new(
+            session_manager,
+            config,
+            "/tmp/test".to_string(),
+            user_store,
+            model_registry,
+        )
     }
 
     #[tokio::test]

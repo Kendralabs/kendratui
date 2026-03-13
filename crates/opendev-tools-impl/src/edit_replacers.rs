@@ -38,6 +38,7 @@ pub fn find_match(original: &str, old_content: &str) -> Option<MatchResult> {
     let original = normalize_line_endings(original);
     let old_content = normalize_line_endings(old_content);
 
+    #[allow(clippy::type_complexity)]
     let passes: &[(&str, fn(&str, &str) -> Option<String>)] = &[
         ("simple", simple_find),
         ("line_trimmed", line_trimmed_find),
@@ -95,9 +96,10 @@ fn line_trimmed_find(original: &str, old_content: &str) -> Option<String> {
         if i + old_trimmed.len() > original_lines.len() {
             continue;
         }
-        let all_match = old_trimmed.iter().enumerate().all(|(j, old_ln)| {
-            original_lines[i + j].trim() == *old_ln
-        });
+        let all_match = old_trimmed
+            .iter()
+            .enumerate()
+            .all(|(j, old_ln)| original_lines[i + j].trim() == *old_ln);
         if all_match {
             let actual = original_lines[i..i + old_trimmed.len()].join("\n");
             if original.contains(&actual) {
@@ -161,7 +163,9 @@ fn block_anchor_find(original: &str, old_content: &str) -> Option<String> {
     }
 
     let threshold = if candidates.len() == 1 { 0.0 } else { 0.3 };
-    let best = candidates.iter().max_by(|a, b| a.2.partial_cmp(&b.2).unwrap())?;
+    let best = candidates
+        .iter()
+        .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap())?;
     if best.2 < threshold {
         return None;
     }
@@ -231,14 +235,15 @@ fn indentation_flexible_find(original: &str, old_content: &str) -> Option<String
         let mut matched_indices: Vec<usize> = Vec::new();
         let mut j = 0;
         let search_end = (i + old_stripped.len() * 3).min(original_lines.len());
-        for k in i..search_end {
+        for (k, orig_line) in original_lines[i..search_end].iter().enumerate() {
+            let k = k + i;
             if j >= old_stripped.len() {
                 break;
             }
-            if original_lines[k].trim().is_empty() {
+            if orig_line.trim().is_empty() {
                 continue; // skip blank lines
             }
-            if original_lines[k].trim() == old_stripped[j] {
+            if orig_line.trim() == old_stripped[j] {
                 matched_indices.push(k);
                 j += 1;
             } else {
@@ -339,8 +344,15 @@ fn context_aware_find(original: &str, old_content: &str) -> Option<String> {
 
     let original_lines: Vec<&str> = original.split('\n').collect();
 
-    let first_ctx = old_lines.iter().find(|l| !l.trim().is_empty()).map(|l| l.trim())?;
-    let last_ctx = old_lines.iter().rev().find(|l| !l.trim().is_empty()).map(|l| l.trim())?;
+    let first_ctx = old_lines
+        .iter()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| l.trim())?;
+    let last_ctx = old_lines
+        .iter()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| l.trim())?;
 
     // Find all positions of first anchor
     let starts: Vec<usize> = original_lines
@@ -458,7 +470,12 @@ fn lcs_length(a: &[u8], b: &[u8]) -> usize {
 // ---------------------------------------------------------------------------
 
 /// Generate a unified diff between two strings (like `diff -u`).
-pub fn unified_diff(file_path: &str, original: &str, modified: &str, context_lines: usize) -> String {
+pub fn unified_diff(
+    file_path: &str,
+    original: &str,
+    modified: &str,
+    context_lines: usize,
+) -> String {
     let old_lines: Vec<&str> = original.split('\n').collect();
     let new_lines: Vec<&str> = modified.split('\n').collect();
 
@@ -545,15 +562,29 @@ pub fn unified_diff(file_path: &str, original: &str, modified: &str, context_lin
             }
             if i >= hunk_start && i < hunk_end {
                 match change {
-                    DiffLine::Context(_) => { old_count += 1; new_count += 1; }
-                    DiffLine::Remove(_) => { old_count += 1; }
-                    DiffLine::Add(_) => { new_count += 1; }
+                    DiffLine::Context(_) => {
+                        old_count += 1;
+                        new_count += 1;
+                    }
+                    DiffLine::Remove(_) => {
+                        old_count += 1;
+                    }
+                    DiffLine::Add(_) => {
+                        new_count += 1;
+                    }
                 }
             }
             match change {
-                DiffLine::Context(_) => { ol += 1; nl += 1; }
-                DiffLine::Remove(_) => { ol += 1; }
-                DiffLine::Add(_) => { nl += 1; }
+                DiffLine::Context(_) => {
+                    ol += 1;
+                    nl += 1;
+                }
+                DiffLine::Remove(_) => {
+                    ol += 1;
+                }
+                DiffLine::Add(_) => {
+                    nl += 1;
+                }
             }
         }
 
@@ -713,10 +744,7 @@ mod tests {
         let old = "let x = 1;\nlet y = 2;";
         let result = find_match(original, old).unwrap();
         // May match via line_trimmed or indentation_flexible
-        assert!(
-            result.pass_name == "line_trimmed"
-                || result.pass_name == "indentation_flexible"
-        );
+        assert!(result.pass_name == "line_trimmed" || result.pass_name == "indentation_flexible");
     }
 
     // ---- Pass 6: EscapeNormalized ----
@@ -777,8 +805,7 @@ mod tests {
 
     #[test]
     fn test_context_aware_match() {
-        let original =
-            "fn setup() {\n    init();\n}\n\nfn main() {\n    let x = compute();\n    println!(\"{}\", x);\n}";
+        let original = "fn setup() {\n    init();\n}\n\nfn main() {\n    let x = compute();\n    println!(\"{}\", x);\n}";
         // Old content has matching anchors but slightly different middle
         let old = "fn main() {\n    let x = calculate();\n    println!(\"{}\", x);\n}";
         let result = find_match(original, old).unwrap();
@@ -800,10 +827,7 @@ mod tests {
         let old = "  fn foo() {\n      bar();\n  }";
         let result = find_match(original, old).unwrap();
         // Should match via line_trimmed (earlier pass)
-        assert!(
-            result.pass_name == "line_trimmed"
-                || result.pass_name == "multi_occurrence"
-        );
+        assert!(result.pass_name == "line_trimmed" || result.pass_name == "multi_occurrence");
         assert_eq!(result.actual, "    fn foo() {\n        bar();\n    }");
     }
 
@@ -892,7 +916,8 @@ mod tests {
 
     #[test]
     fn test_multiline_exact() {
-        let original = "fn main() {\n    let x = 1;\n    let y = 2;\n    println!(\"{} {}\", x, y);\n}";
+        let original =
+            "fn main() {\n    let x = 1;\n    let y = 2;\n    println!(\"{} {}\", x, y);\n}";
         let old = "    let x = 1;\n    let y = 2;";
         let result = find_match(original, old).unwrap();
         assert_eq!(result.pass_name, "simple");

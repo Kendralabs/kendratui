@@ -91,38 +91,36 @@ impl ExecutionReflector {
         if let (Some(list_idx), Some(read_idx)) = (
             names.iter().position(|&n| n == "list_files"),
             names.iter().position(|&n| n == "read_file"),
-        ) {
-            if list_idx < read_idx {
-                return Some(ReflectionResult {
-                    category: "file_operations".to_string(),
-                    content: "List directory contents before reading files to understand \
+        ) && list_idx < read_idx
+        {
+            return Some(ReflectionResult {
+                category: "file_operations".to_string(),
+                content: "List directory contents before reading files to understand \
                               structure and locate files"
-                        .to_string(),
-                    confidence: 0.75,
-                    reasoning: "Sequential list_files -> read_file pattern shows exploratory \
+                    .to_string(),
+                confidence: 0.75,
+                reasoning: "Sequential list_files -> read_file pattern shows exploratory \
                                 file access"
-                        .to_string(),
-                });
-            }
+                    .to_string(),
+            });
         }
 
         // Pattern: read_file -> write_file
         if let (Some(read_idx), Some(write_idx)) = (
             names.iter().position(|&n| n == "read_file"),
             names.iter().position(|&n| n == "write_file"),
-        ) {
-            if read_idx < write_idx {
-                return Some(ReflectionResult {
-                    category: "file_operations".to_string(),
-                    content: "Read file contents before writing to understand current state \
+        ) && read_idx < write_idx
+        {
+            return Some(ReflectionResult {
+                category: "file_operations".to_string(),
+                content: "Read file contents before writing to understand current state \
                               and preserve important data"
-                        .to_string(),
-                    confidence: 0.8,
-                    reasoning: "Sequential read_file -> write_file shows safe modification \
+                    .to_string(),
+                confidence: 0.8,
+                reasoning: "Sequential read_file -> write_file shows safe modification \
                                 workflow"
-                        .to_string(),
-                });
-            }
+                    .to_string(),
+            });
         }
 
         // Pattern: multiple read_file calls
@@ -153,17 +151,16 @@ impl ExecutionReflector {
         if let (Some(search_idx), Some(read_idx)) = (
             names.iter().position(|&n| n == "search"),
             names.iter().position(|&n| n == "read_file"),
-        ) {
-            if search_idx < read_idx {
-                return Some(ReflectionResult {
-                    category: "code_navigation".to_string(),
-                    content: "Search for keywords or patterns before reading files to locate \
+        ) && search_idx < read_idx
+        {
+            return Some(ReflectionResult {
+                category: "code_navigation".to_string(),
+                content: "Search for keywords or patterns before reading files to locate \
                               relevant code efficiently"
-                        .to_string(),
-                    confidence: 0.8,
-                    reasoning: "Search followed by read shows targeted file access".to_string(),
-                });
-            }
+                    .to_string(),
+                confidence: 0.8,
+                reasoning: "Search followed by read shows targeted file access".to_string(),
+            });
         }
 
         // Pattern: multiple searches
@@ -184,10 +181,7 @@ impl ExecutionReflector {
         None
     }
 
-    fn extract_testing_pattern(
-        &self,
-        tool_calls: &[ToolCallInfo],
-    ) -> Option<ReflectionResult> {
+    fn extract_testing_pattern(&self, tool_calls: &[ToolCallInfo]) -> Option<ReflectionResult> {
         let names: Vec<&str> = tool_calls.iter().map(|tc| tc.name.as_str()).collect();
 
         let test_keywords = ["test", "pytest", "jest", "npm test"];
@@ -233,15 +227,24 @@ impl ExecutionReflector {
             return None;
         }
 
-        let install_keywords = ["npm install", "pip install", "yarn install", "poetry install"];
+        let install_keywords = [
+            "npm install",
+            "pip install",
+            "yarn install",
+            "poetry install",
+        ];
         let run_keywords = ["npm start", "python", "node", "pytest"];
 
-        let has_install = commands
-            .iter()
-            .any(|cmd| install_keywords.iter().any(|kw| cmd.to_lowercase().contains(kw)));
-        let has_run = commands
-            .iter()
-            .any(|cmd| run_keywords.iter().any(|kw| cmd.to_lowercase().contains(kw)));
+        let has_install = commands.iter().any(|cmd| {
+            install_keywords
+                .iter()
+                .any(|kw| cmd.to_lowercase().contains(kw))
+        });
+        let has_run = commands.iter().any(|cmd| {
+            run_keywords
+                .iter()
+                .any(|kw| cmd.to_lowercase().contains(kw))
+        });
 
         if has_install && has_run {
             return Some(ReflectionResult {
@@ -250,8 +253,7 @@ impl ExecutionReflector {
                           ensure all requirements are met"
                     .to_string(),
                 confidence: 0.8,
-                reasoning: "Install followed by run/test shows proper setup workflow"
-                    .to_string(),
+                reasoning: "Install followed by run/test shows proper setup workflow".to_string(),
             });
         }
 
@@ -289,8 +291,7 @@ impl ExecutionReflector {
                           and check path correctness"
                     .to_string(),
                 confidence: 0.7,
-                reasoning: "File access error suggests need for directory verification"
-                    .to_string(),
+                reasoning: "File access error suggests need for directory verification".to_string(),
             });
         }
 
@@ -375,11 +376,7 @@ mod tests {
     #[test]
     fn test_multiple_reads_pattern() {
         let reflector = ExecutionReflector::default();
-        let calls = vec![
-            tool("read_file"),
-            tool("read_file"),
-            tool("read_file"),
-        ];
+        let calls = vec![tool("read_file"), tool("read_file"), tool("read_file")];
         let result = reflector.reflect("understand code", &calls, "success");
         assert!(result.is_some());
         assert_eq!(result.unwrap().category, "code_navigation");

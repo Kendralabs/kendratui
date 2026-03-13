@@ -83,9 +83,7 @@ impl BaseTool for VlmTool {
         let image_url = args.get("image_url").and_then(|v| v.as_str());
 
         if image_path.is_none() && image_url.is_none() {
-            return ToolResult::fail(
-                "Either image_path or image_url must be provided",
-            );
+            return ToolResult::fail("Either image_path or image_url must be provided");
         }
 
         let provider = args
@@ -116,18 +114,12 @@ impl BaseTool for VlmTool {
             };
 
             if !path.exists() {
-                return ToolResult::fail(format!(
-                    "Image file not found: {path_str}"
-                ));
+                return ToolResult::fail(format!("Image file not found: {path_str}"));
             }
 
             let data = match std::fs::read(&path) {
                 Ok(d) => d,
-                Err(e) => {
-                    return ToolResult::fail(format!(
-                        "Failed to read image file: {e}"
-                    ))
-                }
+                Err(e) => return ToolResult::fail(format!("Failed to read image file: {e}")),
             };
 
             let ext = path
@@ -189,7 +181,7 @@ impl BaseTool for VlmTool {
             _ => {
                 return ToolResult::fail(format!(
                     "API key not found. Please set {api_key_env} environment variable."
-                ))
+                ));
             }
         };
 
@@ -213,9 +205,7 @@ impl BaseTool for VlmTool {
             .build()
         {
             Ok(c) => c,
-            Err(e) => {
-                return ToolResult::fail(format!("Failed to create HTTP client: {e}"))
-            }
+            Err(e) => return ToolResult::fail(format!("Failed to create HTTP client: {e}")),
         };
 
         let response = match client
@@ -241,9 +231,7 @@ impl BaseTool for VlmTool {
         let status = response.status().as_u16();
         let body = match response.text().await {
             Ok(t) => t,
-            Err(e) => {
-                return ToolResult::fail(format!("Failed to read response: {e}"))
-            }
+            Err(e) => return ToolResult::fail(format!("Failed to read response: {e}")),
         };
 
         if status != 200 {
@@ -253,9 +241,7 @@ impl BaseTool for VlmTool {
         // Parse response
         let response_json: serde_json::Value = match serde_json::from_str(&body) {
             Ok(v) => v,
-            Err(e) => {
-                return ToolResult::fail(format!("Failed to parse response: {e}"))
-            }
+            Err(e) => return ToolResult::fail(format!("Failed to parse response: {e}")),
         };
 
         let content = response_json
@@ -329,7 +315,10 @@ mod tests {
         let ctx = ToolContext::new("/tmp");
         let args = make_args(&[
             ("prompt", serde_json::json!("Describe this")),
-            ("image_path", serde_json::json!("/tmp/nonexistent_image.png")),
+            (
+                "image_path",
+                serde_json::json!("/tmp/nonexistent_image.png"),
+            ),
         ]);
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
@@ -386,7 +375,8 @@ mod tests {
         std::fs::write(&img_path, &[0x89, 0x50, 0x4E, 0x47]).unwrap();
 
         // Ensure no API key is set
-        std::env::remove_var("OPENAI_API_KEY");
+        // SAFETY: test-only; ensures no API key interferes with the test.
+        unsafe { std::env::remove_var("OPENAI_API_KEY") };
 
         let args = make_args(&[
             ("prompt", serde_json::json!("Describe")),

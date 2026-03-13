@@ -259,7 +259,10 @@ impl SnapshotManager {
         match self.git(&["init", "--bare"]) {
             Ok(_) => {
                 self.initialized = true;
-                info!("Shadow snapshot repo initialized at {}", self.shadow_dir.display());
+                info!(
+                    "Shadow snapshot repo initialized at {}",
+                    self.shadow_dir.display()
+                );
                 true
             }
             Err(e) => {

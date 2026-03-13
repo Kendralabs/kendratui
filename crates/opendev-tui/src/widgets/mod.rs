@@ -9,6 +9,7 @@ pub mod status_bar;
 pub mod thinking;
 pub mod todo_panel;
 pub mod tool_display;
+pub mod welcome_panel;
 
 pub use conversation::ConversationWidget;
 pub use input::InputWidget;
@@ -19,3 +20,4 @@ pub use status_bar::StatusBarWidget;
 pub use thinking::{ThinkingBlock, ThinkingPhase};
 pub use todo_panel::{TodoDisplayItem, TodoDisplayStatus, TodoPanelWidget};
 pub use tool_display::ToolDisplayWidget;
+pub use welcome_panel::{WelcomePanelState, WelcomePanelWidget};

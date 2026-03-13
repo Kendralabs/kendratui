@@ -59,7 +59,10 @@ impl DeltaOperation {
             .unwrap_or("")
             .to_string();
 
-        let content = payload.get("content").and_then(|v| v.as_str()).map(String::from);
+        let content = payload
+            .get("content")
+            .and_then(|v| v.as_str())
+            .map(String::from);
 
         let bullet_id = payload
             .get("bullet_id")

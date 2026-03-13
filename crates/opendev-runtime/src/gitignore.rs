@@ -11,32 +11,70 @@ use tracing::debug;
 /// Directories always ignored regardless of `.gitignore` contents.
 pub const ALWAYS_IGNORE_DIRS: &[&str] = &[
     // Version control
-    ".git", ".hg", ".svn", ".bzr", "_darcs", ".fossil",
+    ".git",
+    ".hg",
+    ".svn",
+    ".bzr",
+    "_darcs",
+    ".fossil",
     // OS generated
-    ".DS_Store", ".Spotlight-V100", ".Trashes",
-    "Thumbs.db", "desktop.ini", "$RECYCLE.BIN",
+    ".DS_Store",
+    ".Spotlight-V100",
+    ".Trashes",
+    "Thumbs.db",
+    "desktop.ini",
+    "$RECYCLE.BIN",
     // Python caches
-    "__pycache__", ".pytest_cache", ".mypy_cache", ".pytype",
-    ".pyre", ".hypothesis", ".tox", ".nox", "cython_debug", ".eggs",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".pytype",
+    ".pyre",
+    ".hypothesis",
+    ".tox",
+    ".nox",
+    "cython_debug",
+    ".eggs",
     // Node/JS caches
-    "node_modules", ".npm", ".yarn", ".pnpm-store",
-    ".next", ".nuxt", ".output", ".svelte-kit", ".angular",
-    ".parcel-cache", ".turbo",
+    "node_modules",
+    ".npm",
+    ".yarn",
+    ".pnpm-store",
+    ".next",
+    ".nuxt",
+    ".output",
+    ".svelte-kit",
+    ".angular",
+    ".parcel-cache",
+    ".turbo",
     // IDE/Editor
-    ".idea", ".vscode", ".vs", ".settings",
+    ".idea",
+    ".vscode",
+    ".vs",
+    ".settings",
     // Java/Kotlin
     ".gradle",
     // Elixir
-    "_build", ".elixir_ls",
+    "_build",
+    ".elixir_ls",
     // iOS
-    "Pods", "DerivedData", "xcuserdata",
+    "Pods",
+    "DerivedData",
+    "xcuserdata",
     // Ruby
     ".bundle",
     // Virtual environments
-    ".venv", "venv",
+    ".venv",
+    "venv",
     // Misc caches
-    ".cache", ".sass-cache", ".eslintcache", ".stylelintcache",
-    ".tmp", ".temp", "tmp", "temp",
+    ".cache",
+    ".sass-cache",
+    ".eslintcache",
+    ".stylelintcache",
+    ".tmp",
+    ".temp",
+    "tmp",
+    "temp",
     // Rust
     "target",
 ];
@@ -136,10 +174,10 @@ impl GitIgnoreParser {
     fn load_gitignore_files(&mut self) {
         // Load root .gitignore
         let root_gitignore = self.root_dir.join(".gitignore");
-        if root_gitignore.exists() {
-            if let Some(spec) = self.parse_gitignore(&root_gitignore, &self.root_dir.clone()) {
-                self.specs.push(spec);
-            }
+        if root_gitignore.exists()
+            && let Some(spec) = self.parse_gitignore(&root_gitignore, &self.root_dir.clone())
+        {
+            self.specs.push(spec);
         }
 
         // Walk subdirectories
@@ -168,10 +206,10 @@ impl GitIgnoreParser {
             }
 
             let gitignore = path.join(".gitignore");
-            if gitignore.exists() {
-                if let Some(spec) = self.parse_gitignore(&gitignore, &path) {
-                    self.specs.push(spec);
-                }
+            if gitignore.exists()
+                && let Some(spec) = self.parse_gitignore(&gitignore, &path)
+            {
+                self.specs.push(spec);
             }
 
             self.walk_for_gitignores(&path);

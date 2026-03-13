@@ -6,13 +6,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::{debug, error, warn};
 
 use crate::error::LspError;
@@ -63,18 +63,17 @@ impl LspHandler {
             .kill_on_drop(true);
 
         let mut child = cmd.spawn().map_err(|e| {
-            LspError::ServerStart(format!(
-                "Failed to start {}: {}",
-                self.config.command, e
-            ))
+            LspError::ServerStart(format!("Failed to start {}: {}", self.config.command, e))
         })?;
 
-        let stdin = child.stdin.take().ok_or_else(|| {
-            LspError::ServerStart("Failed to capture stdin".to_string())
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            LspError::ServerStart("Failed to capture stdout".to_string())
-        })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| LspError::ServerStart("Failed to capture stdin".to_string()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| LspError::ServerStart("Failed to capture stdout".to_string()))?;
 
         // Spawn stdin writer task
         let (stdin_tx, mut stdin_rx) = mpsc::channel::<String>(64);
@@ -116,10 +115,7 @@ impl LspHandler {
                                         .to_string();
                                     let _ = sender.send(Err(LspError::ServerResponse(err_msg)));
                                 } else {
-                                    let result = msg
-                                        .get("result")
-                                        .cloned()
-                                        .unwrap_or(Value::Null);
+                                    let result = msg.get("result").cloned().unwrap_or(Value::Null);
                                     let _ = sender.send(Ok(result));
                                 }
                             }
@@ -180,7 +176,10 @@ impl LspHandler {
         });
 
         let result = self.send_request("initialize", params).await?;
-        debug!("LSP initialized: {:?}", result.get("capabilities").is_some());
+        debug!(
+            "LSP initialized: {:?}",
+            result.get("capabilities").is_some()
+        );
 
         // Send initialized notification
         self.send_notification("initialized", serde_json::json!({}))
@@ -191,15 +190,8 @@ impl LspHandler {
     }
 
     /// Send a JSON-RPC request and wait for the response.
-    pub async fn send_request(
-        &self,
-        method: &str,
-        params: Value,
-    ) -> Result<Value, LspError> {
-        let tx = self
-            .stdin_tx
-            .as_ref()
-            .ok_or(LspError::NotRunning)?;
+    pub async fn send_request(&self, method: &str, params: Value) -> Result<Value, LspError> {
+        let tx = self.stdin_tx.as_ref().ok_or(LspError::NotRunning)?;
 
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 
@@ -235,15 +227,8 @@ impl LspHandler {
     }
 
     /// Send a JSON-RPC notification (no response expected).
-    pub async fn send_notification(
-        &self,
-        method: &str,
-        params: Value,
-    ) -> Result<(), LspError> {
-        let tx = self
-            .stdin_tx
-            .as_ref()
-            .ok_or(LspError::NotRunning)?;
+    pub async fn send_notification(&self, method: &str, params: Value) -> Result<(), LspError> {
+        let tx = self.stdin_tx.as_ref().ok_or(LspError::NotRunning)?;
 
         let notification = serde_json::json!({
             "jsonrpc": "2.0",
@@ -280,11 +265,7 @@ impl LspHandler {
 
         // Wait for process to exit
         if let Some(ref mut child) = self.process {
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                child.wait(),
-            )
-            .await;
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), child.wait()).await;
         }
 
         self.process = None;
@@ -345,9 +326,8 @@ async fn read_message<R: tokio::io::AsyncRead + Unpin>(
         }
     }
 
-    let length = content_length.ok_or_else(|| {
-        LspError::Protocol("Missing Content-Length header".to_string())
-    })?;
+    let length = content_length
+        .ok_or_else(|| LspError::Protocol("Missing Content-Length header".to_string()))?;
 
     // Read body
     let mut body = vec![0u8; length];
@@ -397,9 +377,7 @@ mod tests {
             extensions: vec!["test".to_string()],
         };
         let handler = LspHandler::new(config, PathBuf::from("/tmp"));
-        let result = handler
-            .send_request("test/method", Value::Null)
-            .await;
+        let result = handler.send_request("test/method", Value::Null).await;
         assert!(result.is_err());
     }
 

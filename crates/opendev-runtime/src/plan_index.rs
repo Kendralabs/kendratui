@@ -79,8 +79,7 @@ impl PlanIndex {
         let tmp_path = self.plans_dir.join(".plans-idx-tmp");
         {
             let mut f = std::fs::File::create(&tmp_path)?;
-            let json = serde_json::to_string_pretty(data)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let json = serde_json::to_string_pretty(data).map_err(std::io::Error::other)?;
             f.write_all(json.as_bytes())?;
             f.write_all(b"\n")?;
             f.sync_all()?;
@@ -94,12 +93,7 @@ impl PlanIndex {
     /// Add or update an entry in the plan index.
     ///
     /// If an entry with the same name already exists, it is replaced (upsert).
-    pub fn add_entry(
-        &self,
-        name: &str,
-        session_id: Option<&str>,
-        project_path: Option<&str>,
-    ) {
+    pub fn add_entry(&self, name: &str, session_id: Option<&str>, project_path: Option<&str>) {
         let mut data = self.read_index();
 
         // Upsert: remove existing entry with same name

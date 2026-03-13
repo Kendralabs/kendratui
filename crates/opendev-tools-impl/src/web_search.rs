@@ -325,11 +325,7 @@ fn extract_tag_text(html: &str) -> Option<String> {
     let start = html.find('>')? + 1;
     let rest = &html[start..];
     let end = rest.find("</").unwrap_or(rest.len().min(500));
-    Some(
-        html_decode(&rest[..end])
-            .trim()
-            .to_string(),
-    )
+    Some(html_decode(&rest[..end]).trim().to_string())
 }
 
 /// Extract the actual URL from DuckDuckGo's redirect URL.
@@ -404,10 +400,7 @@ fn strip_html_tags(s: &str) -> String {
         }
     }
     // Collapse whitespace
-    let collapsed: String = result
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let collapsed: String = result.split_whitespace().collect::<Vec<_>>().join(" ");
     collapsed.trim().to_string()
 }
 
@@ -467,19 +460,11 @@ mod tests {
         ];
 
         // Allowed filter
-        let filtered = filter_by_domain(
-            results.clone(),
-            &["rust-lang.org".to_string()],
-            &[],
-        );
+        let filtered = filter_by_domain(results.clone(), &["rust-lang.org".to_string()], &[]);
         assert_eq!(filtered.len(), 2); // rust-lang.org and docs.rust-lang.org
 
         // Blocked filter
-        let filtered = filter_by_domain(
-            results.clone(),
-            &[],
-            &["golang.org".to_string()],
-        );
+        let filtered = filter_by_domain(results.clone(), &[], &["golang.org".to_string()]);
         assert_eq!(filtered.len(), 2); // everything except golang.org
     }
 
@@ -503,7 +488,10 @@ mod tests {
     #[test]
     fn test_urldecode() {
         assert_eq!(urldecode("hello%20world"), "hello world");
-        assert_eq!(urldecode("https%3A%2F%2Fexample.com"), "https://example.com");
+        assert_eq!(
+            urldecode("https%3A%2F%2Fexample.com"),
+            "https://example.com"
+        );
     }
 
     #[test]

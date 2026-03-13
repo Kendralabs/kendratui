@@ -22,8 +22,7 @@ static FRONTMATTER_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?s)^\s*<!--.*?-->\s*").unwrap());
 
 /// Regex for `{{variable_name}}` placeholders in templates.
-static VARIABLE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\{\{(\w+)\}\}").unwrap());
+static VARIABLE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{\{(\w+)\}\}").unwrap());
 
 /// Runtime context passed to condition functions for section filtering.
 pub type PromptContext = HashMap<String, serde_json::Value>;
@@ -177,7 +176,7 @@ impl PromptComposer {
         let mut included: Vec<&PromptSection> = self
             .sections
             .iter()
-            .filter(|s| s.condition.as_ref().map_or(true, |f| f(context)))
+            .filter(|s| s.condition.as_ref().is_none_or(|f| f(context)))
             .collect();
         included.sort_by_key(|s| s.priority);
         included
@@ -249,11 +248,7 @@ pub fn substitute_variables(template: &str, variables: &HashMap<String, String>)
 /// Create a condition that checks for a boolean context value.
 pub fn ctx_bool(key: &str) -> ConditionFn {
     let key = key.to_string();
-    Box::new(move |ctx: &PromptContext| {
-        ctx.get(&key)
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-    })
+    Box::new(move |ctx: &PromptContext| ctx.get(&key).and_then(|v| v.as_bool()).unwrap_or(false))
 }
 
 /// Create a condition that checks for a string context value equality.
@@ -281,9 +276,7 @@ pub fn ctx_in(key: &str, values: &[&str]) -> ConditionFn {
 /// Create a condition that checks for a non-null context value.
 pub fn ctx_present(key: &str) -> ConditionFn {
     let key = key.to_string();
-    Box::new(move |ctx: &PromptContext| {
-        ctx.get(&key).is_some_and(|v| !v.is_null())
-    })
+    Box::new(move |ctx: &PromptContext| ctx.get(&key).is_some_and(|v| !v.is_null()))
 }
 
 // ---------------------------------------------------------------------------
@@ -728,7 +721,10 @@ mod tests {
     fn test_substitute_variables_basic() {
         let mut vars = HashMap::new();
         vars.insert("name".to_string(), "world".to_string());
-        assert_eq!(substitute_variables("Hello {{name}}!", &vars), "Hello world!");
+        assert_eq!(
+            substitute_variables("Hello {{name}}!", &vars),
+            "Hello world!"
+        );
     }
 
     #[test]
@@ -825,6 +821,9 @@ mod tests {
         let composer = create_thinking_composer(dir.path());
         let result = composer.compose(&HashMap::new());
         // At least one thinking template should resolve from embedded
-        assert!(!result.is_empty(), "Thinking composer should produce output from embedded");
+        assert!(
+            !result.is_empty(),
+            "Thinking composer should produce output from embedded"
+        );
     }
 }

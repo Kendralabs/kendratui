@@ -68,7 +68,7 @@ impl BaseTool for WebScreenshotTool {
         match action {
             "list" => list_screenshots(),
             "clear" => clear_screenshots(5),
-            "capture" | _ => {
+            _ => {
                 let url = match args.get("url").and_then(|v| v.as_str()) {
                     Some(u) if !u.trim().is_empty() => u.trim(),
                     _ => return ToolResult::fail("url is required for screenshot capture"),
@@ -84,8 +84,7 @@ impl BaseTool for WebScreenshotTool {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(1080) as u32;
 
-                capture_screenshot(url, output_path, viewport_width, viewport_height, ctx)
-                    .await
+                capture_screenshot(url, output_path, viewport_width, viewport_height, ctx).await
             }
         }
     }
@@ -122,8 +121,7 @@ fn generate_output_path(url: &str) -> PathBuf {
         .split('/')
         .next()
         .unwrap_or("page")
-        .replace(':', "_")
-        .replace('/', "_");
+        .replace([':', '/'], "_");
 
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -145,13 +143,10 @@ fn find_browser() -> Option<String> {
     ];
 
     for candidate in &candidates {
-        if let Ok(output) = std::process::Command::new("which")
-            .arg(candidate)
-            .output()
+        if let Ok(output) = std::process::Command::new("which").arg(candidate).output()
+            && output.status.success()
         {
-            if output.status.success() {
-                return Some(candidate.to_string());
-            }
+            return Some(candidate.to_string());
         }
         // Direct path check
         if Path::new(candidate).exists() {
@@ -322,12 +317,11 @@ fn list_screenshots() -> ToolResult {
     if let Ok(read_dir) = std::fs::read_dir(&dir) {
         for entry in read_dir.flatten() {
             let path = entry.path();
-            if let Some(ext) = path.extension() {
-                if ext == "png" || ext == "html" {
-                    if let Ok(meta) = entry.metadata() {
-                        entries.push((path, meta));
-                    }
-                }
+            if let Some(ext) = path.extension()
+                && (ext == "png" || ext == "html")
+                && let Ok(meta) = entry.metadata()
+            {
+                entries.push((path, meta));
             }
         }
     }
@@ -336,10 +330,7 @@ fn list_screenshots() -> ToolResult {
     entries.sort_by(|a, b| {
         b.1.modified()
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-            .cmp(
-                &a.1.modified()
-                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-            )
+            .cmp(&a.1.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH))
     });
 
     // Show at most 10
@@ -352,19 +343,12 @@ fn list_screenshots() -> ToolResult {
     let mut output = format!("Screenshots ({}, showing up to 10):\n\n", entries.len());
     for (path, meta) in &entries {
         let size_kb = meta.len() as f64 / 1024.0;
-        output.push_str(&format!(
-            "  {} ({:.1} KB)\n",
-            path.display(),
-            size_kb
-        ));
+        output.push_str(&format!("  {} ({:.1} KB)\n", path.display(), size_kb));
     }
 
     let mut metadata = HashMap::new();
     metadata.insert("count".into(), serde_json::json!(entries.len()));
-    metadata.insert(
-        "directory".into(),
-        serde_json::json!(dir.to_string_lossy()),
-    );
+    metadata.insert("directory".into(), serde_json::json!(dir.to_string_lossy()));
 
     ToolResult::ok_with_metadata(output, metadata)
 }
@@ -381,10 +365,10 @@ fn clear_screenshots(keep_recent: usize) -> ToolResult {
     if let Ok(read_dir) = std::fs::read_dir(&dir) {
         for entry in read_dir.flatten() {
             let path = entry.path();
-            if let Some(ext) = path.extension() {
-                if ext == "png" || ext == "html" {
-                    entries.push(path);
-                }
+            if let Some(ext) = path.extension()
+                && (ext == "png" || ext == "html")
+            {
+                entries.push(path);
             }
         }
     }
@@ -441,14 +425,8 @@ mod tests {
     #[test]
     fn test_normalize_url() {
         assert_eq!(normalize_url("example.com"), "https://example.com");
-        assert_eq!(
-            normalize_url("https://example.com"),
-            "https://example.com"
-        );
-        assert_eq!(
-            normalize_url("https:/example.com"),
-            "https://example.com"
-        );
+        assert_eq!(normalize_url("https://example.com"), "https://example.com");
+        assert_eq!(normalize_url("https:/example.com"), "https://example.com");
     }
 
     #[test]

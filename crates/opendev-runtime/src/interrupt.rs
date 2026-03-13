@@ -9,8 +9,8 @@
 //!
 //! Ported from `opendev/core/runtime/interrupt_token.py`.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio_util::sync::CancellationToken;
 
 /// Async-safe cancellation token shared across all components of a run.

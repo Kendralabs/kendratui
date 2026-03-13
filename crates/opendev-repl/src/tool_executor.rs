@@ -38,9 +38,7 @@ pub struct ToolExecutor {
 impl ToolExecutor {
     /// Create a new tool executor.
     pub fn new() -> Self {
-        Self {
-            execution_count: 0,
-        }
+        Self { execution_count: 0 }
     }
 
     /// Execute a single tool call.
@@ -72,9 +70,7 @@ impl ToolExecutor {
         let args: HashMap<String, Value> = if let Some(args_str) = args_value.as_str() {
             serde_json::from_str(args_str).unwrap_or_default()
         } else if let Some(obj) = args_value.as_object() {
-            obj.iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect()
+            obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         } else {
             HashMap::new()
         };
@@ -151,7 +147,9 @@ impl ToolExecutor {
                 // Single tool -- run sequentially (avoids spawn overhead).
                 let idx = group[0];
                 self.execution_count += 1;
-                let res = self.execute_single(&tool_calls[idx], registry, context).await;
+                let res = self
+                    .execute_single(&tool_calls[idx], registry, context)
+                    .await;
                 results[idx] = Some(res);
             } else {
                 // Multiple tools in this group -- run concurrently.
@@ -216,9 +214,7 @@ impl ToolExecutor {
         let args: HashMap<String, Value> = if let Some(args_str) = args_value.as_str() {
             serde_json::from_str(args_str).unwrap_or_default()
         } else if let Some(obj) = args_value.as_object() {
-            obj.iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect()
+            obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         } else {
             HashMap::new()
         };

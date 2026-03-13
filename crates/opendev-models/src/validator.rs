@@ -60,10 +60,10 @@ fn validate_tool_call(tc: &ToolCall, path: &str) -> Option<String> {
     }
 
     // Check result serializability
-    if let Some(ref result) = tc.result {
-        if !is_json_serializable(result) {
-            return Some(format!("{prefix} [{}] has non-serializable result", tc.id));
-        }
+    if let Some(ref result) = tc.result
+        && !is_json_serializable(result)
+    {
+        return Some(format!("{prefix} [{}] has non-serializable result", tc.id));
     }
 
     // Validate nested tool calls recursively
@@ -103,19 +103,15 @@ pub fn validate_message(msg: &ChatMessage) -> ValidationVerdict {
                 }
             }
 
-            if let Some(ref trace) = msg.thinking_trace {
-                if trace.trim().is_empty() {
-                    return ValidationVerdict::invalid(
-                        "assistant message has empty thinking_trace",
-                    );
-                }
+            if let Some(ref trace) = msg.thinking_trace
+                && trace.trim().is_empty()
+            {
+                return ValidationVerdict::invalid("assistant message has empty thinking_trace");
             }
-            if let Some(ref reasoning) = msg.reasoning_content {
-                if reasoning.trim().is_empty() {
-                    return ValidationVerdict::invalid(
-                        "assistant message has empty reasoning_content",
-                    );
-                }
+            if let Some(ref reasoning) = msg.reasoning_content
+                && reasoning.trim().is_empty()
+            {
+                return ValidationVerdict::invalid("assistant message has empty reasoning_content");
             }
         }
         Role::System => {
@@ -165,22 +161,22 @@ pub fn repair_message(msg: &mut ChatMessage) -> bool {
     }
 
     // Normalize empty thinking_trace / reasoning_content to None
-    if let Some(ref trace) = msg.thinking_trace {
-        if trace.trim().is_empty() {
-            msg.thinking_trace = None;
-        }
+    if let Some(ref trace) = msg.thinking_trace
+        && trace.trim().is_empty()
+    {
+        msg.thinking_trace = None;
     }
-    if let Some(ref reasoning) = msg.reasoning_content {
-        if reasoning.trim().is_empty() {
-            msg.reasoning_content = None;
-        }
+    if let Some(ref reasoning) = msg.reasoning_content
+        && reasoning.trim().is_empty()
+    {
+        msg.reasoning_content = None;
     }
 
     // Fix non-serializable token_usage
-    if let Some(ref usage) = msg.token_usage {
-        if serde_json::to_value(usage).is_err() {
-            msg.token_usage = None;
-        }
+    if let Some(ref usage) = msg.token_usage
+        && serde_json::to_value(usage).is_err()
+    {
+        msg.token_usage = None;
     }
 
     true

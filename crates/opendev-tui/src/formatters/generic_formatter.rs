@@ -7,7 +7,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
-use super::base::{truncate_lines, FormattedOutput, ToolFormatter};
+use super::base::{FormattedOutput, ToolFormatter, truncate_lines};
 use super::style_tokens;
 
 /// Fallback formatter for any tool not handled by a specific formatter.
@@ -19,7 +19,10 @@ const MAX_LINES: usize = 60;
 impl ToolFormatter for GenericFormatter {
     fn format<'a>(&self, tool_name: &str, output: &str) -> FormattedOutput<'a> {
         let header = Line::from(vec![
-            Span::styled("  ⚙ ".to_string(), Style::default().fg(style_tokens::PRIMARY)),
+            Span::styled(
+                "  ⚙ ".to_string(),
+                Style::default().fg(style_tokens::PRIMARY),
+            ),
             Span::styled(
                 tool_name.to_string(),
                 Style::default().fg(style_tokens::PRIMARY),
@@ -83,7 +86,12 @@ mod tests {
         let f = GenericFormatter;
         let result = f.format("some_tool", "hello world\nsecond line");
 
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("some_tool"));
         assert_eq!(result.body.len(), 2);
         assert!(result.footer.is_none());

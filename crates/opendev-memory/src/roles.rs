@@ -109,11 +109,7 @@ impl ReflectorOutput {
 
         let raw = data
             .as_object()
-            .map(|obj| {
-                obj.iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
-            })
+            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
             .unwrap_or_default();
 
         Self {
@@ -161,11 +157,7 @@ impl CuratorOutput {
         let delta = DeltaBatch::from_json(data);
         let raw = data
             .as_object()
-            .map(|obj| {
-                obj.iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
-            })
+            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
             .unwrap_or_default();
 
         Self { delta, raw }

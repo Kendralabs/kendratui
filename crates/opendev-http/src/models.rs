@@ -179,11 +179,23 @@ mod tests {
     #[test]
     fn test_retry_config_delay_for_attempt() {
         let config = RetryConfig::default();
-        assert_eq!(config.delay_for_attempt(0), std::time::Duration::from_secs(1));
-        assert_eq!(config.delay_for_attempt(1), std::time::Duration::from_secs(2));
-        assert_eq!(config.delay_for_attempt(2), std::time::Duration::from_secs(4));
+        assert_eq!(
+            config.delay_for_attempt(0),
+            std::time::Duration::from_secs(1)
+        );
+        assert_eq!(
+            config.delay_for_attempt(1),
+            std::time::Duration::from_secs(2)
+        );
+        assert_eq!(
+            config.delay_for_attempt(2),
+            std::time::Duration::from_secs(4)
+        );
         // Beyond bounds clamps to last
-        assert_eq!(config.delay_for_attempt(99), std::time::Duration::from_secs(4));
+        assert_eq!(
+            config.delay_for_attempt(99),
+            std::time::Duration::from_secs(4)
+        );
     }
 
     #[test]

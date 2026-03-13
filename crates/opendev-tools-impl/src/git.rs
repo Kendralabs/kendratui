@@ -60,7 +60,10 @@ impl BaseTool for GitTool {
             "status" => git_status(&cwd),
             "diff" => {
                 let file = args.get("file").and_then(|v| v.as_str());
-                let staged = args.get("staged").and_then(|v| v.as_bool()).unwrap_or(false);
+                let staged = args
+                    .get("staged")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 git_diff(&cwd, file, staged)
             }
             "log" => {
@@ -76,7 +79,10 @@ impl BaseTool for GitTool {
                     Some(b) => b,
                     None => return ToolResult::fail("branch is required for checkout"),
                 };
-                let create = args.get("create").and_then(|v| v.as_bool()).unwrap_or(false);
+                let create = args
+                    .get("create")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 git_checkout(&cwd, branch, create)
             }
             "commit" => {
@@ -87,18 +93,27 @@ impl BaseTool for GitTool {
                 git_commit(&cwd, message)
             }
             "push" => {
-                let remote = args.get("remote").and_then(|v| v.as_str()).unwrap_or("origin");
+                let remote = args
+                    .get("remote")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("origin");
                 let branch = args.get("branch").and_then(|v| v.as_str());
                 let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
                 git_push(&cwd, remote, branch, force)
             }
             "pull" => {
-                let remote = args.get("remote").and_then(|v| v.as_str()).unwrap_or("origin");
+                let remote = args
+                    .get("remote")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("origin");
                 let branch = args.get("branch").and_then(|v| v.as_str());
                 git_pull(&cwd, remote, branch)
             }
             "stash" => {
-                let sub_action = args.get("action").and_then(|v| v.as_str()).unwrap_or("list");
+                let sub_action = args
+                    .get("action")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("list");
                 // For stash, use a secondary field or default to list
                 git_stash(&cwd, sub_action)
             }
@@ -117,11 +132,7 @@ impl BaseTool for GitTool {
 }
 
 fn run_git(args: &[&str], cwd: &str) -> (bool, String) {
-    match Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-    {
+    match Command::new("git").args(args).current_dir(cwd).output() {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             if output.status.success() {
@@ -187,19 +198,24 @@ fn git_diff(cwd: &str, file: Option<&str>, staged: bool) -> ToolResult {
     if !ok {
         return ToolResult::fail(out);
     }
-    ToolResult::ok(if out.is_empty() { "No differences found".to_string() } else { out })
+    ToolResult::ok(if out.is_empty() {
+        "No differences found".to_string()
+    } else {
+        out
+    })
 }
 
 fn git_log(cwd: &str, limit: usize) -> ToolResult {
     let limit_str = format!("-{limit}");
-    let (ok, out) = run_git(
-        &["log", &limit_str, "--format=%h %s (%cr) <%an>"],
-        cwd,
-    );
+    let (ok, out) = run_git(&["log", &limit_str, "--format=%h %s (%cr) <%an>"], cwd);
     if !ok {
         return ToolResult::fail(out);
     }
-    ToolResult::ok(if out.is_empty() { "No commits found".to_string() } else { out })
+    ToolResult::ok(if out.is_empty() {
+        "No commits found".to_string()
+    } else {
+        out
+    })
 }
 
 fn git_branch(cwd: &str, name: Option<&str>) -> ToolResult {
@@ -260,7 +276,7 @@ fn git_commit(cwd: &str, message: &str) -> ToolResult {
 
 fn git_push(cwd: &str, remote: &str, branch: Option<&str>, force: bool) -> ToolResult {
     if force {
-        let target = branch.unwrap_or_else(|| {
+        let target = branch.unwrap_or({
             // This is a simplification; in practice we'd read HEAD
             ""
         });
@@ -281,7 +297,11 @@ fn git_push(cwd: &str, remote: &str, branch: Option<&str>, force: bool) -> ToolR
 
     let (ok, out) = run_git(&args, cwd);
     if ok {
-        ToolResult::ok(if out.is_empty() { "Push successful".to_string() } else { out })
+        ToolResult::ok(if out.is_empty() {
+            "Push successful".to_string()
+        } else {
+            out
+        })
     } else {
         ToolResult::fail(out)
     }
@@ -307,7 +327,11 @@ fn git_stash(cwd: &str, _action: &str) -> ToolResult {
     if !ok {
         return ToolResult::fail(out);
     }
-    ToolResult::ok(if out.is_empty() { "No stashes".to_string() } else { out })
+    ToolResult::ok(if out.is_empty() {
+        "No stashes".to_string()
+    } else {
+        out
+    })
 }
 
 fn git_merge(cwd: &str, branch: &str) -> ToolResult {
@@ -324,7 +348,10 @@ mod tests {
     use super::*;
 
     fn make_args(pairs: &[(&str, serde_json::Value)]) -> HashMap<String, serde_json::Value> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     #[tokio::test]

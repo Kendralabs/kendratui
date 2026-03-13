@@ -109,7 +109,13 @@ impl SnapshotManager {
             return None;
         }
 
-        let output = self.git(&["diff-tree", "--no-commit-id", "-r", "--name-only", snapshot_id])?;
+        let output = self.git(&[
+            "diff-tree",
+            "--no-commit-id",
+            "-r",
+            "--name-only",
+            snapshot_id,
+        ])?;
         let files: Vec<&str> = output.lines().filter(|l| !l.is_empty()).collect();
 
         for rel_path in &files {
@@ -137,7 +143,13 @@ impl SnapshotManager {
             return Vec::new();
         }
 
-        let output = match self.git(&["diff-tree", "--no-commit-id", "-r", "--name-only", snapshot_id]) {
+        let output = match self.git(&[
+            "diff-tree",
+            "--no-commit-id",
+            "-r",
+            "--name-only",
+            snapshot_id,
+        ]) {
             Some(o) => o,
             None => return Vec::new(),
         };

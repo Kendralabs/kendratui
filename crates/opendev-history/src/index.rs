@@ -107,8 +107,7 @@ impl SessionIndex {
         with_file_lock(&index_path, Duration::from_secs(10), || {
             // Write to temp file then rename (atomic on POSIX)
             let tmp_path = self.session_dir.join(".sessions-index-tmp.json");
-            let content = serde_json::to_string_pretty(&data)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let content = serde_json::to_string_pretty(&data).map_err(std::io::Error::other)?;
             std::fs::write(&tmp_path, content)?;
             std::fs::rename(&tmp_path, &index_path)?;
             Ok(())
@@ -185,10 +184,7 @@ impl SessionIndex {
     /// Upsert a single session entry in the index.
     pub fn upsert_entry(&self, session: &Session) -> std::io::Result<()> {
         let new_entry = Self::session_to_entry(session);
-        let mut entries = self
-            .read_index()
-            .map(|idx| idx.entries)
-            .unwrap_or_default();
+        let mut entries = self.read_index().map(|idx| idx.entries).unwrap_or_default();
 
         // Replace existing or append
         if let Some(pos) = entries.iter().position(|e| e.session_id == session.id) {

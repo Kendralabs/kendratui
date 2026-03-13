@@ -38,10 +38,13 @@ impl FrecencyTracker {
 
     /// Record an access for `key`.
     pub fn record(&mut self, key: &str) {
-        let entry = self.entries.entry(key.to_string()).or_insert(FrecencyEntry {
-            count: 0,
-            last_access: Instant::now(),
-        });
+        let entry = self
+            .entries
+            .entry(key.to_string())
+            .or_insert(FrecencyEntry {
+                count: 0,
+                last_access: Instant::now(),
+            });
         entry.count += 1;
         entry.last_access = Instant::now();
     }
@@ -90,7 +93,12 @@ pub fn fuzzy_score(pattern: &str, text: &str) -> f64 {
     for (ti, &tc) in text_lower.iter().enumerate() {
         if pi < pattern_lower.len() && tc == pattern_lower[pi] {
             // Bonus for matching at the start of the string or after a separator
-            if ti == 0 || matches!(text_lower.get(ti.wrapping_sub(1)), Some(&'/' | &'_' | &'-' | &'.')) {
+            if ti == 0
+                || matches!(
+                    text_lower.get(ti.wrapping_sub(1)),
+                    Some(&'/' | &'_' | &'-' | &'.')
+                )
+            {
                 total_bonus += 0.15;
             }
             consecutive += 1;
@@ -150,7 +158,7 @@ impl CompletionStrategy {
 
     /// Sort `items` in-place, assigning scores and ordering by descending
     /// score.
-    pub fn sort(&self, items: &mut Vec<CompletionItem>) {
+    pub fn sort(&self, items: &mut [CompletionItem]) {
         for item in items.iter_mut() {
             let frecency = self.frecency.score(&item.insert_text) * self.frecency_weight;
             // For items already produced by a completer the base score is 0.
@@ -170,7 +178,11 @@ impl CompletionStrategy {
             };
             item.score = match_score + frecency;
         }
-        items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        items.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     /// Return the current match mode.

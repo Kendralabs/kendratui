@@ -128,9 +128,7 @@ impl InteractiveMenu {
                             self.search_query.pop();
                             self.filter_items();
                         }
-                        KeyCode::Char('c')
-                            if key.modifiers.contains(KeyModifiers::CONTROL) =>
-                        {
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             self.clear_display(&mut stdout, num_lines)?;
                             return Ok(None);
                         }
@@ -140,10 +138,9 @@ impl InteractiveMenu {
                         }
                         KeyCode::Up => {
                             if !self.filtered_items.is_empty() {
-                                self.selected_index = (self.selected_index
-                                    + self.filtered_items.len()
-                                    - 1)
-                                    % self.filtered_items.len();
+                                self.selected_index =
+                                    (self.selected_index + self.filtered_items.len() - 1)
+                                        % self.filtered_items.len();
                             }
                         }
                         KeyCode::Down => {
@@ -158,10 +155,9 @@ impl InteractiveMenu {
                     match key.code {
                         KeyCode::Up => {
                             if !self.filtered_items.is_empty() {
-                                self.selected_index = (self.selected_index
-                                    + self.filtered_items.len()
-                                    - 1)
-                                    % self.filtered_items.len();
+                                self.selected_index =
+                                    (self.selected_index + self.filtered_items.len() - 1)
+                                        % self.filtered_items.len();
                             }
                         }
                         KeyCode::Down => {
@@ -185,9 +181,7 @@ impl InteractiveMenu {
                             self.clear_display(&mut stdout, num_lines)?;
                             return Ok(None);
                         }
-                        KeyCode::Char('c')
-                            if key.modifiers.contains(KeyModifiers::CONTROL) =>
-                        {
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             self.clear_display(&mut stdout, num_lines)?;
                             return Ok(None);
                         }
@@ -217,10 +211,11 @@ impl InteractiveMenu {
 
         let mut buf = String::new();
         io::stdin().read_line(&mut buf)?;
-        if let Ok(n) = buf.trim().parse::<usize>() {
-            if n >= 1 && n <= self.all_items.len() {
-                return Ok(Some(self.all_items[n - 1].0.clone()));
-            }
+        if let Ok(n) = buf.trim().parse::<usize>()
+            && n >= 1
+            && n <= self.all_items.len()
+        {
+            return Ok(Some(self.all_items[n - 1].0.clone()));
         }
         Ok(None)
     }
@@ -322,8 +317,7 @@ impl InteractiveMenu {
                     let name_field = format!("{:<24}", name);
                     let content_len = 2 + 2 + name_field.len() + desc_display.len(); // "❯ " + name + desc
                     let rail_prefix = 5; // "  │  " = 5 chars
-                    let remaining =
-                        self.term_width.saturating_sub(content_len + rail_prefix);
+                    let remaining = self.term_width.saturating_sub(content_len + rail_prefix);
                     let pad = " ".repeat(remaining);
 
                     let _ = crossterm::execute!(

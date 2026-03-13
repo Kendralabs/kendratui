@@ -5,8 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
 use opendev_tools_lsp::protocol::UnifiedSymbolInfo;
+use serde_json::Value;
 
 use crate::error::{SymbolError, ToolResult};
 use crate::util::LangCategory;
@@ -122,8 +122,14 @@ fn find_body_start_python(
 
             // Check if code follows the colon on the same line
             if !after_colon.is_empty() && !after_colon.starts_with('#') {
-                return Some((i, colon_pos + 1 + (line.len() - line[colon_pos + 1..].len()
-                    - line[colon_pos + 1..].trim_start().len())));
+                return Some((
+                    i,
+                    colon_pos
+                        + 1
+                        + (line.len()
+                            - line[colon_pos + 1..].len()
+                            - line[colon_pos + 1..].trim_start().len()),
+                ));
             }
 
             // Otherwise, move to the next non-empty line
@@ -264,10 +270,7 @@ mod tests {
 
     #[test]
     fn test_find_body_start_python_simple() {
-        let lines = vec![
-            "def my_func(x, y):",
-            "    return x + y",
-        ];
+        let lines = vec!["def my_func(x, y):", "    return x + y"];
         let result = find_body_start(&lines, 0, 0, LangCategory::Python);
         assert!(result.is_some());
         let (line, _col) = result.unwrap();
@@ -304,11 +307,7 @@ mod tests {
 
     #[test]
     fn test_find_body_start_c_like() {
-        let lines = vec![
-            "fn my_func() {",
-            "    return 42;",
-            "}",
-        ];
+        let lines = vec!["fn my_func() {", "    return 42;", "}"];
         let result = find_body_start(&lines, 0, 0, LangCategory::CLike);
         assert!(result.is_some());
         let (line, _) = result.unwrap();
@@ -337,11 +336,7 @@ mod tests {
 
     #[test]
     fn test_replace_range_preserve_signature() {
-        let lines = vec![
-            "def my_func():",
-            "    old_body",
-            "    more_old",
-        ];
+        let lines = vec!["def my_func():", "    old_body", "    more_old"];
         let result = replace_range(&lines, 1, 4, 2, 12, "    new_body", true);
         assert!(result.contains("def my_func():"));
         assert!(result.contains("    new_body"));

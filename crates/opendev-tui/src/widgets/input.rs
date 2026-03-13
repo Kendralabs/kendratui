@@ -5,7 +5,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Paragraph, Widget},
+    widgets::{Paragraph, Widget},
 };
 
 use crate::formatters::style_tokens;
@@ -31,54 +31,67 @@ impl<'a> InputWidget<'a> {
 
 impl Widget for InputWidget<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (border_color, placeholder) = if self.agent_active {
-            (style_tokens::GOLD, " Agent is thinking... (ESC to interrupt)")
+        if area.height < 2 {
+            return;
+        }
+
+        let accent = if self.agent_active {
+            style_tokens::GOLD
         } else {
-            (style_tokens::ACCENT, " Type a message...")
+            style_tokens::ACCENT
         };
 
-        let block = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(border_color))
-            .title(Span::styled(
-                format!(" {} > ", self.mode),
-                Style::default()
-                    .fg(border_color)
-                    .add_modifier(Modifier::BOLD),
-            ));
-
-        let display_text = if self.buffer.is_empty() {
-            Line::from(Span::styled(
-                placeholder,
-                Style::default().fg(style_tokens::SUBTLE),
-            ))
+        let placeholder = if self.agent_active {
+            "Agent is thinking... (ESC to interrupt)"
         } else {
-            // Show buffer with cursor indicator
+            "Type a message..."
+        };
+
+        // Row 0: thin separator line
+        let sep_style = Style::default().fg(accent);
+        for x in area.left()..area.right() {
+            buf[(x, area.top())].set_symbol("─").set_style(sep_style);
+        }
+
+        // Row 1: mode prefix + input text
+        let text_area = Rect {
+            x: area.x,
+            y: area.y + 1,
+            width: area.width,
+            height: 1,
+        };
+
+        let prefix = Span::styled(
+            format!(" {} > ", self.mode),
+            Style::default().fg(accent).add_modifier(Modifier::BOLD),
+        );
+
+        let content = if self.buffer.is_empty() {
+            vec![
+                prefix,
+                Span::styled(placeholder, Style::default().fg(style_tokens::SUBTLE)),
+            ]
+        } else {
             let before = &self.buffer[..self.cursor];
-            let cursor_char = self
-                .buffer
-                .get(self.cursor..self.cursor + 1)
-                .unwrap_or(" ");
+            let cursor_char = self.buffer.get(self.cursor..self.cursor + 1).unwrap_or(" ");
             let after = if self.cursor < self.buffer.len() {
                 &self.buffer[self.cursor + 1..]
             } else {
                 ""
             };
 
-            Line::from(vec![
+            vec![
+                prefix,
                 Span::raw(before.to_string()),
                 Span::styled(
                     cursor_char.to_string(),
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::White),
+                    Style::default().fg(Color::Black).bg(Color::White),
                 ),
                 Span::raw(after.to_string()),
-            ])
+            ]
         };
 
-        let paragraph = Paragraph::new(display_text).block(block);
-        paragraph.render(area, buf);
+        Paragraph::new(Line::from(content)).render(text_area, buf);
     }
 }
 

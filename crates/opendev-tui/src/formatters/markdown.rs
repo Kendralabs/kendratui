@@ -3,11 +3,11 @@
 //! Converts markdown text to styled ratatui `Line`s with basic formatting:
 //! headers, bold, italic, code blocks, and inline code.
 
+use super::style_tokens;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
-use super::style_tokens;
 
 /// Renders markdown text into styled terminal lines.
 pub struct MarkdownRenderer;
@@ -37,7 +37,9 @@ impl MarkdownRenderer {
             if in_code_block {
                 lines.push(Line::from(Span::styled(
                     raw_line.to_string(),
-                    Style::default().fg(style_tokens::CODE_FG).bg(style_tokens::CODE_BG),
+                    Style::default()
+                        .fg(style_tokens::CODE_FG)
+                        .bg(style_tokens::CODE_BG),
                 )));
                 continue;
             }
@@ -75,9 +77,10 @@ impl MarkdownRenderer {
                 } else {
                     format!("{}  - ", "  ".repeat(indent_level))
                 };
-                let mut spans = vec![
-                    Span::styled(prefix, Style::default().fg(style_tokens::BULLET)),
-                ];
+                let mut spans = vec![Span::styled(
+                    prefix,
+                    Style::default().fg(style_tokens::BULLET),
+                )];
                 spans.extend(parse_inline_spans(content));
                 lines.push(Line::from(spans));
             } else if is_ordered_list_line(raw_line) {
@@ -89,9 +92,10 @@ impl MarkdownRenderer {
                 let number = &trimmed[..dot_pos];
                 let content = &trimmed[dot_pos + 2..];
                 let prefix = format!("{}  {}. ", "  ".repeat(indent_level), number);
-                let mut spans = vec![
-                    Span::styled(prefix, Style::default().fg(style_tokens::BULLET)),
-                ];
+                let mut spans = vec![Span::styled(
+                    prefix,
+                    Style::default().fg(style_tokens::BULLET),
+                )];
                 spans.extend(parse_inline_spans(content));
                 lines.push(Line::from(spans));
             } else {
@@ -236,12 +240,33 @@ mod tests {
         let lines = MarkdownRenderer::render(md);
         assert_eq!(lines.len(), 3);
         // Check prefixes
-        let first: String = lines[0].spans.iter().map(|s| s.content.to_string()).collect();
-        assert!(first.starts_with("  - "), "top-level should start with '  - '");
-        let second: String = lines[1].spans.iter().map(|s| s.content.to_string()).collect();
-        assert!(second.starts_with("    - "), "nested should start with '    - '");
-        let third: String = lines[2].spans.iter().map(|s| s.content.to_string()).collect();
-        assert!(third.starts_with("      - "), "deep nested should start with '      - '");
+        let first: String = lines[0]
+            .spans
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
+        assert!(
+            first.starts_with("  - "),
+            "top-level should start with '  - '"
+        );
+        let second: String = lines[1]
+            .spans
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
+        assert!(
+            second.starts_with("    - "),
+            "nested should start with '    - '"
+        );
+        let third: String = lines[2]
+            .spans
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
+        assert!(
+            third.starts_with("      - "),
+            "deep nested should start with '      - '"
+        );
     }
 
     #[test]
@@ -249,9 +274,17 @@ mod tests {
         let md = "1. first\n2. second\n3. third";
         let lines = MarkdownRenderer::render(md);
         assert_eq!(lines.len(), 3);
-        let first: String = lines[0].spans.iter().map(|s| s.content.to_string()).collect();
+        let first: String = lines[0]
+            .spans
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
         assert!(first.contains("1. "));
-        let second: String = lines[1].spans.iter().map(|s| s.content.to_string()).collect();
+        let second: String = lines[1]
+            .spans
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
         assert!(second.contains("2. "));
     }
 
@@ -261,7 +294,10 @@ mod tests {
         let lines = MarkdownRenderer::render(md);
         assert_eq!(lines.len(), 1);
         // Should have more than 2 spans (prefix + inline formatted content)
-        assert!(lines[0].spans.len() > 2, "bullet content should preserve inline formatting");
+        assert!(
+            lines[0].spans.len() > 2,
+            "bullet content should preserve inline formatting"
+        );
     }
 
     #[test]

@@ -51,15 +51,15 @@ pub fn build_app(state: AppState, static_dir: Option<&Path>) -> Router {
         .with_state(state);
 
     // Serve static files if the directory exists.
-    if let Some(dir) = static_dir {
-        if dir.exists() {
-            let assets_dir = dir.join("assets");
-            if assets_dir.exists() {
-                app = app.nest_service("/assets", ServeDir::new(assets_dir));
-            }
-            // SPA fallback: serve index.html for all unmatched paths.
-            app = app.fallback_service(ServeDir::new(dir));
+    if let Some(dir) = static_dir
+        && dir.exists()
+    {
+        let assets_dir = dir.join("assets");
+        if assets_dir.exists() {
+            app = app.nest_service("/assets", ServeDir::new(assets_dir));
         }
+        // SPA fallback: serve index.html for all unmatched paths.
+        app = app.fallback_service(ServeDir::new(dir));
     }
 
     app
@@ -91,7 +91,7 @@ pub async fn start_server(
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app)
         .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        .map_err(std::io::Error::other)
 }
 
 #[cfg(test)]
@@ -114,7 +114,13 @@ mod tests {
         let config = AppConfig::default();
         let user_store = UserStore::new(tmp_path).unwrap();
         let model_registry = ModelRegistry::new();
-        AppState::new(session_manager, config, "/tmp/test".to_string(), user_store, model_registry)
+        AppState::new(
+            session_manager,
+            config,
+            "/tmp/test".to_string(),
+            user_store,
+            model_registry,
+        )
     }
 
     #[tokio::test]

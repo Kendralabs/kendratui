@@ -133,10 +133,7 @@ fn read_line_preview(file: &Path, line: u32) -> Option<String> {
         }
     };
 
-    content
-        .lines()
-        .nth(line as usize)
-        .map(|s| s.to_string())
+    content.lines().nth(line as usize).map(|s| s.to_string())
 }
 
 #[cfg(test)]
@@ -200,10 +197,7 @@ mod tests {
         let file = dir.path().join("test.rs");
         std::fs::write(&file, "line 0\nline 1\nline 2\n").unwrap();
 
-        assert_eq!(
-            read_line_preview(&file, 1).as_deref(),
-            Some("line 1")
-        );
+        assert_eq!(read_line_preview(&file, 1).as_deref(), Some("line 1"));
         assert!(read_line_preview(&file, 100).is_none());
     }
 }

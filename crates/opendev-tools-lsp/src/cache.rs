@@ -58,10 +58,10 @@ impl SymbolCache {
     pub fn new(cache_dir: Option<PathBuf>, ttl_secs: Option<u64>) -> Self {
         let ttl = Duration::from_secs(ttl_secs.unwrap_or(DEFAULT_TTL_SECS));
 
-        if let Some(ref dir) = cache_dir {
-            if let Err(e) = std::fs::create_dir_all(dir) {
-                warn!("Failed to create cache dir {}: {}", dir.display(), e);
-            }
+        if let Some(ref dir) = cache_dir
+            && let Err(e) = std::fs::create_dir_all(dir)
+        {
+            warn!("Failed to create cache dir {}: {}", dir.display(), e);
         }
 
         Self {
@@ -72,11 +72,7 @@ impl SymbolCache {
     }
 
     /// Get cached symbols for a workspace + query, if not expired.
-    pub fn get(
-        &mut self,
-        workspace: &Path,
-        query: &str,
-    ) -> Option<Vec<UnifiedSymbolInfo>> {
+    pub fn get(&mut self, workspace: &Path, query: &str) -> Option<Vec<UnifiedSymbolInfo>> {
         let key = (workspace.to_path_buf(), query.to_string());
 
         // Check in-memory first
@@ -90,25 +86,21 @@ impl SymbolCache {
         }
 
         // Check disk cache
-        if let Some(entry) = self.load_from_disk(workspace, query) {
-            if entry.is_current_version() && !entry.is_expired(self.ttl) {
-                debug!("Symbol cache hit (disk): {:?}", key);
-                let symbols = entry.symbols.clone();
-                self.memory.insert(key, entry);
-                return Some(symbols);
-            }
+        if let Some(entry) = self.load_from_disk(workspace, query)
+            && entry.is_current_version()
+            && !entry.is_expired(self.ttl)
+        {
+            debug!("Symbol cache hit (disk): {:?}", key);
+            let symbols = entry.symbols.clone();
+            self.memory.insert(key, entry);
+            return Some(symbols);
         }
 
         None
     }
 
     /// Store symbols in cache.
-    pub fn put(
-        &mut self,
-        workspace: &Path,
-        query: &str,
-        symbols: Vec<UnifiedSymbolInfo>,
-    ) {
+    pub fn put(&mut self, workspace: &Path, query: &str, symbols: Vec<UnifiedSymbolInfo>) {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
@@ -131,10 +123,10 @@ impl SymbolCache {
 
         if let Some(ref cache_dir) = self.cache_dir {
             let ws_cache = self.workspace_cache_dir(cache_dir, workspace);
-            if ws_cache.exists() {
-                if let Err(e) = std::fs::remove_dir_all(&ws_cache) {
-                    warn!("Failed to remove cache dir {}: {}", ws_cache.display(), e);
-                }
+            if ws_cache.exists()
+                && let Err(e) = std::fs::remove_dir_all(&ws_cache)
+            {
+                warn!("Failed to remove cache dir {}: {}", ws_cache.display(), e);
             }
         }
     }

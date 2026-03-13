@@ -56,11 +56,7 @@ fn config_project_overrides_global() {
         r#"{"model_provider": "openai", "model": "gpt-4", "temperature": 0.5}"#,
     )
     .unwrap();
-    std::fs::write(
-        &project,
-        r#"{"model": "gpt-4-turbo", "temperature": 0.2}"#,
-    )
-    .unwrap();
+    std::fs::write(&project, r#"{"model": "gpt-4-turbo", "temperature": 0.2}"#).unwrap();
 
     let config = ConfigLoader::load(&global, &project).unwrap();
     assert_eq!(config.model_provider, "openai"); // from global

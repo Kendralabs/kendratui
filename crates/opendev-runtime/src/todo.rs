@@ -198,7 +198,10 @@ impl TodoManager {
         let mut out = format!("Todos ({done}/{total} done):\n");
 
         for item in self.todos.values() {
-            out.push_str(&format!("  [{}] {}. {}\n", item.status, item.id, item.title));
+            out.push_str(&format!(
+                "  [{}] {}. {}\n",
+                item.status, item.id, item.title
+            ));
         }
 
         out
@@ -244,12 +247,11 @@ pub fn parse_plan_steps(plan_content: &str) -> Vec<String> {
         }
 
         // Extract numbered items
-        if in_steps_section {
-            if let Some(text) = extract_numbered_step(trimmed) {
-                if !text.is_empty() {
-                    steps.push(text);
-                }
-            }
+        if in_steps_section
+            && let Some(text) = extract_numbered_step(trimmed)
+            && !text.is_empty()
+        {
+            steps.push(text);
         }
     }
 
@@ -261,10 +263,10 @@ pub fn parse_plan_steps(plan_content: &str) -> Vec<String> {
             if trimmed.starts_with('#') {
                 continue;
             }
-            if let Some(text) = extract_numbered_step(trimmed) {
-                if !text.is_empty() {
-                    steps.push(text);
-                }
+            if let Some(text) = extract_numbered_step(trimmed)
+                && !text.is_empty()
+            {
+                steps.push(text);
             }
         }
     }
@@ -296,14 +298,12 @@ fn extract_numbered_step(line: &str) -> Option<String> {
     let rest = rest.trim_start_matches(|c: char| c.is_ascii_digit());
 
     // Check for separator (. or ) or -)
-    let rest = if rest.starts_with(". ") {
-        &rest[2..]
-    } else if rest.starts_with(") ") {
-        &rest[2..]
-    } else if rest.starts_with(" - ") {
-        &rest[3..]
-    } else if rest.starts_with(". ") {
-        &rest[2..]
+    let rest = if let Some(s) = rest.strip_prefix(". ") {
+        s
+    } else if let Some(s) = rest.strip_prefix(") ") {
+        s
+    } else if let Some(s) = rest.strip_prefix(" - ") {
+        s
     } else {
         return None;
     };

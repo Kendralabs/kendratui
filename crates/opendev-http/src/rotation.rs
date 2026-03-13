@@ -11,14 +11,14 @@ use tracing::{info, warn};
 /// Cooldown durations in seconds by HTTP status code.
 fn cooldown_seconds(status: u16) -> f64 {
     match status {
-        429 => 30.0,        // Rate limit
-        401 => 300.0,       // Unauthorized
-        402 => 300.0,       // Payment required
-        403 => 600.0,       // Forbidden
-        500 => 60.0,        // Server error
-        502 => 30.0,        // Bad gateway
-        503 => 60.0,        // Service unavailable
-        _ => 60.0,          // Default
+        429 => 30.0,  // Rate limit
+        401 => 300.0, // Unauthorized
+        402 => 300.0, // Payment required
+        403 => 600.0, // Forbidden
+        500 => 60.0,  // Server error
+        502 => 30.0,  // Bad gateway
+        503 => 60.0,  // Service unavailable
+        _ => 60.0,    // Default
     }
 }
 
@@ -132,10 +132,10 @@ impl AuthProfileManager {
         let mut keys = Vec::new();
 
         // Primary key
-        if let Ok(val) = std::env::var(format!("{prefix}_API_KEY")) {
-            if !val.is_empty() {
-                keys.push(val);
-            }
+        if let Ok(val) = std::env::var(format!("{prefix}_API_KEY"))
+            && !val.is_empty()
+        {
+            keys.push(val);
         }
 
         // Additional keys: _2, _3, ...
@@ -262,10 +262,7 @@ mod tests {
 
     #[test]
     fn test_new_filters_empty_keys() {
-        let mgr = AuthProfileManager::new(
-            "openai",
-            vec!["key1".into(), "".into(), "key2".into()],
-        );
+        let mgr = AuthProfileManager::new("openai", vec!["key1".into(), "".into(), "key2".into()]);
         assert_eq!(mgr.profile_count(), 2);
     }
 
@@ -291,10 +288,7 @@ mod tests {
 
     #[test]
     fn test_mark_failure_and_rotate() {
-        let mut mgr = AuthProfileManager::new(
-            "openai",
-            vec!["key-a".into(), "key-b".into()],
-        );
+        let mut mgr = AuthProfileManager::new("openai", vec!["key-a".into(), "key-b".into()]);
         assert_eq!(mgr.get_active_key(), Some("key-a"));
 
         // Fail key-a, should rotate to key-b
@@ -304,10 +298,7 @@ mod tests {
 
     #[test]
     fn test_all_keys_in_cooldown() {
-        let mut mgr = AuthProfileManager::new(
-            "openai",
-            vec!["key-a".into(), "key-b".into()],
-        );
+        let mut mgr = AuthProfileManager::new("openai", vec!["key-a".into(), "key-b".into()]);
         mgr.mark_failure(429);
         mgr.current_index = 1;
         mgr.mark_failure(429);
@@ -330,10 +321,7 @@ mod tests {
     #[test]
     fn test_from_config_api_keys() {
         let mut config = HashMap::new();
-        config.insert(
-            "api_keys".into(),
-            serde_json::json!(["key1", "key2"]),
-        );
+        config.insert("api_keys".into(), serde_json::json!(["key1", "key2"]));
         let mgr = AuthProfileManager::from_config("openai", &config);
         assert_eq!(mgr.profile_count(), 2);
     }

@@ -19,8 +19,7 @@ use crate::file_injector::{FileContentInjector, ImageBlock};
 // ---------------------------------------------------------------------------
 
 /// Default thinking-on instruction text (injected when thinking is visible).
-const THINKING_ON_INSTRUCTION: &str =
-    "Use your thinking/reasoning capabilities to work through complex problems step by step. \
+const THINKING_ON_INSTRUCTION: &str = "Use your thinking/reasoning capabilities to work through complex problems step by step. \
      Show your reasoning process.";
 
 /// Default thinking-off instruction text (injected when thinking is hidden).
@@ -58,8 +57,7 @@ impl QueryEnhancer {
         let enhanced = quoted_re.replace_all(query, "$1").to_string();
 
         // Pattern 2: Unquoted paths (but not emails like user@example.com)
-        let unquoted_re =
-            Regex::new(r"(?:^|\s)@([a-zA-Z0-9_./\-]+)").expect("valid regex");
+        let unquoted_re = Regex::new(r"(?:^|\s)@([a-zA-Z0-9_./\-]+)").expect("valid regex");
         let enhanced = unquoted_re
             .replace_all(&enhanced, |caps: &regex::Captures| {
                 // Preserve the leading whitespace (or start-of-string) that was matched
@@ -139,22 +137,18 @@ impl QueryEnhancer {
         }
 
         // Append playbook context if present
-        if let Some(playbook) = playbook_context {
-            if !playbook.is_empty() {
-                system_content = format!(
-                    "{}\n\n## Learned Strategies\n{}",
-                    system_content.trim_end(),
-                    playbook
-                );
-            }
+        if let Some(playbook) = playbook_context
+            && !playbook.is_empty()
+        {
+            system_content = format!(
+                "{}\n\n## Learned Strategies\n{}",
+                system_content.trim_end(),
+                playbook
+            );
         }
 
         // Insert or update system message at position 0
-        if messages.is_empty()
-            || messages[0]
-                .get("role")
-                .and_then(|r| r.as_str())
-                != Some("system")
+        if messages.is_empty() || messages[0].get("role").and_then(|r| r.as_str()) != Some("system")
         {
             messages.insert(
                 0,
@@ -261,11 +255,7 @@ impl QueryEnhancer {
             summary_parts.push(format!("{}: {}", role, preview));
         }
 
-        format!(
-            "{} messages: {}",
-            messages.len(),
-            summary_parts.join(" | ")
-        )
+        format!("{} messages: {}", messages.len(), summary_parts.join(" | "))
     }
 }
 
@@ -349,15 +339,8 @@ mod tests {
     #[test]
     fn test_prepare_messages_basic() {
         let (_dir, enh) = tmp_enhancer();
-        let msgs = enh.prepare_messages(
-            "hello",
-            "hello",
-            "You are helpful.",
-            None,
-            &[],
-            false,
-            None,
-        );
+        let msgs =
+            enh.prepare_messages("hello", "hello", "You are helpful.", None, &[], false, None);
         assert_eq!(msgs.len(), 1); // just system message
         assert_eq!(msgs[0]["role"], "system");
         assert_eq!(msgs[0]["content"], "You are helpful.");
@@ -389,9 +372,7 @@ mod tests {
     #[test]
     fn test_prepare_messages_replaces_enhanced_content() {
         let (_dir, enh) = tmp_enhancer();
-        let session = vec![
-            json!({"role": "user", "content": "look at @foo.py"}),
-        ];
+        let session = vec![json!({"role": "user", "content": "look at @foo.py"})];
         let msgs = enh.prepare_messages(
             "look at @foo.py",
             "look at foo.py\n\n<file_content>...</file_content>",
@@ -404,7 +385,12 @@ mod tests {
         // Last user message content should be the enhanced version
         let user_msg = &msgs[1];
         assert_eq!(user_msg["role"], "user");
-        assert!(user_msg["content"].as_str().unwrap().contains("<file_content>"));
+        assert!(
+            user_msg["content"]
+                .as_str()
+                .unwrap()
+                .contains("<file_content>")
+        );
     }
 
     #[test]
@@ -460,9 +446,7 @@ mod tests {
     #[test]
     fn test_prepare_messages_multimodal_images() {
         let (_dir, enh) = tmp_enhancer();
-        let session = vec![
-            json!({"role": "user", "content": "analyze this image"}),
-        ];
+        let session = vec![json!({"role": "user", "content": "analyze this image"})];
         let images = vec![ImageBlock {
             media_type: "image/png".to_string(),
             data: "base64data".to_string(),
@@ -507,9 +491,7 @@ mod tests {
 
     #[test]
     fn test_format_messages_summary_truncates() {
-        let msgs = vec![
-            json!({"role": "user", "content": "a]".repeat(100)}),
-        ];
+        let msgs = vec![json!({"role": "user", "content": "a]".repeat(100)})];
         let summary = QueryEnhancer::format_messages_summary(&msgs, 10);
         assert!(summary.contains("..."));
     }

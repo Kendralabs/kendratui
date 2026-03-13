@@ -127,9 +127,7 @@ impl Widget for StatusBarWidget<'_> {
         ));
         spans.push(Span::styled(
             mode_label,
-            Style::default()
-                .fg(mode_color)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(mode_color).add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(
             " (Shift+Tab)",
@@ -220,9 +218,7 @@ impl Widget for StatusBarWidget<'_> {
             };
             spans.push(Span::styled(
                 mcp_label,
-                Style::default()
-                    .fg(mcp_color)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(mcp_color).add_modifier(Modifier::BOLD),
             ));
         }
 
@@ -309,9 +305,7 @@ impl Widget for StatusBarWidget<'_> {
         // Context remaining
         spans.push(Span::styled(
             format!("Context left {pct_str}%"),
-            Style::default()
-                .fg(pct_color)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(pct_color).add_modifier(Modifier::BOLD),
         ));
 
         // Render a thin border line at top, then text below
@@ -368,10 +362,10 @@ fn shorten_path(path: &str) -> String {
 /// Replace home directory prefix with ~ if possible.
 fn dirs_home(path: &str) -> Option<String> {
     // Try to detect home directory from env
-    if let Ok(home) = std::env::var("HOME") {
-        if path.starts_with(&home) {
-            return Some(format!("~{}", &path[home.len()..]));
-        }
+    if let Ok(home) = std::env::var("HOME")
+        && path.starts_with(&home)
+    {
+        return Some(format!("~{}", &path[home.len()..]));
     }
     None
 }

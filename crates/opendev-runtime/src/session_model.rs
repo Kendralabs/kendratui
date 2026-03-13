@@ -51,17 +51,19 @@ impl SessionModelManager {
 
     /// Whether a session-model overlay is currently active.
     pub fn is_active(&self) -> bool {
-        self.active_overlay
-            .as_ref()
-            .map_or(false, |o| !o.is_empty())
+        self.active_overlay.as_ref().is_some_and(|o| !o.is_empty())
     }
 
     /// Apply an overlay, recording the original values from the provided config getter.
     ///
     /// The `get_config_value` closure retrieves the current config value for a given key.
     /// The `set_config_value` closure applies the override.
-    pub fn apply<G, S>(&mut self, overlay: &SessionOverlay, get_config_value: G, set_config_value: S)
-    where
+    pub fn apply<G, S>(
+        &mut self,
+        overlay: &SessionOverlay,
+        get_config_value: G,
+        set_config_value: S,
+    ) where
         G: Fn(&str) -> Option<String>,
         S: Fn(&str, &str),
     {
@@ -113,9 +115,9 @@ impl Default for SessionModelManager {
 
 /// Read session-model overlay from session metadata.
 pub fn get_session_model(metadata: &serde_json::Value) -> Option<SessionOverlay> {
-    metadata.get("session_model").and_then(|v| {
-        serde_json::from_value::<SessionOverlay>(v.clone()).ok()
-    })
+    metadata
+        .get("session_model")
+        .and_then(|v| serde_json::from_value::<SessionOverlay>(v.clone()).ok())
 }
 
 /// Write session-model overlay to session metadata.
@@ -138,9 +140,7 @@ pub fn clear_session_model(metadata: &mut serde_json::Value) {
 /// Validate overlay entries against valid field names.
 ///
 /// Returns `(valid_overlay, warnings)`.
-pub fn validate_session_model(
-    overlay: &SessionOverlay,
-) -> (SessionOverlay, Vec<String>) {
+pub fn validate_session_model(overlay: &SessionOverlay) -> (SessionOverlay, Vec<String>) {
     if overlay.is_empty() {
         return (HashMap::new(), Vec::new());
     }
@@ -189,7 +189,9 @@ mod tests {
             &overlay,
             |key| config.borrow().get(key).cloned(),
             |key, value| {
-                config.borrow_mut().insert(key.to_string(), value.to_string());
+                config
+                    .borrow_mut()
+                    .insert(key.to_string(), value.to_string());
             },
         );
 
@@ -201,25 +203,27 @@ mod tests {
     #[test]
     fn test_restore_overlay() {
         let mut mgr = SessionModelManager::new();
-        let config: RefCell<HashMap<String, String>> = RefCell::new(HashMap::from([
-            ("model".into(), "gpt-4".into()),
-        ]));
+        let config: RefCell<HashMap<String, String>> =
+            RefCell::new(HashMap::from([("model".into(), "gpt-4".into())]));
 
-        let overlay: SessionOverlay =
-            HashMap::from([("model".into(), "claude-3-opus".into())]);
+        let overlay: SessionOverlay = HashMap::from([("model".into(), "claude-3-opus".into())]);
 
         mgr.apply(
             &overlay,
             |key| config.borrow().get(key).cloned(),
             |key, value| {
-                config.borrow_mut().insert(key.to_string(), value.to_string());
+                config
+                    .borrow_mut()
+                    .insert(key.to_string(), value.to_string());
             },
         );
 
         assert_eq!(config.borrow().get("model").unwrap(), "claude-3-opus");
 
         mgr.restore(|key, value| {
-            config.borrow_mut().insert(key.to_string(), value.to_string());
+            config
+                .borrow_mut()
+                .insert(key.to_string(), value.to_string());
         });
 
         assert!(!mgr.is_active());
@@ -238,14 +242,15 @@ mod tests {
         let mut mgr = SessionModelManager::new();
         let config: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
 
-        let overlay: SessionOverlay =
-            HashMap::from([("invalid_field".into(), "value".into())]);
+        let overlay: SessionOverlay = HashMap::from([("invalid_field".into(), "value".into())]);
 
         mgr.apply(
             &overlay,
             |key| config.borrow().get(key).cloned(),
             |key, value| {
-                config.borrow_mut().insert(key.to_string(), value.to_string());
+                config
+                    .borrow_mut()
+                    .insert(key.to_string(), value.to_string());
             },
         );
 
@@ -259,8 +264,7 @@ mod tests {
         let mut metadata = serde_json::json!({});
 
         // Set
-        let overlay: SessionOverlay =
-            HashMap::from([("model".into(), "claude-3-opus".into())]);
+        let overlay: SessionOverlay = HashMap::from([("model".into(), "claude-3-opus".into())]);
         set_session_model(&mut metadata, &overlay);
 
         // Get

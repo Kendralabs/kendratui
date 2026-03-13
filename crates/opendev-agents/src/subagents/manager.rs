@@ -174,6 +174,7 @@ impl SubagentManager {
     /// * `working_dir` - Working directory for tool execution
     /// * `progress` - Callback for progress updates
     /// * `task_monitor` - Optional interrupt monitor
+    #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
         &self,
         subagent_name: &str,
@@ -240,8 +241,7 @@ impl SubagentManager {
         match result {
             Ok(agent_result) => {
                 // Count tool calls for shallow subagent detection
-                let tool_call_count =
-                    ReactLoop::count_subagent_tool_calls(&agent_result.messages);
+                let tool_call_count = ReactLoop::count_subagent_tool_calls(&agent_result.messages);
                 let shallow_warning = ReactLoop::shallow_subagent_warning(
                     &agent_result.messages,
                     agent_result.success,
@@ -339,7 +339,10 @@ mod tests {
 
     #[test]
     fn test_subagent_type_from_name() {
-        assert_eq!(SubagentType::from_name("Code-Explorer"), SubagentType::CodeExplorer);
+        assert_eq!(
+            SubagentType::from_name("Code-Explorer"),
+            SubagentType::CodeExplorer
+        );
         assert_eq!(SubagentType::from_name("Planner"), SubagentType::Planner);
         assert_eq!(SubagentType::from_name("ask-user"), SubagentType::AskUser);
         assert_eq!(SubagentType::from_name("unknown"), SubagentType::Custom);

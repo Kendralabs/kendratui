@@ -172,13 +172,12 @@ impl McpManager {
             .result
             .ok_or_else(|| McpError::Protocol("Empty response from tools/list".to_string()))?;
 
-        let tools_value = result
-            .get("tools")
-            .ok_or_else(|| McpError::Protocol("No 'tools' field in tools/list response".to_string()))?;
-
-        let tools: Vec<McpTool> = serde_json::from_value(tools_value.clone()).map_err(|e| {
-            McpError::Protocol(format!("Failed to parse tools list: {}", e))
+        let tools_value = result.get("tools").ok_or_else(|| {
+            McpError::Protocol("No 'tools' field in tools/list response".to_string())
         })?;
+
+        let tools: Vec<McpTool> = serde_json::from_value(tools_value.clone())
+            .map_err(|e| McpError::Protocol(format!("Failed to parse tools list: {}", e)))?;
 
         debug!(count = tools.len(), "Discovered tools");
         Ok(tools)
@@ -214,19 +213,22 @@ impl McpManager {
         let mut transport = transport::create_transport(&prepared)?;
 
         // Step 1: Connect the transport (e.g., spawn child process).
-        transport.connect().await.map_err(|e| McpError::Connection {
-            server: name.to_string(),
-            message: format!("Transport connect failed: {}", e),
-        })?;
+        transport
+            .connect()
+            .await
+            .map_err(|e| McpError::Connection {
+                server: name.to_string(),
+                message: format!("Transport connect failed: {}", e),
+            })?;
 
         // Step 2: Run initialize handshake.
-        let _server_info =
-            self.initialize_handshake(transport.as_ref())
-                .await
-                .map_err(|e| McpError::Connection {
-                    server: name.to_string(),
-                    message: format!("Initialize handshake failed: {}", e),
-                })?;
+        let _server_info = self
+            .initialize_handshake(transport.as_ref())
+            .await
+            .map_err(|e| McpError::Connection {
+                server: name.to_string(),
+                message: format!("Initialize handshake failed: {}", e),
+            })?;
 
         // Step 3: Discover tools.
         let tools = self
@@ -372,9 +374,8 @@ impl McpManager {
             .result
             .ok_or_else(|| McpError::Protocol("Empty response from tool call".to_string()))?;
 
-        serde_json::from_value(result).map_err(|e| {
-            McpError::Protocol(format!("Failed to parse tool result: {}", e))
-        })
+        serde_json::from_value(result)
+            .map_err(|e| McpError::Protocol(format!("Failed to parse tool result: {}", e)))
     }
 
     /// List prompts from all connected servers.
@@ -392,42 +393,39 @@ impl McpManager {
 
             match conn.transport.send_request(&request).await {
                 Ok(response) => {
-                    if let Some(result) = response.result {
-                        if let Some(prompt_list) = result.get("prompts").and_then(|p| p.as_array())
-                        {
-                            for prompt_val in prompt_list {
-                                let name = prompt_val
-                                    .get("name")
-                                    .and_then(|n| n.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                let description = prompt_val
-                                    .get("description")
-                                    .and_then(|d| d.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                let arguments = prompt_val
-                                    .get("arguments")
-                                    .and_then(|a| a.as_array())
-                                    .map(|args| {
-                                        args.iter()
-                                            .filter_map(|a| {
-                                                a.get("name")
-                                                    .and_then(|n| n.as_str())
-                                                    .map(String::from)
-                                            })
-                                            .collect()
-                                    })
-                                    .unwrap_or_default();
+                    if let Some(result) = response.result
+                        && let Some(prompt_list) = result.get("prompts").and_then(|p| p.as_array())
+                    {
+                        for prompt_val in prompt_list {
+                            let name = prompt_val
+                                .get("name")
+                                .and_then(|n| n.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let description = prompt_val
+                                .get("description")
+                                .and_then(|d| d.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let arguments = prompt_val
+                                .get("arguments")
+                                .and_then(|a| a.as_array())
+                                .map(|args| {
+                                    args.iter()
+                                        .filter_map(|a| {
+                                            a.get("name").and_then(|n| n.as_str()).map(String::from)
+                                        })
+                                        .collect()
+                                })
+                                .unwrap_or_default();
 
-                                prompts.push(McpPromptSummary {
-                                    server_name: server_name.clone(),
-                                    prompt_name: name.clone(),
-                                    description,
-                                    arguments,
-                                    command: format!("/{}:{}", server_name, name),
-                                });
-                            }
+                            prompts.push(McpPromptSummary {
+                                server_name: server_name.clone(),
+                                prompt_name: name.clone(),
+                                description,
+                                arguments,
+                                command: format!("/{}:{}", server_name, name),
+                            });
                         }
                     }
                 }

@@ -130,8 +130,7 @@ impl PlanApprovalController {
         if !self.active || self.options.is_empty() {
             return;
         }
-        self.selected_action =
-            (self.selected_action + self.options.len() - 1) % self.options.len();
+        self.selected_action = (self.selected_action + self.options.len() - 1) % self.options.len();
     }
 
     /// Approve the plan (selects the first "approve_auto" action).

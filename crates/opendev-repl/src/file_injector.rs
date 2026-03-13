@@ -21,9 +21,38 @@ use std::path::{Path, PathBuf};
 
 /// Safe text extensions to auto-inject.
 const SAFE_TEXT_EXTENSIONS: &[&str] = &[
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".c", ".cpp", ".h", ".hpp", ".cs",
-    ".rb", ".php", ".swift", ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".xml", ".html",
-    ".css", ".scss", ".less", ".sh", ".bash", ".zsh", ".gitignore", ".dockerignore",
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".go",
+    ".rs",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".rb",
+    ".php",
+    ".swift",
+    ".md",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".html",
+    ".css",
+    ".scss",
+    ".less",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".gitignore",
+    ".dockerignore",
     ".env.example",
 ];
 
@@ -229,8 +258,7 @@ impl FileContentInjector {
         // Pattern 2: Unquoted paths
         // Match @ followed by path-like chars, only when @ is at start-of-string,
         // after whitespace, or after non-word character. This avoids emails.
-        let unquoted_re =
-            Regex::new(r"(?:^|\s|[^\w])@([a-zA-Z0-9_./\-]+)").expect("valid regex");
+        let unquoted_re = Regex::new(r"(?:^|\s|[^\w])@([a-zA-Z0-9_./\-]+)").expect("valid regex");
         for cap in unquoted_re.captures_iter(query) {
             let r = cap[1].to_string();
             if seen.insert(r.clone()) {
@@ -266,8 +294,7 @@ impl FileContentInjector {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        if SAFE_TEXT_EXTENSIONS.contains(&ext.as_str()) || SAFE_FILENAMES.contains(&name.as_str())
-        {
+        if SAFE_TEXT_EXTENSIONS.contains(&ext.as_str()) || SAFE_FILENAMES.contains(&name.as_str()) {
             return true;
         }
 
@@ -402,11 +429,7 @@ impl FileContentInjector {
     ) -> String {
         let total_lines = lines.len();
         let head: Vec<&str> = lines.iter().take(HEAD_LINES).copied().collect();
-        let tail_start = if total_lines > TAIL_LINES {
-            total_lines - TAIL_LINES
-        } else {
-            0
-        };
+        let tail_start = total_lines.saturating_sub(TAIL_LINES);
         let tail: Vec<&str> = lines.iter().skip(tail_start).copied().collect();
         let omitted = if total_lines > HEAD_LINES + TAIL_LINES {
             total_lines - HEAD_LINES - TAIL_LINES
@@ -519,7 +542,11 @@ impl FileContentInjector {
 
         for (i, item) in items.iter().enumerate() {
             let is_last = i == count - 1;
-            let connector = if is_last { "\u{2514}\u{2500}\u{2500} " } else { "\u{251C}\u{2500}\u{2500} " };
+            let connector = if is_last {
+                "\u{2514}\u{2500}\u{2500} "
+            } else {
+                "\u{251C}\u{2500}\u{2500} "
+            };
             let new_prefix = if is_last {
                 format!("{}    ", prefix)
             } else {
@@ -651,7 +678,11 @@ mod tests {
     fn test_extract_refs_excludes_emails() {
         let (_dir, inj) = tmp_injector();
         let refs = inj.extract_refs("send to user@example.com please");
-        assert!(refs.is_empty(), "emails should not be extracted: {:?}", refs);
+        assert!(
+            refs.is_empty(),
+            "emails should not be extracted: {:?}",
+            refs
+        );
     }
 
     #[test]
@@ -752,10 +783,7 @@ mod tests {
 
     #[test]
     fn test_get_language_unknown() {
-        assert_eq!(
-            FileContentInjector::get_language(Path::new("data.xyz")),
-            ""
-        );
+        assert_eq!(FileContentInjector::get_language(Path::new("data.xyz")), "");
     }
 
     // -- format_size --------------------------------------------------------

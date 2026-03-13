@@ -35,11 +35,12 @@ impl MessageController {
     ///
     /// Appends to the last assistant message or creates a new one.
     pub fn handle_agent_chunk(&self, state: &mut AppState, text: &str) {
-        if let Some(last) = state.messages.last_mut() {
-            if last.role == DisplayRole::Assistant && last.tool_call.is_none() {
-                last.content.push_str(text);
-                return;
-            }
+        if let Some(last) = state.messages.last_mut()
+            && last.role == DisplayRole::Assistant
+            && last.tool_call.is_none()
+        {
+            last.content.push_str(text);
+            return;
         }
         // Start a new assistant message
         state.messages.push(DisplayMessage {

@@ -282,11 +282,7 @@ impl ContextCompactor {
     }
 
     /// Replace old tool result messages with compact references.
-    pub fn mask_old_observations(
-        &self,
-        messages: &mut Vec<ApiMessage>,
-        level: OptimizationLevel,
-    ) {
+    pub fn mask_old_observations(&self, messages: &mut [ApiMessage], level: OptimizationLevel) {
         let recent_threshold = match level {
             OptimizationLevel::Mask => 6,
             OptimizationLevel::Aggressive => 3,
@@ -348,7 +344,7 @@ impl ContextCompactor {
     }
 
     /// Strip old tool outputs while protecting the most recent ones.
-    pub fn prune_old_tool_outputs(&self, messages: &mut Vec<ApiMessage>) {
+    pub fn prune_old_tool_outputs(&self, messages: &mut [ApiMessage]) {
         // Collect tool result indices in reverse order
         let mut tool_indices: Vec<usize> = Vec::new();
         for i in (0..messages.len()).rev() {
@@ -427,7 +423,7 @@ impl ContextCompactor {
             return messages;
         }
 
-        let keep_recent = (messages.len() / 3).max(2).min(5);
+        let keep_recent = (messages.len() / 3).clamp(2, 5);
         let split_point = messages.len() - keep_recent;
 
         let head = &messages[..1];
@@ -483,10 +479,7 @@ impl ContextCompactor {
         let mut parts = Vec::new();
         let mut total = 0usize;
         for msg in messages {
-            let content = msg
-                .get("content")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let content = msg.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
             if !content.is_empty() && (role == "user" || role == "assistant") {
                 let snippet: String = content.chars().take(200).collect();
@@ -521,10 +514,7 @@ impl ContextCompactor {
                 for tc in tool_calls {
                     if let Some(func) = tc.get("function") {
                         let name = func.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                        let args = func
-                            .get("arguments")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
+                        let args = func.get("arguments").and_then(|v| v.as_str()).unwrap_or("");
                         total += name.len() as u64 / 4;
                         total += args.len() as u64 / 4;
                     }
@@ -666,8 +656,7 @@ mod tests {
         // Create messages: assistant with tool calls, then 8 tool results
         let mut messages = vec![make_msg("system", "system prompt")];
         let tc_ids: Vec<String> = (0..8).map(|i| format!("tc-{i}")).collect();
-        let tc_pairs: Vec<(&str, &str)> =
-            tc_ids.iter().map(|id| (id.as_str(), "bash")).collect();
+        let tc_pairs: Vec<(&str, &str)> = tc_ids.iter().map(|id| (id.as_str(), "bash")).collect();
         messages.push(make_assistant_with_tc(tc_pairs));
         for id in &tc_ids {
             messages.push(make_tool_msg(id, &"x".repeat(100)));
@@ -713,11 +702,7 @@ mod tests {
         // tc-0 is read_file and should NOT be masked
         let tc0_msg = messages
             .iter()
-            .find(|m| {
-                m.get("tool_call_id")
-                    .and_then(|v| v.as_str())
-                    == Some("tc-0")
-            })
+            .find(|m| m.get("tool_call_id").and_then(|v| v.as_str()) == Some("tc-0"))
             .unwrap();
         let content = tc0_msg.get("content").and_then(|v| v.as_str()).unwrap();
         assert!(!content.starts_with("[ref:"));
@@ -799,11 +784,7 @@ mod tests {
 
         let pruned_count = messages
             .iter()
-            .filter(|m| {
-                m.get("content")
-                    .and_then(|v| v.as_str())
-                    == Some("[pruned]")
-            })
+            .filter(|m| m.get("content").and_then(|v| v.as_str()) == Some("[pruned]"))
             .count();
         assert!(pruned_count > 0, "Some messages should have been pruned");
     }

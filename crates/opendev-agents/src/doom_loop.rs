@@ -7,8 +7,8 @@
 //! deque and detects repeating cycles of length 1..MAX_CYCLE_LEN.
 //! Escalates: 1st = redirect guidance, 2nd = user notification, 3rd = force-stop.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::VecDeque;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use serde_json::Value;
@@ -210,7 +210,10 @@ mod tests {
     #[test]
     fn test_two_step_cycle() {
         let mut det = DoomLoopDetector::new();
-        let edit = make_tool_call("edit_file", "{\"path\": \"a.rs\", \"old\": \"x\", \"new\": \"y\"}");
+        let edit = make_tool_call(
+            "edit_file",
+            "{\"path\": \"a.rs\", \"old\": \"x\", \"new\": \"y\"}",
+        );
         let test = make_tool_call("bash", "{\"command\": \"cargo test\"}");
 
         // Need 2*3=6 calls to detect a 2-step cycle with threshold 3

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use opendev_models::SessionMetadata;
 
-use crate::index::{SessionIndex, SESSIONS_INDEX_FILE_NAME};
+use crate::index::{SESSIONS_INDEX_FILE_NAME, SessionIndex};
 
 /// Session listing operations.
 ///
@@ -38,7 +38,7 @@ impl SessionListing {
             };
             entries
                 .iter()
-                .map(|e| SessionIndex::entry_to_metadata(e))
+                .map(SessionIndex::entry_to_metadata)
                 .collect()
         } else {
             // Index missing/corrupted; return empty for now
@@ -116,22 +116,12 @@ impl SessionListing {
                 }
                 // Check if directory has session files
                 if let Ok(files) = std::fs::read_dir(entry.path()) {
-                    let has_sessions = files
-                        .flatten()
-                        .any(|f| {
-                            f.path()
-                                .extension()
-                                .map(|e| e == "json")
-                                .unwrap_or(false)
-                                && f.file_name() != SESSIONS_INDEX_FILE_NAME
-                        });
+                    let has_sessions = files.flatten().any(|f| {
+                        f.path().extension().map(|e| e == "json").unwrap_or(false)
+                            && f.file_name() != SESSIONS_INDEX_FILE_NAME
+                    });
                     if has_sessions {
-                        workspaces.push(
-                            entry
-                                .file_name()
-                                .to_string_lossy()
-                                .to_string(),
-                        );
+                        workspaces.push(entry.file_name().to_string_lossy().to_string());
                     }
                 }
             }
@@ -190,11 +180,7 @@ mod tests {
         let (tmp, listing) = setup_with_sessions(2);
 
         // Create a fake session file
-        std::fs::write(
-            tmp.path().join("session-0.json"),
-            "{}",
-        )
-        .unwrap();
+        std::fs::write(tmp.path().join("session-0.json"), "{}").unwrap();
 
         listing.delete_session("session-0").unwrap();
 

@@ -111,8 +111,7 @@ pub const SYSTEM_THINKING_THINKING_SUBAGENT_GUIDE: &str =
 // tools/
 pub const TOOLS_TOOL_ANALYZE_IMAGE: &str =
     include_str!("../../templates/tools/tool-analyze-image.md");
-pub const TOOLS_TOOL_APPLY_PATCH: &str =
-    include_str!("../../templates/tools/tool-apply-patch.md");
+pub const TOOLS_TOOL_APPLY_PATCH: &str = include_str!("../../templates/tools/tool-apply-patch.md");
 pub const TOOLS_TOOL_ASK_USER: &str = include_str!("../../templates/tools/tool-ask-user.md");
 pub const TOOLS_TOOL_BATCH_TOOL: &str = include_str!("../../templates/tools/tool-batch-tool.md");
 pub const TOOLS_TOOL_BROWSER: &str = include_str!("../../templates/tools/tool-browser.md");
@@ -120,16 +119,14 @@ pub const TOOLS_TOOL_CAPTURE_SCREENSHOT: &str =
     include_str!("../../templates/tools/tool-capture-screenshot.md");
 pub const TOOLS_TOOL_CAPTURE_WEB_SCREENSHOT: &str =
     include_str!("../../templates/tools/tool-capture-web-screenshot.md");
-pub const TOOLS_TOOL_CLEAR_TODOS: &str =
-    include_str!("../../templates/tools/tool-clear-todos.md");
+pub const TOOLS_TOOL_CLEAR_TODOS: &str = include_str!("../../templates/tools/tool-clear-todos.md");
 pub const TOOLS_TOOL_COMPLETE_TODO: &str =
     include_str!("../../templates/tools/tool-complete-todo.md");
 pub const TOOLS_TOOL_EDIT_FILE: &str = include_str!("../../templates/tools/tool-edit-file.md");
 pub const TOOLS_TOOL_FETCH_URL: &str = include_str!("../../templates/tools/tool-fetch-url.md");
 pub const TOOLS_TOOL_FIND_REFERENCING_SYMBOLS: &str =
     include_str!("../../templates/tools/tool-find-referencing-symbols.md");
-pub const TOOLS_TOOL_FIND_SYMBOL: &str =
-    include_str!("../../templates/tools/tool-find-symbol.md");
+pub const TOOLS_TOOL_FIND_SYMBOL: &str = include_str!("../../templates/tools/tool-find-symbol.md");
 pub const TOOLS_TOOL_GET_PROCESS_OUTPUT: &str =
     include_str!("../../templates/tools/tool-get-process-output.md");
 pub const TOOLS_TOOL_GET_SESSION_HISTORY: &str =
@@ -145,8 +142,7 @@ pub const TOOLS_TOOL_INVOKE_SKILL: &str =
     include_str!("../../templates/tools/tool-invoke-skill.md");
 pub const TOOLS_TOOL_KILL_PROCESS: &str =
     include_str!("../../templates/tools/tool-kill-process.md");
-pub const TOOLS_TOOL_LIST_AGENTS: &str =
-    include_str!("../../templates/tools/tool-list-agents.md");
+pub const TOOLS_TOOL_LIST_AGENTS: &str = include_str!("../../templates/tools/tool-list-agents.md");
 pub const TOOLS_TOOL_LIST_FILES: &str = include_str!("../../templates/tools/tool-list-files.md");
 pub const TOOLS_TOOL_LIST_PROCESSES: &str =
     include_str!("../../templates/tools/tool-list-processes.md");
@@ -171,8 +167,7 @@ pub const TOOLS_TOOL_RENAME_SYMBOL: &str =
     include_str!("../../templates/tools/tool-rename-symbol.md");
 pub const TOOLS_TOOL_REPLACE_SYMBOL_BODY: &str =
     include_str!("../../templates/tools/tool-replace-symbol-body.md");
-pub const TOOLS_TOOL_RUN_COMMAND: &str =
-    include_str!("../../templates/tools/tool-run-command.md");
+pub const TOOLS_TOOL_RUN_COMMAND: &str = include_str!("../../templates/tools/tool-run-command.md");
 pub const TOOLS_TOOL_SCHEDULE: &str = include_str!("../../templates/tools/tool-schedule.md");
 pub const TOOLS_TOOL_SEARCH_TOOLS: &str =
     include_str!("../../templates/tools/tool-search-tools.md");
@@ -181,12 +176,10 @@ pub const TOOLS_TOOL_SEND_MESSAGE: &str =
     include_str!("../../templates/tools/tool-send-message.md");
 pub const TOOLS_TOOL_TASK_COMPLETE: &str =
     include_str!("../../templates/tools/tool-task-complete.md");
-pub const TOOLS_TOOL_UPDATE_TODO: &str =
-    include_str!("../../templates/tools/tool-update-todo.md");
+pub const TOOLS_TOOL_UPDATE_TODO: &str = include_str!("../../templates/tools/tool-update-todo.md");
 pub const TOOLS_TOOL_WEB_SEARCH: &str = include_str!("../../templates/tools/tool-web-search.md");
 pub const TOOLS_TOOL_WRITE_FILE: &str = include_str!("../../templates/tools/tool-write-file.md");
-pub const TOOLS_TOOL_WRITE_TODOS: &str =
-    include_str!("../../templates/tools/tool-write-todos.md");
+pub const TOOLS_TOOL_WRITE_TODOS: &str = include_str!("../../templates/tools/tool-write-todos.md");
 
 // ---------------------------------------------------------------------------
 // Template registry

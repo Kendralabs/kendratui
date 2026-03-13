@@ -38,10 +38,9 @@ impl RemoteRuntime {
 
     /// Create from a `DockerConfig`.
     pub fn from_config(config: &DockerConfig) -> Result<Self> {
-        let host = config
-            .remote_host
-            .as_deref()
-            .ok_or_else(|| DockerError::Other("remote_host is required for RemoteRuntime".into()))?;
+        let host = config.remote_host.as_deref().ok_or_else(|| {
+            DockerError::Other("remote_host is required for RemoteRuntime".into())
+        })?;
         Ok(Self::new(
             host,
             config.remote_user.as_deref(),
@@ -55,7 +54,11 @@ impl RemoteRuntime {
     }
 
     /// Run a docker command on the remote host via SSH.
-    async fn run_remote_docker(&self, args: &[&str], timeout_secs: f64) -> Result<(String, String, i32)> {
+    async fn run_remote_docker(
+        &self,
+        args: &[&str],
+        timeout_secs: f64,
+    ) -> Result<(String, String, i32)> {
         let mut cmd_args: Vec<String> = Vec::new();
 
         if let Some(ref key) = self.ssh_key_path {
@@ -70,9 +73,7 @@ impl RemoteRuntime {
 
         let output = tokio::time::timeout(
             std::time::Duration::from_secs_f64(timeout_secs),
-            tokio::process::Command::new("ssh")
-                .args(&cmd_args)
-                .output(),
+            tokio::process::Command::new("ssh").args(&cmd_args).output(),
         )
         .await
         .map_err(|_| DockerError::Timeout {
@@ -100,7 +101,10 @@ impl RemoteRuntime {
             };
         }
 
-        match self.run_remote_docker(&["info", "--format", "{{.ServerVersion}}"], 10.0).await {
+        match self
+            .run_remote_docker(&["info", "--format", "{{.ServerVersion}}"], 10.0)
+            .await
+        {
             Ok((_, _, 0)) => IsAliveResponse::default(),
             Ok((_, stderr, _)) => IsAliveResponse {
                 status: "error".into(),
@@ -138,10 +142,7 @@ impl RemoteRuntime {
             .ok_or_else(|| DockerError::Other("No container ID set on remote runtime".into()))?;
 
         let (stdout, stderr, code) = self
-            .run_remote_docker(
-                &["exec", container_id, "bash", "-c", command],
-                timeout_secs,
-            )
+            .run_remote_docker(&["exec", container_id, "bash", "-c", command], timeout_secs)
             .await?;
 
         let output = if stderr.is_empty() {
@@ -197,7 +198,11 @@ impl RemoteRuntime {
 
         // docker cp on remote
         self.run_remote_docker(
-            &["cp", &remote_tmp, &format!("{container_id}:{container_path}")],
+            &[
+                "cp",
+                &remote_tmp,
+                &format!("{container_id}:{container_path}"),
+            ],
             60.0,
         )
         .await?;
@@ -211,11 +216,7 @@ impl RemoteRuntime {
     }
 
     /// Copy a file from the remote container to host.
-    pub async fn copy_from_container(
-        &self,
-        container_path: &str,
-        local_path: &str,
-    ) -> Result<()> {
+    pub async fn copy_from_container(&self, container_path: &str, local_path: &str) -> Result<()> {
         let container_id = self
             .container_id
             .as_deref()
@@ -225,7 +226,11 @@ impl RemoteRuntime {
 
         // docker cp on remote
         self.run_remote_docker(
-            &["cp", &format!("{container_id}:{container_path}"), &remote_tmp],
+            &[
+                "cp",
+                &format!("{container_id}:{container_path}"),
+                &remote_tmp,
+            ],
             60.0,
         )
         .await?;

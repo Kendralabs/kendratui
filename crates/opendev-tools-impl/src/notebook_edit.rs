@@ -101,44 +101,30 @@ impl BaseTool for NotebookEditTool {
         }
 
         if path.extension().and_then(|e| e.to_str()) != Some("ipynb") {
-            return ToolResult::fail(format!(
-                "Not a Jupyter notebook file: {notebook_path}"
-            ));
+            return ToolResult::fail(format!("Not a Jupyter notebook file: {notebook_path}"));
         }
 
         // Load notebook
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
-            Err(e) => {
-                return ToolResult::fail(format!("Failed to read notebook: {e}"))
-            }
+            Err(e) => return ToolResult::fail(format!("Failed to read notebook: {e}")),
         };
 
         let mut notebook: serde_json::Value = match serde_json::from_str(&content) {
             Ok(v) => v,
-            Err(e) => {
-                return ToolResult::fail(format!("Invalid notebook JSON: {e}"))
-            }
+            Err(e) => return ToolResult::fail(format!("Invalid notebook JSON: {e}")),
         };
 
         // Extract cells as owned Vec
         let cells = match notebook.get("cells").and_then(|v| v.as_array()) {
             Some(c) => c.clone(),
-            None => {
-                return ToolResult::fail("Notebook has no 'cells' array")
-            }
+            None => return ToolResult::fail("Notebook has no 'cells' array"),
         };
 
         let result = match edit_mode {
-            "replace" => {
-                replace_cell(cells, new_source, cell_id, cell_number, cell_type)
-            }
-            "insert" => {
-                insert_cell(cells, new_source, cell_id, cell_number, cell_type)
-            }
-            "delete" => {
-                delete_cell(cells, cell_id, cell_number)
-            }
+            "replace" => replace_cell(cells, new_source, cell_id, cell_number, cell_type),
+            "insert" => insert_cell(cells, new_source, cell_id, cell_number, cell_type),
+            "delete" => delete_cell(cells, cell_id, cell_number),
             other => {
                 return ToolResult::fail(format!(
                     "Unknown edit_mode: {other}. Use 'replace', 'insert', or 'delete'."
@@ -203,10 +189,7 @@ fn source_to_lines(source: &str) -> serde_json::Value {
 }
 
 /// Save the notebook back to disk.
-fn save_notebook(
-    path: &PathBuf,
-    notebook: &serde_json::Value,
-) -> Result<(), String> {
+fn save_notebook(path: &PathBuf, notebook: &serde_json::Value) -> Result<(), String> {
     let json = serde_json::to_string_pretty(notebook)
         .map_err(|e| format!("Failed to serialize notebook: {e}"))?;
     let json = if json.ends_with('\n') {
@@ -225,8 +208,7 @@ fn replace_cell(
     cell_number: Option<i64>,
     cell_type: Option<&str>,
 ) -> Result<(Vec<serde_json::Value>, ToolResult), ToolResult> {
-    let index = find_cell_index(&cells, cell_id, cell_number)
-        .map_err(ToolResult::fail)?;
+    let index = find_cell_index(&cells, cell_id, cell_number).map_err(ToolResult::fail)?;
 
     // Get old source length for reporting
     let old_source_len = cells[index]
@@ -283,8 +265,7 @@ fn insert_cell(
 
     // Determine insert position
     let insert_pos = if let Some(id) = after_cell_id {
-        let idx = find_cell_index(&cells, Some(id), None)
-            .map_err(ToolResult::fail)?;
+        let idx = find_cell_index(&cells, Some(id), None).map_err(ToolResult::fail)?;
         idx + 1
     } else if let Some(pos) = at_position {
         let pos = pos.max(0) as usize;
@@ -332,8 +313,7 @@ fn delete_cell(
     cell_id: Option<&str>,
     cell_number: Option<i64>,
 ) -> Result<(Vec<serde_json::Value>, ToolResult), ToolResult> {
-    let index = find_cell_index(&cells, cell_id, cell_number)
-        .map_err(ToolResult::fail)?;
+    let index = find_cell_index(&cells, cell_id, cell_number).map_err(ToolResult::fail)?;
 
     let deleted = cells.remove(index);
     let deleted_cell_id = deleted
@@ -462,10 +442,7 @@ mod tests {
     async fn test_notebook_edit_file_not_found() {
         let tool = NotebookEditTool;
         let ctx = ToolContext::new("/tmp");
-        let args = make_args(&[(
-            "notebook_path",
-            serde_json::json!("/tmp/nonexistent.ipynb"),
-        )]);
+        let args = make_args(&[("notebook_path", serde_json::json!("/tmp/nonexistent.ipynb"))]);
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("not found"));
@@ -479,10 +456,7 @@ mod tests {
         let path = std::env::temp_dir().join("test_not_notebook.txt");
         std::fs::write(&path, "not a notebook").unwrap();
 
-        let args = make_args(&[(
-            "notebook_path",
-            serde_json::json!(path.to_string_lossy()),
-        )]);
+        let args = make_args(&[("notebook_path", serde_json::json!(path.to_string_lossy()))]);
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("Not a Jupyter notebook"));

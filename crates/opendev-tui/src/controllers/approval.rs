@@ -90,11 +90,7 @@ impl ApprovalController {
         command: String,
         working_dir: String,
     ) -> oneshot::Receiver<ApprovalDecision> {
-        let base_prefix = command
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_string();
+        let base_prefix = command.split_whitespace().next().unwrap_or("").to_string();
 
         let auto_desc = if !base_prefix.is_empty() {
             format!(

@@ -118,7 +118,10 @@ impl BaseTool for TodoTool {
                     _ => return ToolResult::fail("title is required for add"),
                 };
                 let id = mgr.add(title.to_string());
-                ToolResult::ok(format!("Added todo {id}: {title}\n\n{}", mgr.format_status()))
+                ToolResult::ok(format!(
+                    "Added todo {id}: {title}\n\n{}",
+                    mgr.format_status()
+                ))
             }
             _ => ToolResult::fail(format!(
                 "Unknown action: {action}. Available: list, start, complete, add"

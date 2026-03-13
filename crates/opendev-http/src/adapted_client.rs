@@ -51,10 +51,10 @@ impl AdaptedClient {
         let mut result = self.client.post_json(&converted_payload, cancel).await?;
 
         // Convert response body back to Chat Completions format
-        if let (Some(adapter), Some(body)) = (&self.adapter, &result.body) {
-            if result.success {
-                result.body = Some(adapter.convert_response(body.clone()));
-            }
+        if let (Some(adapter), Some(body)) = (&self.adapter, &result.body)
+            && result.success
+        {
+            result.body = Some(adapter.convert_response(body.clone()));
         }
 
         Ok(result)

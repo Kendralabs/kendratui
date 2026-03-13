@@ -1,8 +1,8 @@
 //! Plugin manager: discovery, install/uninstall, enable/disable.
 
 use crate::models::{
-    InstalledPlugins, KnownMarketplaces, PluginConfig, PluginManifest,
-    PluginMetadata, PluginScope, PluginSource, PluginStatus,
+    InstalledPlugins, KnownMarketplaces, PluginConfig, PluginManifest, PluginMetadata, PluginScope,
+    PluginSource, PluginStatus,
 };
 use chrono::Utc;
 use std::path::{Path, PathBuf};
@@ -256,12 +256,14 @@ impl PluginManager {
         scope: PluginScope,
     ) -> Result<()> {
         let mut installed = self.load_installed_plugins(scope)?;
-        let plugin = installed.remove(marketplace_name, plugin_name).ok_or_else(|| {
-            PluginError::NotFound(format!(
-                "Plugin '{}:{}' not installed in {:?} scope",
-                marketplace_name, plugin_name, scope
-            ))
-        })?;
+        let plugin = installed
+            .remove(marketplace_name, plugin_name)
+            .ok_or_else(|| {
+                PluginError::NotFound(format!(
+                    "Plugin '{}:{}' not installed in {:?} scope",
+                    marketplace_name, plugin_name, scope
+                ))
+            })?;
 
         // Remove from filesystem
         if plugin.path.exists() {
@@ -337,8 +339,7 @@ impl PluginManager {
                 let project = self.load_installed_plugins(PluginScope::Project)?;
                 let user = self.load_installed_plugins(PluginScope::User)?;
 
-                let mut all: Vec<PluginConfig> =
-                    project.plugins.values().cloned().collect();
+                let mut all: Vec<PluginConfig> = project.plugins.values().cloned().collect();
 
                 let project_keys: std::collections::HashSet<_> =
                     project.plugins.keys().cloned().collect();
@@ -447,10 +448,15 @@ impl PluginManager {
                 for line in parts[1].trim().lines() {
                     let line = line.trim();
                     if let Some(val) = line.strip_prefix("name:") {
-                        name = val.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                        name = val
+                            .trim()
+                            .trim_matches(|c| c == '"' || c == '\'')
+                            .to_string();
                     } else if let Some(val) = line.strip_prefix("description:") {
-                        description =
-                            val.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                        description = val
+                            .trim()
+                            .trim_matches(|c| c == '"' || c == '\'')
+                            .to_string();
                     }
                 }
             }
@@ -463,15 +469,17 @@ impl PluginManager {
     pub fn discover_skills_in_dir(plugin_dir: &Path) -> Vec<String> {
         let skills_dir = plugin_dir.join("skills");
         let mut skills = Vec::new();
-        if skills_dir.exists() && skills_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&skills_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() && path.join("SKILL.md").exists() {
-                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            skills.push(name.to_string());
-                        }
-                    }
+        if skills_dir.exists()
+            && skills_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&skills_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir()
+                    && path.join("SKILL.md").exists()
+                    && let Some(name) = path.file_name().and_then(|n| n.to_str())
+                {
+                    skills.push(name.to_string());
                 }
             }
         }
@@ -489,7 +497,7 @@ impl PluginManager {
         // Try to parse as URL
         if let Ok(parsed) = url::Url::parse(&cleaned) {
             let path = parsed.path().trim_matches('/');
-            if let Some(last) = path.split('/').last() {
+            if let Some(last) = path.split('/').next_back() {
                 let name = last.to_string();
                 let name = regex::Regex::new(r"^swecli-")
                     .unwrap()
@@ -506,22 +514,22 @@ impl PluginManager {
         }
 
         // Handle SSH-style URLs: git@github.com:user/repo
-        if cleaned.contains('@') && cleaned.contains(':') {
-            if let Some(path_part) = cleaned.split(':').last() {
-                if let Some(last) = path_part.trim_matches('/').split('/').last() {
-                    let name = last.to_string();
-                    let name = regex::Regex::new(r"^swecli-")
-                        .unwrap()
-                        .replace(&name, "")
-                        .to_string();
-                    let name = regex::Regex::new(r"-marketplace$")
-                        .unwrap()
-                        .replace(&name, "")
-                        .to_string();
-                    if !name.is_empty() {
-                        return name;
-                    }
-                }
+        if cleaned.contains('@')
+            && cleaned.contains(':')
+            && let Some(path_part) = cleaned.split(':').next_back()
+            && let Some(last) = path_part.trim_matches('/').split('/').next_back()
+        {
+            let name = last.to_string();
+            let name = regex::Regex::new(r"^swecli-")
+                .unwrap()
+                .replace(&name, "")
+                .to_string();
+            let name = regex::Regex::new(r"-marketplace$")
+                .unwrap()
+                .replace(&name, "")
+                .to_string();
+            if !name.is_empty() {
+                return name;
             }
         }
 

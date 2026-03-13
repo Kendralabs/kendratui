@@ -67,10 +67,7 @@ pub fn format_error<'a>(primary: &str, secondary: Option<&str>) -> Vec<Line<'a>>
                 "  \u{23bf}  ".to_string(),
                 Style::default().fg(style_tokens::SUBTLE),
             ),
-            Span::styled(
-                sec.to_string(),
-                Style::default().fg(style_tokens::SUBTLE),
-            ),
+            Span::styled(sec.to_string(), Style::default().fg(style_tokens::SUBTLE)),
         ]));
     }
 
@@ -97,10 +94,7 @@ pub fn format_warning<'a>(primary: &str, secondary: Option<&str>) -> Vec<Line<'a
                 "  \u{23bf}  ".to_string(),
                 Style::default().fg(style_tokens::SUBTLE),
             ),
-            Span::styled(
-                sec.to_string(),
-                Style::default().fg(style_tokens::SUBTLE),
-            ),
+            Span::styled(sec.to_string(), Style::default().fg(style_tokens::SUBTLE)),
         ]));
     }
 
@@ -124,10 +118,7 @@ pub fn format_info<'a>(primary: &str, secondary: Option<&str>) -> Vec<Line<'a>> 
                 "  \u{23bf}  ".to_string(),
                 Style::default().fg(style_tokens::SUBTLE),
             ),
-            Span::styled(
-                sec.to_string(),
-                Style::default().fg(style_tokens::SUBTLE),
-            ),
+            Span::styled(sec.to_string(), Style::default().fg(style_tokens::SUBTLE)),
         ]));
     }
 
@@ -170,8 +161,7 @@ mod tests {
 
     #[test]
     fn test_strip_system_reminders() {
-        let input =
-            "Hello\n<system-reminder>secret stuff</system-reminder>\nWorld";
+        let input = "Hello\n<system-reminder>secret stuff</system-reminder>\nWorld";
         let result = strip_system_reminders(input);
         assert_eq!(result, "Hello\nWorld");
     }

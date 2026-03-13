@@ -77,12 +77,11 @@ impl CredentialStore {
         let provider_lower = provider.to_lowercase();
 
         // Check environment variable first
-        if let Some(env_var) = env_var_for_provider(&provider_lower) {
-            if let Ok(val) = std::env::var(env_var) {
-                if !val.is_empty() {
-                    return Some(val);
-                }
-            }
+        if let Some(env_var) = env_var_for_provider(&provider_lower)
+            && let Ok(val) = std::env::var(env_var)
+            && !val.is_empty()
+        {
+            return Some(val);
         }
 
         // Fall back to stored credential
@@ -115,7 +114,9 @@ impl CredentialStore {
         ENV_VAR_MAP
             .iter()
             .map(|&(provider, env_var)| {
-                let has_env = std::env::var(env_var).map(|v| !v.is_empty()).unwrap_or(false);
+                let has_env = std::env::var(env_var)
+                    .map(|v| !v.is_empty())
+                    .unwrap_or(false);
                 let has_stored = data.keys.contains_key(provider);
                 ProviderStatus {
                     provider: provider.to_string(),
@@ -153,8 +154,8 @@ impl CredentialStore {
 
     /// Load credentials from file, caching the result.
     fn load(&mut self) -> &AuthData {
-        if self.cache.is_some() {
-            return self.cache.as_ref().unwrap();
+        if let Some(ref cached) = self.cache {
+            return cached;
         }
 
         let data = if self.path.exists() {
@@ -212,10 +213,8 @@ impl CredentialStore {
                     "Credential file {:?} has loose permissions ({:o}). Tightening to 0600.",
                     self.path, mode
                 );
-                let _ = std::fs::set_permissions(
-                    &self.path,
-                    std::fs::Permissions::from_mode(0o600),
-                );
+                let _ =
+                    std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600));
             }
         }
     }
@@ -263,7 +262,10 @@ mod tests {
         assert!(store.get_key("testprovider").is_none());
 
         store.set_key("testprovider", "sk-test-key-123").unwrap();
-        assert_eq!(store.get_key("testprovider").as_deref(), Some("sk-test-key-123"));
+        assert_eq!(
+            store.get_key("testprovider").as_deref(),
+            Some("sk-test-key-123")
+        );
 
         // Verify file was created
         assert!(auth_path.exists());
@@ -296,7 +298,11 @@ mod tests {
         assert!(store.get_token("mcp-github").is_none());
 
         store
-            .store_token("mcp-github", "ghp_abc123", Some(serde_json::json!({"scope": "repo"})))
+            .store_token(
+                "mcp-github",
+                "ghp_abc123",
+                Some(serde_json::json!({"scope": "repo"})),
+            )
             .unwrap();
         assert_eq!(store.get_token("mcp-github").as_deref(), Some("ghp_abc123"));
     }
@@ -335,7 +341,8 @@ mod tests {
 
     #[test]
     fn test_nonexistent_file() {
-        let mut store = CredentialStore::new(Some(PathBuf::from("/tmp/nonexistent-dir-12345/auth.json")));
+        let mut store =
+            CredentialStore::new(Some(PathBuf::from("/tmp/nonexistent-dir-12345/auth.json")));
         // Use a provider with no env var to avoid interference
         assert!(store.get_key("testprovider").is_none());
     }

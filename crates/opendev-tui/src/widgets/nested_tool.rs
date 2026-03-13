@@ -219,10 +219,7 @@ impl Widget for NestedToolWidget<'_> {
                     format!(" {connector} "),
                     Style::default().fg(style_tokens::SUBTLE),
                 ),
-                Span::styled(
-                    format!("{status_str} "),
-                    Style::default().fg(status_color),
-                ),
+                Span::styled(format!("{status_str} "), Style::default().fg(status_color)),
                 Span::styled(
                     subagent.name.clone(),
                     Style::default()
@@ -240,7 +237,11 @@ impl Widget for NestedToolWidget<'_> {
             ]));
 
             // Show active tool calls
-            let vertical = if is_last { "   " } else { &format!(" {TREE_VERTICAL}  ") };
+            let vertical = if is_last {
+                "   "
+            } else {
+                &format!(" {TREE_VERTICAL}  ")
+            };
             let active_count = subagent.active_tools.len();
 
             for (j, tool_state) in subagent.active_tools.values().enumerate() {
@@ -319,9 +320,7 @@ impl Widget for NestedToolWidget<'_> {
             }
         }
 
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: true });
+        let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
 
         paragraph.render(area, buf);
     }

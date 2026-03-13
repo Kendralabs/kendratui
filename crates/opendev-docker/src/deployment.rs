@@ -16,7 +16,10 @@ use crate::models::{ContainerStatus, DockerConfig};
 pub fn find_free_port() -> Result<u16> {
     let listener =
         TcpListener::bind("127.0.0.1:0").map_err(|e| DockerError::Other(e.to_string()))?;
-    let port = listener.local_addr().map_err(|e| DockerError::Other(e.to_string()))?.port();
+    let port = listener
+        .local_addr()
+        .map_err(|e| DockerError::Other(e.to_string()))?
+        .port();
     Ok(port)
 }
 
@@ -139,12 +142,12 @@ impl DockerDeployment {
         (self.on_status)(&format!("Pulling Docker image: {}", self.config.image));
         info!("Pulling Docker image: {}", self.config.image);
 
-        run_docker_command(&["pull", &self.config.image], 600.0, true).await.map_err(|e| {
-            DockerError::ImagePullFailed {
+        run_docker_command(&["pull", &self.config.image], 600.0, true)
+            .await
+            .map_err(|e| DockerError::ImagePullFailed {
                 image: self.config.image.clone(),
                 reason: e.to_string(),
-            }
-        })?;
+            })?;
 
         Ok(())
     }
@@ -160,16 +163,16 @@ impl DockerDeployment {
             format!("--name={}", self.container_name),
             format!("--memory={}", self.config.memory),
             format!("--cpus={}", self.config.cpus),
-            format!(
-                "--publish={}:{}",
-                self.host_port, self.config.server_port
-            ),
+            format!("--publish={}:{}", self.host_port, self.config.server_port),
         ];
 
         // Volume mounts
         for v in &self.config.volumes {
             let ro = if v.read_only { ":ro" } else { "" };
-            args.push(format!("--volume={}:{}{}", v.host_path, v.container_path, ro));
+            args.push(format!(
+                "--volume={}:{}{}",
+                v.host_path, v.container_path, ro
+            ));
         }
 
         // Environment variables
@@ -238,9 +241,12 @@ impl DockerDeployment {
             None => return Ok(ContainerStatus::Unknown),
         };
 
-        let (stdout, _, code) =
-            run_docker_command(&["inspect", "--format", "{{.State.Status}}", &id], 10.0, false)
-                .await?;
+        let (stdout, _, code) = run_docker_command(
+            &["inspect", "--format", "{{.State.Status}}", &id],
+            10.0,
+            false,
+        )
+        .await?;
 
         if code != 0 {
             return Ok(ContainerStatus::Unknown);
@@ -304,8 +310,9 @@ mod tests {
         let messages = Arc::new(Mutex::new(Vec::<String>::new()));
         let msgs = messages.clone();
         let cfg = DockerConfig::default();
-        let deploy =
-            DockerDeployment::new(cfg).unwrap().with_status_callback(move |s: &str| {
+        let deploy = DockerDeployment::new(cfg)
+            .unwrap()
+            .with_status_callback(move |s: &str| {
                 msgs.lock().unwrap().push(s.to_string());
             });
         (deploy.on_status)("test message");

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use opendev_runtime::{parse_plan_steps, PlanIndex, TodoManager};
+use opendev_runtime::{PlanIndex, TodoManager, parse_plan_steps};
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
 /// Minimum plan length in characters to be considered valid.
@@ -154,9 +154,7 @@ impl BaseTool for PresentPlanTool {
                      the plan with ---BEGIN PLAN--- / ---END PLAN--- delimiters \
                      to {plan_file_path}."
                 )),
-                error: Some(
-                    "Plan is missing the required ---BEGIN PLAN--- delimiter.".to_string(),
-                ),
+                error: Some("Plan is missing the required ---BEGIN PLAN--- delimiter.".to_string()),
                 metadata: HashMap::new(),
             };
         }
@@ -193,9 +191,7 @@ impl BaseTool for PresentPlanTool {
                      Re-spawn the Planner subagent to improve the verification section \
                      in {plan_file_path}."
                 )),
-                error: Some(
-                    "Plan verification section is missing or too brief.".to_string(),
-                ),
+                error: Some("Plan verification section is missing or too brief.".to_string()),
                 metadata: HashMap::new(),
             };
         }
@@ -205,12 +201,12 @@ impl BaseTool for PresentPlanTool {
         let step_count = steps.len();
 
         // Create todos from plan steps
-        if let Some(ref mgr) = self.todo_manager {
-            if let Ok(mut todo_mgr) = mgr.lock() {
-                todo_mgr.clear(); // Clear any previous plan's todos
-                for step in &steps {
-                    todo_mgr.add(step.clone());
-                }
+        if let Some(ref mgr) = self.todo_manager
+            && let Ok(mut todo_mgr) = mgr.lock()
+        {
+            todo_mgr.clear(); // Clear any previous plan's todos
+            for step in &steps {
+                todo_mgr.add(step.clone());
             }
         }
 
@@ -242,14 +238,8 @@ impl BaseTool for PresentPlanTool {
         // Build metadata
         let mut metadata = HashMap::new();
         metadata.insert("plan_approved".into(), serde_json::json!(true));
-        metadata.insert(
-            "plan_file_path".into(),
-            serde_json::json!(plan_file_path),
-        );
-        metadata.insert(
-            "plan_length".into(),
-            serde_json::json!(plan_content.len()),
-        );
+        metadata.insert("plan_file_path".into(), serde_json::json!(plan_file_path));
+        metadata.insert("plan_length".into(), serde_json::json!(plan_content.len()));
         metadata.insert("step_count".into(), serde_json::json!(step_count));
 
         if let Some(ref name) = plan_name {
@@ -265,7 +255,10 @@ impl BaseTool for PresentPlanTool {
                 .enumerate()
                 .map(|(i, s)| format!("  {}. {s}", i + 1))
                 .collect();
-            format!("\n\nTodo items created ({step_count}):\n{}", items.join("\n"))
+            format!(
+                "\n\nTodo items created ({step_count}):\n{}",
+                items.join("\n")
+            )
         };
 
         let plan_name_display = plan_name
@@ -287,10 +280,10 @@ impl BaseTool for PresentPlanTool {
 
 /// Expand `~` to the home directory.
 fn expand_tilde(path: &str) -> PathBuf {
-    if path.starts_with("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(&path[2..]);
-        }
+    if path.starts_with("~/")
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(&path[2..]);
     }
     PathBuf::from(path)
 }
@@ -336,10 +329,7 @@ mod tests {
         let path = std::env::temp_dir().join("test_empty_plan_rs.md");
         std::fs::write(&path, "").unwrap();
 
-        let args = make_args(&[(
-            "plan_file_path",
-            serde_json::json!(path.to_string_lossy()),
-        )]);
+        let args = make_args(&[("plan_file_path", serde_json::json!(path.to_string_lossy()))]);
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("empty"));
@@ -355,10 +345,7 @@ mod tests {
         let path = std::env::temp_dir().join("test_short_plan_rs.md");
         std::fs::write(&path, "A short plan.").unwrap();
 
-        let args = make_args(&[(
-            "plan_file_path",
-            serde_json::json!(path.to_string_lossy()),
-        )]);
+        let args = make_args(&[("plan_file_path", serde_json::json!(path.to_string_lossy()))]);
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("too short"));
@@ -375,10 +362,7 @@ mod tests {
         let content = "x".repeat(200);
         std::fs::write(&path, &content).unwrap();
 
-        let args = make_args(&[(
-            "plan_file_path",
-            serde_json::json!(path.to_string_lossy()),
-        )]);
+        let args = make_args(&[("plan_file_path", serde_json::json!(path.to_string_lossy()))]);
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("---BEGIN PLAN---"));
@@ -402,13 +386,16 @@ mod tests {
         );
         std::fs::write(&path, &content).unwrap();
 
-        let args = make_args(&[(
-            "plan_file_path",
-            serde_json::json!(path.to_string_lossy()),
-        )]);
+        let args = make_args(&[("plan_file_path", serde_json::json!(path.to_string_lossy()))]);
         let result = tool.execute(args, &ctx).await;
         assert!(result.success, "Error: {:?}", result.error);
-        assert!(result.output.as_ref().unwrap().contains("Proceed with implementation"));
+        assert!(
+            result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("Proceed with implementation")
+        );
         assert_eq!(
             result.metadata.get("plan_approved"),
             Some(&serde_json::json!(true))
@@ -442,10 +429,7 @@ mod tests {
         );
         std::fs::write(&path, &content).unwrap();
 
-        let args = make_args(&[(
-            "plan_file_path",
-            serde_json::json!(path.to_string_lossy()),
-        )]);
+        let args = make_args(&[("plan_file_path", serde_json::json!(path.to_string_lossy()))]);
         let result = tool.execute(args, &ctx).await;
         assert!(result.success, "Error: {:?}", result.error);
 

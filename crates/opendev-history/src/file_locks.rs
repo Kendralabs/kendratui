@@ -79,10 +79,14 @@ impl FileLock {
 impl Drop for FileLock {
     fn drop(&mut self) {
         // Clean up the lock file
-        if let Err(e) = std::fs::remove_file(&self.lock_path) {
-            if e.kind() != io::ErrorKind::NotFound {
-                debug!("Could not remove lock file {}: {}", self.lock_path.display(), e);
-            }
+        if let Err(e) = std::fs::remove_file(&self.lock_path)
+            && e.kind() != io::ErrorKind::NotFound
+        {
+            debug!(
+                "Could not remove lock file {}: {}",
+                self.lock_path.display(),
+                e
+            );
         }
     }
 }
@@ -111,8 +115,7 @@ mod tests {
     #[test]
     fn test_with_file_lock() {
         let tmp = NamedTempFile::new().unwrap();
-        let result =
-            with_file_lock(tmp.path(), Duration::from_secs(5), || 42).unwrap();
+        let result = with_file_lock(tmp.path(), Duration::from_secs(5), || 42).unwrap();
         assert_eq!(result, 42);
     }
 

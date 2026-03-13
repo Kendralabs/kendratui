@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast, mpsc, oneshot};
 
 use opendev_config::ModelRegistry;
 use opendev_history::SessionManager;
@@ -465,13 +465,13 @@ impl AppState {
             .collect();
 
         for id in to_remove {
-            if let Some(mut slot) = approvals.remove(&id) {
-                if let Some(tx) = slot.tx.take() {
-                    let _ = tx.send(ApprovalResult {
-                        approved: false,
-                        auto_approve: false,
-                    });
-                }
+            if let Some(mut slot) = approvals.remove(&id)
+                && let Some(tx) = slot.tx.take()
+            {
+                let _ = tx.send(ApprovalResult {
+                    approved: false,
+                    auto_approve: false,
+                });
             }
         }
     }
@@ -590,13 +590,13 @@ impl AppState {
             .collect();
 
         for id in to_remove {
-            if let Some(mut slot) = plan_approvals.remove(&id) {
-                if let Some(tx) = slot.tx.take() {
-                    let _ = tx.send(PlanApprovalResult {
-                        action: "reject".to_string(),
-                        feedback: "Session ended".to_string(),
-                    });
-                }
+            if let Some(mut slot) = plan_approvals.remove(&id)
+                && let Some(tx) = slot.tx.take()
+            {
+                let _ = tx.send(PlanApprovalResult {
+                    action: "reject".to_string(),
+                    feedback: "Session ended".to_string(),
+                });
             }
         }
     }
@@ -685,11 +685,7 @@ impl AppState {
 
     /// Remove the injection queue for a session.
     pub async fn clear_injection_queue(&self, session_id: &str) {
-        self.inner
-            .injection_queues
-            .lock()
-            .await
-            .remove(session_id);
+        self.inner.injection_queues.lock().await.remove(session_id);
     }
 
     // --- Agent executor ---
@@ -802,9 +798,7 @@ mod tests {
         };
 
         // Add approval and get receiver.
-        let rx = state
-            .add_pending_approval("a1".to_string(), approval)
-            .await;
+        let rx = state.add_pending_approval("a1".to_string(), approval).await;
 
         // Verify pending.
         let pending = state.get_pending_approval("a1").await;
@@ -833,9 +827,7 @@ mod tests {
             session_id: Some("s1".to_string()),
         };
 
-        let rx = state
-            .add_pending_approval("a1".to_string(), approval)
-            .await;
+        let rx = state.add_pending_approval("a1".to_string(), approval).await;
 
         // Interrupt should deny all pending approvals.
         state.request_interrupt().await;
@@ -885,9 +877,7 @@ mod tests {
             session_id: Some("s1".to_string()),
         };
 
-        let rx = state
-            .add_pending_ask_user("q1".to_string(), ask)
-            .await;
+        let rx = state.add_pending_ask_user("q1".to_string(), ask).await;
 
         let pending = state.get_pending_ask_user("q1").await;
         assert!(pending.is_some());
@@ -949,10 +939,12 @@ mod tests {
         assert_eq!(result.feedback, "looks good");
 
         // Second resolve returns None.
-        assert!(state
-            .resolve_plan_approval("p1", "reject".to_string(), String::new())
-            .await
-            .is_none());
+        assert!(
+            state
+                .resolve_plan_approval("p1", "reject".to_string(), String::new())
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -1053,10 +1045,12 @@ mod tests {
 
         // Clear and verify injection fails.
         state.clear_injection_queue("s1").await;
-        assert!(state
-            .try_inject_message("s1", "fail".to_string())
-            .await
-            .is_err());
+        assert!(
+            state
+                .try_inject_message("s1", "fail".to_string())
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

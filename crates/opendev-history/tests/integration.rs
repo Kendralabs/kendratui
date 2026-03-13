@@ -47,9 +47,7 @@ fn session_full_lifecycle() {
     current
         .messages
         .push(make_msg(Role::Assistant, "Hello human"));
-    current
-        .messages
-        .push(make_msg(Role::User, "Do something"));
+    current.messages.push(make_msg(Role::User, "Do something"));
 
     // Save
     mgr.save_current().unwrap();
@@ -126,7 +124,9 @@ fn legacy_json_format_loads() {
 
     let mut session = Session::new();
     session.id = "legacy".to_string();
-    session.messages.push(make_msg(Role::User, "old format msg"));
+    session
+        .messages
+        .push(make_msg(Role::User, "old format msg"));
 
     // Write as monolithic JSON (legacy)
     let json = serde_json::to_string_pretty(&session).unwrap();
@@ -258,10 +258,8 @@ fn file_lock_released_on_drop() {
 fn with_file_lock_executes_closure() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
     let result =
-        opendev_history::file_locks::with_file_lock(tmp.path(), Duration::from_secs(5), || {
-            42 + 1
-        })
-        .unwrap();
+        opendev_history::file_locks::with_file_lock(tmp.path(), Duration::from_secs(5), || 42 + 1)
+            .unwrap();
     assert_eq!(result, 43);
 }
 
@@ -312,11 +310,7 @@ fn index_remove_entry() {
 fn index_invalid_version_returns_none() {
     let tmp = TempDir::new().unwrap();
     let index_path = tmp.path().join("sessions-index.json");
-    std::fs::write(
-        &index_path,
-        r#"{"version": 999, "entries": []}"#,
-    )
-    .unwrap();
+    std::fs::write(&index_path, r#"{"version": 999, "entries": []}"#).unwrap();
 
     let index = SessionIndex::new(tmp.path().to_path_buf());
     assert!(index.read_index().is_none());
@@ -345,13 +339,21 @@ fn project_scoped_session_isolation() {
     // Create session in project A
     let session_a = mgr_a.create_session();
     let id_a = session_a.id.clone();
-    mgr_a.current_session_mut().unwrap().messages.push(make_msg(Role::User, "Project A message"));
+    mgr_a
+        .current_session_mut()
+        .unwrap()
+        .messages
+        .push(make_msg(Role::User, "Project A message"));
     mgr_a.save_current().unwrap();
 
     // Create session in project B
     let session_b = mgr_b.create_session();
     let id_b = session_b.id.clone();
-    mgr_b.current_session_mut().unwrap().messages.push(make_msg(Role::User, "Project B message"));
+    mgr_b
+        .current_session_mut()
+        .unwrap()
+        .messages
+        .push(make_msg(Role::User, "Project B message"));
     mgr_b.save_current().unwrap();
 
     // Sessions are different IDs
@@ -359,11 +361,17 @@ fn project_scoped_session_isolation() {
 
     // Project A cannot see project B's session
     let result = mgr_a.load_session(&id_b);
-    assert!(result.is_err(), "project A should not see project B's session");
+    assert!(
+        result.is_err(),
+        "project A should not see project B's session"
+    );
 
     // Project B cannot see project A's session
     let result = mgr_b.load_session(&id_a);
-    assert!(result.is_err(), "project B should not see project A's session");
+    assert!(
+        result.is_err(),
+        "project B should not see project A's session"
+    );
 
     // Each can see their own
     let loaded_a = mgr_a.load_session(&id_a).unwrap();
@@ -382,13 +390,19 @@ fn multiple_sessions_in_same_project() {
     // Create first session
     let s1 = mgr.create_session();
     let id1 = s1.id.clone();
-    mgr.current_session_mut().unwrap().messages.push(make_msg(Role::User, "Session 1"));
+    mgr.current_session_mut()
+        .unwrap()
+        .messages
+        .push(make_msg(Role::User, "Session 1"));
     mgr.save_current().unwrap();
 
     // Create second session (replaces current)
     let s2 = mgr.create_session();
     let id2 = s2.id.clone();
-    mgr.current_session_mut().unwrap().messages.push(make_msg(Role::User, "Session 2"));
+    mgr.current_session_mut()
+        .unwrap()
+        .messages
+        .push(make_msg(Role::User, "Session 2"));
     mgr.save_current().unwrap();
 
     assert_ne!(id1, id2);
@@ -416,7 +430,10 @@ fn session_working_directory_persists() {
     mgr.save_session(&session).unwrap();
 
     let loaded = mgr.load_session("wd-test").unwrap();
-    assert_eq!(loaded.working_directory.as_deref(), Some("/home/user/project"));
+    assert_eq!(
+        loaded.working_directory.as_deref(),
+        Some("/home/user/project")
+    );
 }
 
 /// Session messages preserve all fields (role, content, metadata, tool_calls).
@@ -426,7 +443,8 @@ fn session_message_fields_preserved() {
     let mgr = SessionManager::new(tmp.path().to_path_buf()).unwrap();
 
     let mut msg = make_msg(Role::User, "test message");
-    msg.metadata.insert("key".to_string(), serde_json::json!("value"));
+    msg.metadata
+        .insert("key".to_string(), serde_json::json!("value"));
 
     let mut session = Session::new();
     session.id = "fields-test".to_string();

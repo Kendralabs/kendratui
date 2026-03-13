@@ -64,20 +64,19 @@ impl BaseTool for FileWriteTool {
 
         // Create parent directories if needed
         if create_dirs {
-            if let Some(parent) = path.parent() {
-                if !parent.exists() {
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        return ToolResult::fail(format!("Failed to create directories: {e}"));
-                    }
-                }
+            if let Some(parent) = path.parent()
+                && !parent.exists()
+                && let Err(e) = std::fs::create_dir_all(parent)
+            {
+                return ToolResult::fail(format!("Failed to create directories: {e}"));
             }
-        } else if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                return ToolResult::fail(format!(
-                    "Parent directory does not exist: {}",
-                    parent.display()
-                ));
-            }
+        } else if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            return ToolResult::fail(format!(
+                "Parent directory does not exist: {}",
+                parent.display()
+            ));
         }
 
         // Atomic write: write to temp file then rename
@@ -114,7 +113,10 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_args(pairs: &[(&str, serde_json::Value)]) -> HashMap<String, serde_json::Value> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     #[tokio::test]
@@ -131,7 +133,10 @@ mod tests {
 
         let result = tool.execute(args, &ctx).await;
         assert!(result.success);
-        assert_eq!(std::fs::read_to_string(&file_path).unwrap(), "hello\nworld\n");
+        assert_eq!(
+            std::fs::read_to_string(&file_path).unwrap(),
+            "hello\nworld\n"
+        );
     }
 
     #[tokio::test]
@@ -148,7 +153,10 @@ mod tests {
 
         let result = tool.execute(args, &ctx).await;
         assert!(result.success);
-        assert_eq!(std::fs::read_to_string(&file_path).unwrap(), "nested content");
+        assert_eq!(
+            std::fs::read_to_string(&file_path).unwrap(),
+            "nested content"
+        );
     }
 
     #[tokio::test]

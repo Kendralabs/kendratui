@@ -2,21 +2,47 @@
 //!
 //! Ported from `opendev/core/runtime/plan_names.py`.
 
-use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::seq::SliceRandom;
 use std::path::Path;
 
 const ADJECTIVES: &[&str] = &[
     "bold", "calm", "cool", "crisp", "dark", "deep", "fair", "fast", "fine", "free", "glad",
-    "gold", "gray", "keen", "kind", "lean", "mild", "neat", "pale", "pure", "rare", "rich",
-    "safe", "slim", "soft", "tall", "tidy", "warm", "wide", "wise",
+    "gold", "gray", "keen", "kind", "lean", "mild", "neat", "pale", "pure", "rare", "rich", "safe",
+    "slim", "soft", "tall", "tidy", "warm", "wide", "wise",
 ];
 
 const VERBS: &[&str] = &[
-    "blazing", "dashing", "diving", "drifting", "flying", "gliding", "growing", "hiding",
-    "jumping", "landing", "leaping", "lifting", "moving", "pacing", "racing", "rising", "roaming",
-    "rowing", "running", "sailing", "singing", "sliding", "soaring", "spinning", "splashing",
-    "standing", "surfing", "swimming", "swinging", "waving",
+    "blazing",
+    "dashing",
+    "diving",
+    "drifting",
+    "flying",
+    "gliding",
+    "growing",
+    "hiding",
+    "jumping",
+    "landing",
+    "leaping",
+    "lifting",
+    "moving",
+    "pacing",
+    "racing",
+    "rising",
+    "roaming",
+    "rowing",
+    "running",
+    "sailing",
+    "singing",
+    "sliding",
+    "soaring",
+    "spinning",
+    "splashing",
+    "standing",
+    "surfing",
+    "swimming",
+    "swinging",
+    "waving",
 ];
 
 const NOUNS: &[&str] = &[

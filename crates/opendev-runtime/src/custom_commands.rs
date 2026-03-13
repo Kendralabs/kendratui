@@ -47,11 +47,7 @@ impl CustomCommand {
     /// - Replaces `$1`, `$2`, etc. with positional args (whitespace-split).
     /// - Cleans up unreplaced `$N` positional patterns.
     /// - Replaces context variables: `$KEY` → value.
-    pub fn expand(
-        &self,
-        arguments: &str,
-        context: Option<&HashMap<String, String>>,
-    ) -> String {
+    pub fn expand(&self, arguments: &str, context: Option<&HashMap<String, String>>) -> String {
         let mut result = self.template.replace("$ARGUMENTS", arguments);
 
         // Replace positional $1, $2, etc.
@@ -112,8 +108,8 @@ impl CustomCommandLoader {
     /// Scans `.opendev/commands/` under the project directory (higher priority)
     /// and then `~/.opendev/commands/` (global). Results are cached.
     pub fn load_commands(&mut self) -> &HashMap<String, CustomCommand> {
-        if self.commands.is_some() {
-            return self.commands.as_ref().unwrap();
+        if let Some(ref cmds) = self.commands {
+            return cmds;
         }
 
         let mut commands = HashMap::new();
@@ -121,10 +117,7 @@ impl CustomCommandLoader {
 
         for (cmd_dir, source) in dirs {
             if let Ok(entries) = fs::read_dir(&cmd_dir) {
-                let mut paths: Vec<_> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.path())
-                    .collect();
+                let mut paths: Vec<_> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
                 paths.sort();
 
                 for path in paths {
@@ -160,10 +153,8 @@ impl CustomCommandLoader {
                                 .map(|line| line.trim_start_matches('#').trim().to_string())
                                 .unwrap_or_default();
 
-                            let file_name = path
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or(&stem);
+                            let file_name =
+                                path.file_name().and_then(|n| n.to_str()).unwrap_or(&stem);
 
                             let source_label = format!("{}:{}", source, file_name);
 
@@ -295,7 +286,10 @@ mod tests {
         let mut ctx = HashMap::new();
         ctx.insert("file".to_string(), "lib.rs".to_string());
         let result = cmd.expand("security perf", Some(&ctx));
-        assert_eq!(result, "Review security perf in lib.rs focusing on security");
+        assert_eq!(
+            result,
+            "Review security perf in lib.rs focusing on security"
+        );
     }
 
     #[test]

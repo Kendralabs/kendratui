@@ -72,8 +72,8 @@ impl SessionManager {
         let mut session_for_json = session.clone();
         session_for_json.messages.clear();
 
-        let json_content = serde_json::to_string_pretty(&session_for_json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json_content =
+            serde_json::to_string_pretty(&session_for_json).map_err(std::io::Error::other)?;
 
         // Atomic write for metadata
         let tmp_json = self.session_dir.join(format!(".{}.json.tmp", session.id));
@@ -83,8 +83,7 @@ impl SessionManager {
         // Write messages as JSONL
         let mut jsonl_content = String::new();
         for msg in &session.messages {
-            let line = serde_json::to_string(msg)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let line = serde_json::to_string(msg).map_err(std::io::Error::other)?;
             jsonl_content.push_str(&line);
             jsonl_content.push('\n');
         }
@@ -98,7 +97,11 @@ impl SessionManager {
             warn!("Failed to update session index: {}", e);
         }
 
-        debug!("Saved session {} ({} messages)", session.id, session.messages.len());
+        debug!(
+            "Saved session {} ({} messages)",
+            session.id,
+            session.messages.len()
+        );
         Ok(())
     }
 
@@ -173,9 +176,10 @@ impl SessionManager {
     /// Useful for persisting mode, thinking level, autonomy level, etc.
     pub fn set_metadata(&mut self, key: &str, value: &str) {
         if let Some(session) = &mut self.current_session {
-            session
-                .metadata
-                .insert(key.to_string(), serde_json::Value::String(value.to_string()));
+            session.metadata.insert(
+                key.to_string(),
+                serde_json::Value::String(value.to_string()),
+            );
         }
     }
 
@@ -228,12 +232,8 @@ mod tests {
 
         let mut session = Session::new();
         session.id = "test-save-load".to_string();
-        session
-            .messages
-            .push(make_msg(Role::User, "hello"));
-        session
-            .messages
-            .push(make_msg(Role::Assistant, "hi there"));
+        session.messages.push(make_msg(Role::User, "hello"));
+        session.messages.push(make_msg(Role::Assistant, "hi there"));
 
         mgr.save_session(&session).unwrap();
 
@@ -316,16 +316,10 @@ mod tests {
         assert_eq!(mgr.get_metadata("mode").as_deref(), Some("PLAN"));
 
         mgr.set_metadata("thinking_level", "High");
-        assert_eq!(
-            mgr.get_metadata("thinking_level").as_deref(),
-            Some("High")
-        );
+        assert_eq!(mgr.get_metadata("thinking_level").as_deref(), Some("High"));
 
         mgr.set_metadata("autonomy_level", "Auto");
-        assert_eq!(
-            mgr.get_metadata("autonomy_level").as_deref(),
-            Some("Auto")
-        );
+        assert_eq!(mgr.get_metadata("autonomy_level").as_deref(), Some("Auto"));
     }
 
     #[test]

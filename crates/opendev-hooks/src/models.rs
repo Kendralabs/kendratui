@@ -331,10 +331,7 @@ mod tests {
 
     #[test]
     fn test_matcher_with_regex() {
-        let m = HookMatcher::with_pattern(
-            r"^(bash|edit)$",
-            vec![HookCommand::new("echo test")],
-        );
+        let m = HookMatcher::with_pattern(r"^(bash|edit)$", vec![HookCommand::new("echo test")]);
         assert!(m.matches(Some("bash")));
         assert!(m.matches(Some("edit")));
         assert!(!m.matches(Some("read")));
@@ -344,10 +341,7 @@ mod tests {
 
     #[test]
     fn test_matcher_invalid_regex_falls_back_to_exact() {
-        let m = HookMatcher::with_pattern(
-            r"[invalid",
-            vec![HookCommand::new("echo test")],
-        );
+        let m = HookMatcher::with_pattern(r"[invalid", vec![HookCommand::new("echo test")]);
         // Invalid regex can't compile, falls back to exact match
         assert!(!m.matches(Some("anything")));
         assert!(m.matches(Some("[invalid")));

@@ -330,15 +330,15 @@ impl ModelRegistry {
         let mut models = Vec::new();
         for (provider_id, provider) in &self.providers {
             for model in provider.models.values() {
-                if let Some(cap) = capability {
-                    if !model.capabilities.contains(&cap.to_string()) {
-                        continue;
-                    }
+                if let Some(cap) = capability
+                    && !model.capabilities.contains(&cap.to_string())
+                {
+                    continue;
                 }
-                if let Some(max) = max_price {
-                    if model.pricing_output > max {
-                        continue;
-                    }
+                if let Some(max) = max_price
+                    && model.pricing_output > max
+                {
+                    continue;
                 }
                 models.push((provider_id.as_str(), model));
             }
@@ -384,17 +384,14 @@ pub fn sync_provider_cache(
 
     // Check TTL via marker file
     let marker = providers_dir.join(".last_sync");
-    if marker.exists() {
-        if let Ok(meta) = marker.metadata() {
-            if let Ok(mtime) = meta.modified() {
-                if SystemTime::now()
-                    .duration_since(mtime)
-                    .is_ok_and(|age| age <= ttl)
-                {
-                    return Ok(false); // Still fresh
-                }
-            }
-        }
+    if marker.exists()
+        && let Ok(meta) = marker.metadata()
+        && let Ok(mtime) = meta.modified()
+        && SystemTime::now()
+            .duration_since(mtime)
+            .is_ok_and(|age| age <= ttl)
+    {
+        return Ok(false); // Still fresh
     }
 
     // Respect env overrides
@@ -750,10 +747,12 @@ mod tests {
 
         let model = &result["models"]["test-model"];
         assert_eq!(model["context_length"], 8192);
-        assert!(model["capabilities"]
-            .as_array()
-            .unwrap()
-            .contains(&serde_json::json!("vision")));
+        assert!(
+            model["capabilities"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("vision"))
+        );
         assert!(model["recommended"].as_bool().unwrap());
     }
 

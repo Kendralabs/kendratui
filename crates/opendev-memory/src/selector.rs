@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::embeddings::{cosine_similarity, EmbeddingCache};
+use crate::embeddings::{EmbeddingCache, cosine_similarity};
 use crate::playbook::Bullet;
 
 /// Bullet with its calculated relevance score.
@@ -56,12 +56,7 @@ impl BulletSelector {
     }
 
     /// Select top-K most relevant bullets.
-    pub fn select(
-        &self,
-        bullets: &[Bullet],
-        max_count: usize,
-        query: Option<&str>,
-    ) -> Vec<Bullet> {
+    pub fn select(&self, bullets: &[Bullet], max_count: usize, query: Option<&str>) -> Vec<Bullet> {
         if bullets.len() <= max_count {
             return bullets.to_vec();
         }
@@ -71,8 +66,16 @@ impl BulletSelector {
             .map(|b| self.score_bullet(b, query))
             .collect();
 
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-        scored.into_iter().take(max_count).map(|sb| sb.bullet).collect()
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        scored
+            .into_iter()
+            .take(max_count)
+            .map(|sb| sb.bullet)
+            .collect()
     }
 
     /// Score a single bullet.
@@ -111,9 +114,8 @@ impl BulletSelector {
         if total == 0 {
             return 0.5;
         }
-        let weighted = bullet.helpful as f64 * 1.0
-            + bullet.neutral as f64 * 0.5
-            + bullet.harmful as f64 * 0.0;
+        let weighted =
+            bullet.helpful as f64 * 1.0 + bullet.neutral as f64 * 0.5 + bullet.harmful as f64 * 0.0;
         weighted / total as f64
     }
 
@@ -202,10 +204,7 @@ impl BulletSelector {
         );
         stats.insert("avg_all_score".to_string(), avg_all);
         stats.insert("avg_selected_score".to_string(), avg_selected);
-        stats.insert(
-            "score_improvement".to_string(),
-            avg_selected - avg_all,
-        );
+        stats.insert("score_improvement".to_string(), avg_selected - avg_all);
         stats
     }
 }
@@ -273,9 +272,9 @@ mod tests {
     fn test_select_prefers_helpful_bullets() {
         let selector = BulletSelector::default();
         let bullets = vec![
-            make_bullet("low", "test", 0, 5),    // harmful
-            make_bullet("high", "test", 10, 0),   // very helpful
-            make_bullet("mid", "test", 3, 3),     // mixed
+            make_bullet("low", "test", 0, 5),      // harmful
+            make_bullet("high", "test", 10, 0),    // very helpful
+            make_bullet("mid", "test", 3, 3),      // mixed
             make_bullet("untested", "test", 0, 0), // neutral (0.5)
         ];
 

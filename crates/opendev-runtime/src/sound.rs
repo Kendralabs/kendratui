@@ -52,7 +52,7 @@ fn play_platform_sound() -> Result<(), String> {
             .stderr(std::process::Stdio::null())
             .spawn()
             .map_err(|e| e.to_string())?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "linux")]
@@ -65,9 +65,7 @@ fn play_platform_sound() -> Result<(), String> {
         ];
 
         for player in &players {
-            let which = std::process::Command::new("which")
-                .arg(player)
-                .output();
+            let which = std::process::Command::new("which").arg(player).output();
             if let Ok(output) = which {
                 if output.status.success() {
                     for sound in &sounds {

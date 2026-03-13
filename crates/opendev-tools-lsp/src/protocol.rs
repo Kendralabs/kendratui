@@ -215,19 +215,18 @@ impl WorkspaceEdit {
 
         if let Some(lsp_changes) = value.get("changes").and_then(|v| v.as_object()) {
             for (uri_str, edits) in lsp_changes {
-                if let Some(path) = uri_string_to_path(uri_str) {
-                    if let Some(edit_arr) = edits.as_array() {
-                        let text_edits: Vec<TextEdit> = edit_arr
-                            .iter()
-                            .filter_map(|e| {
-                                let range = parse_range_json(e.get("range")?)?;
-                                let new_text =
-                                    e.get("newText")?.as_str()?.to_string();
-                                Some(TextEdit { range, new_text })
-                            })
-                            .collect();
-                        changes.insert(path, text_edits);
-                    }
+                if let Some(path) = uri_string_to_path(uri_str)
+                    && let Some(edit_arr) = edits.as_array()
+                {
+                    let text_edits: Vec<TextEdit> = edit_arr
+                        .iter()
+                        .filter_map(|e| {
+                            let range = parse_range_json(e.get("range")?)?;
+                            let new_text = e.get("newText")?.as_str()?.to_string();
+                            Some(TextEdit { range, new_text })
+                        })
+                        .collect();
+                    changes.insert(path, text_edits);
                 }
             }
         }

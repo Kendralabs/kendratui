@@ -172,7 +172,10 @@ mod tests {
         let mut ctrl = SkillCreatorController::new();
         ctrl.set_name("skill");
         let err = ctrl.validate().unwrap_err();
-        assert!(err.contains("description"), "Error should mention description: {err}");
+        assert!(
+            err.contains("description"),
+            "Error should mention description: {err}"
+        );
     }
 
     #[test]
@@ -181,7 +184,10 @@ mod tests {
         ctrl.set_name("skill");
         ctrl.set_description("desc");
         let err = ctrl.validate().unwrap_err();
-        assert!(err.contains("content"), "Error should mention content: {err}");
+        assert!(
+            err.contains("content"),
+            "Error should mention content: {err}"
+        );
     }
 
     #[test]

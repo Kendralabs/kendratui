@@ -72,19 +72,15 @@ impl BaseTool for MessageTool {
 
         // Load channel config
         let channel_config = load_channel_config();
-        let config_for_channel = channel_config
-            .get(channel)
-            .and_then(|v| v.as_object());
+        let config_for_channel = channel_config.get(channel).and_then(|v| v.as_object());
 
         // Determine webhook URL
-        let webhook_url = target
-            .map(|t| t.to_string())
-            .or_else(|| {
-                config_for_channel
-                    .and_then(|c| c.get("webhook_url"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
+        let webhook_url = target.map(|t| t.to_string()).or_else(|| {
+            config_for_channel
+                .and_then(|c| c.get("webhook_url"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        });
 
         let webhook_url = match webhook_url {
             Some(url) if !url.is_empty() => url,
@@ -110,9 +106,7 @@ impl BaseTool for MessageTool {
             .build()
         {
             Ok(c) => c,
-            Err(e) => {
-                return ToolResult::fail(format!("Failed to create HTTP client: {e}"))
-            }
+            Err(e) => return ToolResult::fail(format!("Failed to create HTTP client: {e}")),
         };
 
         match client
@@ -131,9 +125,7 @@ impl BaseTool for MessageTool {
                         .text()
                         .await
                         .unwrap_or_else(|_| "unknown error".to_string());
-                    ToolResult::fail(format!(
-                        "Webhook returned status {status}: {body}"
-                    ))
+                    ToolResult::fail(format!("Webhook returned status {status}: {body}"))
                 }
             }
             Err(e) => ToolResult::fail(format!("Failed to send message: {e}")),
@@ -142,11 +134,7 @@ impl BaseTool for MessageTool {
 }
 
 /// Build the webhook payload for a specific channel type.
-fn build_payload(
-    channel: &str,
-    message: &str,
-    format: &str,
-) -> serde_json::Value {
+fn build_payload(channel: &str, message: &str, format: &str) -> serde_json::Value {
     match channel {
         "slack" => {
             if format == "markdown" {
@@ -186,15 +174,13 @@ fn load_channel_config() -> HashMap<String, serde_json::Value> {
     ];
 
     for path in config_paths.iter().flatten() {
-        if path.exists() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(ch) = data.get("channels").and_then(|v| v.as_object()) {
-                        for (key, value) in ch {
-                            channels.insert(key.clone(), value.clone());
-                        }
-                    }
-                }
+        if path.exists()
+            && let Ok(content) = std::fs::read_to_string(path)
+            && let Ok(data) = serde_json::from_str::<serde_json::Value>(&content)
+            && let Some(ch) = data.get("channels").and_then(|v| v.as_object())
+        {
+            for (key, value) in ch {
+                channels.insert(key.clone(), value.clone());
             }
         }
     }
@@ -228,10 +214,7 @@ mod tests {
     #[test]
     fn test_build_payload_discord() {
         let payload = build_payload("discord", "Hello Discord", "text");
-        assert_eq!(
-            payload,
-            serde_json::json!({"content": "Hello Discord"})
-        );
+        assert_eq!(payload, serde_json::json!({"content": "Hello Discord"}));
     }
 
     #[test]

@@ -59,11 +59,7 @@ impl ToolHandler for ThinkingHandler {
         &["Think", "think"]
     }
 
-    fn pre_check(
-        &self,
-        _tool_name: &str,
-        _args: &HashMap<String, Value>,
-    ) -> PreCheckResult {
+    fn pre_check(&self, _tool_name: &str, _args: &HashMap<String, Value>) -> PreCheckResult {
         PreCheckResult::Allow
     }
 
@@ -76,7 +72,7 @@ impl ToolHandler for ThinkingHandler {
         success: bool,
     ) -> HandlerResult {
         // Format thinking output with delimiters.
-        let formatted = output.map(|o| Self::format_thinking(o));
+        let formatted = output.map(Self::format_thinking);
 
         HandlerResult {
             output: formatted,

@@ -21,15 +21,15 @@ impl BashFormatter {
     fn parse_exit_code(output: &str) -> Option<i32> {
         for line in output.lines().rev() {
             let trimmed = line.trim().to_lowercase();
-            if let Some(rest) = trimmed.strip_prefix("exit code:") {
-                if let Ok(code) = rest.trim().parse::<i32>() {
-                    return Some(code);
-                }
+            if let Some(rest) = trimmed.strip_prefix("exit code:")
+                && let Ok(code) = rest.trim().parse::<i32>()
+            {
+                return Some(code);
             }
-            if let Some(rest) = trimmed.strip_prefix("exit_code:") {
-                if let Ok(code) = rest.trim().parse::<i32>() {
-                    return Some(code);
-                }
+            if let Some(rest) = trimmed.strip_prefix("exit_code:")
+                && let Ok(code) = rest.trim().parse::<i32>()
+            {
+                return Some(code);
             }
         }
         None
@@ -50,8 +50,12 @@ impl BashFormatter {
 impl ToolFormatter for BashFormatter {
     fn format<'a>(&self, _tool_name: &str, output: &str) -> FormattedOutput<'a> {
         let exit_code = Self::parse_exit_code(output);
-        let success = exit_code.map_or(true, |c| c == 0);
-        let status_color = if success { style_tokens::SUCCESS } else { style_tokens::ERROR };
+        let success = exit_code.is_none_or(|c| c == 0);
+        let status_color = if success {
+            style_tokens::SUCCESS
+        } else {
+            style_tokens::ERROR
+        };
 
         // Header: command line or generic label
         let cmd = Self::extract_command(output);
@@ -89,7 +93,10 @@ impl ToolFormatter for BashFormatter {
         // Footer: exit code
         let footer = exit_code.map(|code| {
             Line::from(vec![
-                Span::styled("  ─ exit ".to_string(), Style::default().fg(style_tokens::GREY)),
+                Span::styled(
+                    "  ─ exit ".to_string(),
+                    Style::default().fg(style_tokens::GREY),
+                ),
                 Span::styled(code.to_string(), Style::default().fg(status_color)),
             ])
         });
@@ -126,7 +133,12 @@ mod tests {
         let result = f.format("Bash", output);
 
         // Header should contain the command
-        let header_text: String = result.header.spans.iter().map(|s| s.content.as_ref()).collect();
+        let header_text: String = result
+            .header
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
         assert!(header_text.contains("ls -la"));
 
         // Body should have 2 file lines
@@ -162,8 +174,14 @@ mod tests {
 
     #[test]
     fn test_parse_exit_code() {
-        assert_eq!(BashFormatter::parse_exit_code("output\nExit code: 0"), Some(0));
-        assert_eq!(BashFormatter::parse_exit_code("output\nexit_code: 42"), Some(42));
+        assert_eq!(
+            BashFormatter::parse_exit_code("output\nExit code: 0"),
+            Some(0)
+        );
+        assert_eq!(
+            BashFormatter::parse_exit_code("output\nexit_code: 42"),
+            Some(42)
+        );
         assert_eq!(BashFormatter::parse_exit_code("no code here"), None);
     }
 }

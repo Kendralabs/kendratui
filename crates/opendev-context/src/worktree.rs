@@ -41,7 +41,7 @@ impl WorktreeManager {
     /// Returns the worktree path and branch name.
     pub fn create(&self, prefix: &str) -> Result<WorktreeInfo, String> {
         let branch_name = format!("opendev/{prefix}/{}", generate_short_id());
-        let worktree_path = self.worktrees_dir().join(&branch_name.replace('/', "_"));
+        let worktree_path = self.worktrees_dir().join(branch_name.replace('/', "_"));
 
         self.create_at(&worktree_path, &branch_name)
     }
@@ -64,7 +64,11 @@ impl WorktreeManager {
             return Err(format!("git worktree add failed: {stderr}"));
         }
 
-        debug!("Created worktree at {} on branch {}", path.display(), branch);
+        debug!(
+            "Created worktree at {} on branch {}",
+            path.display(),
+            branch
+        );
 
         // Get HEAD
         let head = self
@@ -199,10 +203,7 @@ fn parse_porcelain_output(output: &str) -> Vec<WorktreeInfo> {
             head = rest.to_string();
         } else if let Some(rest) = line.strip_prefix("branch ") {
             // refs/heads/branch-name → branch-name
-            branch = rest
-                .strip_prefix("refs/heads/")
-                .unwrap_or(rest)
-                .to_string();
+            branch = rest.strip_prefix("refs/heads/").unwrap_or(rest).to_string();
         }
     }
 

@@ -17,7 +17,7 @@ use tokio::process::Command;
 use tracing::{error, warn};
 
 /// Result from executing a single hook command.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HookResult {
     /// Process exit code (0 = success, 2 = block).
     pub exit_code: i32,
@@ -54,18 +54,6 @@ impl HookResult {
     }
 }
 
-impl Default for HookResult {
-    fn default() -> Self {
-        Self {
-            exit_code: 0,
-            stdout: String::new(),
-            stderr: String::new(),
-            timed_out: false,
-            error: None,
-        }
-    }
-}
-
 /// Executes hook commands as subprocesses.
 ///
 /// This is an async executor that spawns shell processes, pipes JSON on stdin,
@@ -82,11 +70,7 @@ impl HookExecutor {
     ///
     /// The command receives `stdin_data` as JSON on stdin and communicates
     /// results via exit code and optional JSON on stdout.
-    pub async fn execute(
-        &self,
-        command: &HookCommand,
-        stdin_data: &Value,
-    ) -> HookResult {
+    pub async fn execute(&self, command: &HookCommand, stdin_data: &Value) -> HookResult {
         let stdin_json = match serde_json::to_string(stdin_data) {
             Ok(s) => s,
             Err(e) => {
@@ -266,8 +250,14 @@ mod tests {
             ..Default::default()
         };
         let parsed = r.parse_json_output();
-        assert_eq!(parsed.get("reason").and_then(|v| v.as_str()), Some("blocked"));
-        assert_eq!(parsed.get("decision").and_then(|v| v.as_str()), Some("deny"));
+        assert_eq!(
+            parsed.get("reason").and_then(|v| v.as_str()),
+            Some("blocked")
+        );
+        assert_eq!(
+            parsed.get("decision").and_then(|v| v.as_str()),
+            Some("deny")
+        );
     }
 
     #[test]
@@ -304,8 +294,7 @@ mod tests {
 
         let result = executor.execute(&cmd, &stdin).await;
         assert!(result.success());
-        let parsed: serde_json::Value =
-            serde_json::from_str(result.stdout.trim()).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(result.stdout.trim()).unwrap();
         assert_eq!(parsed["key"], "value");
     }
 
@@ -368,8 +357,7 @@ mod tests {
     #[tokio::test]
     async fn test_executor_json_stdout() {
         let executor = HookExecutor::new();
-        let cmd =
-            HookCommand::new(r#"echo '{"additionalContext":"extra info"}'"#);
+        let cmd = HookCommand::new(r#"echo '{"additionalContext":"extra info"}'"#);
         let stdin = serde_json::json!({});
 
         let result = executor.execute(&cmd, &stdin).await;

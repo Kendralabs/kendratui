@@ -33,16 +33,12 @@ impl HandlerRegistry {
     fn find_handler(&self, tool_name: &str) -> Option<&dyn ToolHandler> {
         self.handlers
             .iter()
-            .find(|h| h.handles().iter().any(|&name| name == tool_name))
+            .find(|h| h.handles().contains(&tool_name))
             .map(|h| h.as_ref())
     }
 
     /// Run pre-execution checks for a tool.
-    pub fn pre_check(
-        &self,
-        tool_name: &str,
-        args: &HashMap<String, Value>,
-    ) -> PreCheckResult {
+    pub fn pre_check(&self, tool_name: &str, args: &HashMap<String, Value>) -> PreCheckResult {
         match self.find_handler(tool_name) {
             Some(handler) => handler.pre_check(tool_name, args),
             None => PreCheckResult::Allow,
@@ -96,17 +92,11 @@ mod tests {
 
     impl MockHandler {
         fn allowing(names: Vec<&'static str>) -> Self {
-            Self {
-                names,
-                deny: false,
-            }
+            Self { names, deny: false }
         }
 
         fn denying(names: Vec<&'static str>) -> Self {
-            Self {
-                names,
-                deny: true,
-            }
+            Self { names, deny: true }
         }
     }
 
@@ -115,11 +105,7 @@ mod tests {
             &self.names
         }
 
-        fn pre_check(
-            &self,
-            _tool_name: &str,
-            _args: &HashMap<String, Value>,
-        ) -> PreCheckResult {
+        fn pre_check(&self, _tool_name: &str, _args: &HashMap<String, Value>) -> PreCheckResult {
             if self.deny {
                 PreCheckResult::Deny("denied by test".to_string())
             } else {

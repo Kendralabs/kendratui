@@ -133,14 +133,8 @@ impl BaseTool for FileReadTool {
                 }
 
                 let mut metadata = HashMap::new();
-                metadata.insert(
-                    "total_lines".into(),
-                    serde_json::json!(total_lines),
-                );
-                metadata.insert(
-                    "lines_shown".into(),
-                    serde_json::json!(end - start),
-                );
+                metadata.insert("total_lines".into(), serde_json::json!(total_lines));
+                metadata.insert("lines_shown".into(), serde_json::json!(end - start));
 
                 ToolResult::ok_with_metadata(output, metadata)
             }
@@ -163,7 +157,10 @@ mod tests {
     use tempfile::NamedTempFile;
 
     fn make_args(pairs: &[(&str, serde_json::Value)]) -> HashMap<String, serde_json::Value> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     #[tokio::test]

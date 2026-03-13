@@ -91,9 +91,7 @@ fn global_config_path() -> PathBuf {
 
 /// Get the project-level MCP config path (.opendev/mcp.json in working_dir).
 fn project_config_path(working_dir: &str) -> PathBuf {
-    PathBuf::from(working_dir)
-        .join(".opendev")
-        .join("mcp.json")
+    PathBuf::from(working_dir).join(".opendev").join("mcp.json")
 }
 
 /// Load MCP servers from both global and project config files.
@@ -102,18 +100,18 @@ fn load_all_servers(working_dir: &str) -> HashMap<String, McpServerConfig> {
 
     // Load global config.
     let global_path = global_config_path();
-    if let Ok(content) = std::fs::read_to_string(&global_path) {
-        if let Ok(config) = serde_json::from_str::<McpConfigFile>(&content) {
-            servers.extend(config.mcp_servers);
-        }
+    if let Ok(content) = std::fs::read_to_string(&global_path)
+        && let Ok(config) = serde_json::from_str::<McpConfigFile>(&content)
+    {
+        servers.extend(config.mcp_servers);
     }
 
     // Load project config (overrides global).
     let project_path = project_config_path(working_dir);
-    if let Ok(content) = std::fs::read_to_string(&project_path) {
-        if let Ok(config) = serde_json::from_str::<McpConfigFile>(&content) {
-            servers.extend(config.mcp_servers);
-        }
+    if let Ok(content) = std::fs::read_to_string(&project_path)
+        && let Ok(config) = serde_json::from_str::<McpConfigFile>(&content)
+    {
+        servers.extend(config.mcp_servers);
     }
 
     servers
@@ -127,9 +125,8 @@ fn save_server_to_config(
 ) -> Result<(), WebError> {
     // Ensure parent directory exists.
     if let Some(parent) = config_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            WebError::Internal(format!("Failed to create config directory: {}", e))
-        })?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| WebError::Internal(format!("Failed to create config directory: {}", e)))?;
     }
 
     // Read existing config.
@@ -147,13 +144,11 @@ fn save_server_to_config(
         .mcp_servers
         .insert(name.to_string(), config.clone());
 
-    let content = serde_json::to_string_pretty(&mcp_config).map_err(|e| {
-        WebError::Internal(format!("Failed to serialize config: {}", e))
-    })?;
+    let content = serde_json::to_string_pretty(&mcp_config)
+        .map_err(|e| WebError::Internal(format!("Failed to serialize config: {}", e)))?;
 
-    std::fs::write(config_path, content).map_err(|e| {
-        WebError::Internal(format!("Failed to write config: {}", e))
-    })?;
+    std::fs::write(config_path, content)
+        .map_err(|e| WebError::Internal(format!("Failed to write config: {}", e)))?;
 
     Ok(())
 }
@@ -164,32 +159,26 @@ fn remove_server_from_config(name: &str, config_path: &Path) -> Result<bool, Web
         return Ok(false);
     }
 
-    let content = std::fs::read_to_string(config_path).map_err(|e| {
-        WebError::Internal(format!("Failed to read config: {}", e))
-    })?;
+    let content = std::fs::read_to_string(config_path)
+        .map_err(|e| WebError::Internal(format!("Failed to read config: {}", e)))?;
 
-    let mut mcp_config = serde_json::from_str::<McpConfigFile>(&content).map_err(|e| {
-        WebError::Internal(format!("Failed to parse config: {}", e))
-    })?;
+    let mut mcp_config = serde_json::from_str::<McpConfigFile>(&content)
+        .map_err(|e| WebError::Internal(format!("Failed to parse config: {}", e)))?;
 
     let removed = mcp_config.mcp_servers.remove(name).is_some();
 
     if removed {
-        let content = serde_json::to_string_pretty(&mcp_config).map_err(|e| {
-            WebError::Internal(format!("Failed to serialize config: {}", e))
-        })?;
-        std::fs::write(config_path, content).map_err(|e| {
-            WebError::Internal(format!("Failed to write config: {}", e))
-        })?;
+        let content = serde_json::to_string_pretty(&mcp_config)
+            .map_err(|e| WebError::Internal(format!("Failed to serialize config: {}", e)))?;
+        std::fs::write(config_path, content)
+            .map_err(|e| WebError::Internal(format!("Failed to write config: {}", e)))?;
     }
 
     Ok(removed)
 }
 
 /// List all configured MCP servers.
-async fn list_servers(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, WebError> {
+async fn list_servers(State(state): State<AppState>) -> Result<Json<serde_json::Value>, WebError> {
     let servers = load_all_servers(state.working_dir());
 
     let result: Vec<serde_json::Value> = servers
@@ -221,9 +210,9 @@ async fn get_server(
     AxumPath(name): AxumPath<String>,
 ) -> Result<Json<serde_json::Value>, WebError> {
     let servers = load_all_servers(state.working_dir());
-    let config = servers.get(&name).ok_or_else(|| {
-        WebError::NotFound(format!("Server '{}' not found", name))
-    })?;
+    let config = servers
+        .get(&name)
+        .ok_or_else(|| WebError::NotFound(format!("Server '{}' not found", name)))?;
 
     Ok(Json(serde_json::json!({
         "name": name,
@@ -285,9 +274,9 @@ async fn update_server(
     Json(update): Json<McpServerUpdate>,
 ) -> Result<Json<serde_json::Value>, WebError> {
     let servers = load_all_servers(state.working_dir());
-    let existing = servers.get(&name).ok_or_else(|| {
-        WebError::NotFound(format!("Server '{}' not found", name))
-    })?;
+    let existing = servers
+        .get(&name)
+        .ok_or_else(|| WebError::NotFound(format!("Server '{}' not found", name)))?;
 
     let config = McpServerConfig {
         command: update.command.unwrap_or_else(|| existing.command.clone()),
@@ -320,10 +309,7 @@ async fn delete_server(
 ) -> Result<Json<serde_json::Value>, WebError> {
     let servers = load_all_servers(state.working_dir());
     if !servers.contains_key(&name) {
-        return Err(WebError::NotFound(format!(
-            "Server '{}' not found",
-            name
-        )));
+        return Err(WebError::NotFound(format!("Server '{}' not found", name)));
     }
 
     // Try to remove from both global and project configs.
@@ -361,9 +347,9 @@ async fn connect_server(
     AxumPath(name): AxumPath<String>,
 ) -> Result<Json<serde_json::Value>, WebError> {
     let servers = load_all_servers(state.working_dir());
-    let server_config = servers.get(&name).ok_or_else(|| {
-        WebError::NotFound(format!("Server '{}' not found", name))
-    })?;
+    let server_config = servers
+        .get(&name)
+        .ok_or_else(|| WebError::NotFound(format!("Server '{}' not found", name)))?;
 
     // Build an opendev_mcp::McpServerConfig from the web-layer config.
     let mcp_config = opendev_mcp::McpServerConfig {
@@ -422,10 +408,7 @@ async fn disconnect_server(
 ) -> Result<Json<serde_json::Value>, WebError> {
     let servers = load_all_servers(state.working_dir());
     if !servers.contains_key(&name) {
-        return Err(WebError::NotFound(format!(
-            "Server '{}' not found",
-            name
-        )));
+        return Err(WebError::NotFound(format!("Server '{}' not found", name)));
     }
 
     Ok(Json(serde_json::json!({
@@ -451,7 +434,13 @@ mod tests {
         let config = AppConfig::default();
         let user_store = opendev_http::UserStore::new(tmp_path).unwrap();
         let model_registry = opendev_config::ModelRegistry::new();
-        AppState::new(session_manager, config, work_dir.to_string(), user_store, model_registry)
+        AppState::new(
+            session_manager,
+            config,
+            work_dir.to_string(),
+            user_store,
+            model_registry,
+        )
     }
 
     #[tokio::test]
@@ -505,7 +494,8 @@ mod tests {
         let work_dir = tmp.path().to_string_lossy().to_string();
 
         // Override HOME to the temp dir so global_config_path resolves there.
-        std::env::set_var("HOME", tmp.path());
+        // SAFETY: test-only; overrides HOME so config resolves to temp dir.
+        unsafe { std::env::set_var("HOME", tmp.path()) };
 
         let state = make_state_with_workdir(&work_dir);
 

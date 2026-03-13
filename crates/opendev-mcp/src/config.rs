@@ -13,16 +13,12 @@ use crate::error::{McpError, McpResult};
 /// Transport type for MCP server connections.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum TransportType {
+    #[default]
     Stdio,
     Sse,
     Http,
-}
-
-impl Default for TransportType {
-    fn default() -> Self {
-        Self::Stdio
-    }
 }
 
 impl std::fmt::Display for TransportType {
@@ -289,7 +285,8 @@ mod tests {
 
     #[test]
     fn test_expand_env_vars() {
-        std::env::set_var("TEST_MCP_VAR", "hello");
+        // SAFETY: test-only; tests in this module are not run concurrently.
+        unsafe { std::env::set_var("TEST_MCP_VAR", "hello") };
         assert_eq!(expand_env_vars("${TEST_MCP_VAR}_world"), "hello_world");
         // Unknown variables are left as-is
         assert_eq!(
@@ -298,18 +295,24 @@ mod tests {
         );
         // No variables
         assert_eq!(expand_env_vars("no vars here"), "no vars here");
-        std::env::remove_var("TEST_MCP_VAR");
+        // SAFETY: test-only cleanup.
+        unsafe { std::env::remove_var("TEST_MCP_VAR") };
     }
 
     #[test]
     fn test_prepare_server_config() {
-        std::env::set_var("MCP_TEST_TOKEN", "secret123");
+        // SAFETY: test-only; not run concurrently with env-dependent code.
+        unsafe { std::env::set_var("MCP_TEST_TOKEN", "secret123") };
         let config = McpServerConfig {
             command: "node".to_string(),
-            args: vec!["server.js".to_string(), "--token=${MCP_TEST_TOKEN}".to_string()],
-            headers: HashMap::from([
-                ("Authorization".to_string(), "Bearer ${MCP_TEST_TOKEN}".to_string()),
-            ]),
+            args: vec![
+                "server.js".to_string(),
+                "--token=${MCP_TEST_TOKEN}".to_string(),
+            ],
+            headers: HashMap::from([(
+                "Authorization".to_string(),
+                "Bearer ${MCP_TEST_TOKEN}".to_string(),
+            )]),
             url: Some("https://example.com/${MCP_TEST_TOKEN}".to_string()),
             ..Default::default()
         };
@@ -321,7 +324,8 @@ mod tests {
             prepared.url.as_deref(),
             Some("https://example.com/secret123")
         );
-        std::env::remove_var("MCP_TEST_TOKEN");
+        // SAFETY: test-only cleanup.
+        unsafe { std::env::remove_var("MCP_TEST_TOKEN") };
     }
 
     #[test]

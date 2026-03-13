@@ -6,7 +6,7 @@
 //! - Prompt caching via `cache_control` blocks
 //! - Image blocks using Anthropic's native `source` format
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const DEFAULT_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -76,25 +76,24 @@ impl AnthropicAdapter {
             for msg in messages.iter_mut() {
                 if let Some(content) = msg.get_mut("content").and_then(|c| c.as_array_mut()) {
                     for block in content.iter_mut() {
-                        if block.get("type").and_then(|t| t.as_str()) == Some("image_url") {
-                            if let Some(url) = block
+                        if block.get("type").and_then(|t| t.as_str()) == Some("image_url")
+                            && let Some(url) = block
                                 .get("image_url")
                                 .and_then(|iu| iu.get("url"))
                                 .and_then(|u| u.as_str())
+                        {
+                            // Parse data:media_type;base64,data
+                            if let Some(rest) = url.strip_prefix("data:")
+                                && let Some((media_type, data)) = rest.split_once(";base64,")
                             {
-                                // Parse data:media_type;base64,data
-                                if let Some(rest) = url.strip_prefix("data:") {
-                                    if let Some((media_type, data)) = rest.split_once(";base64,") {
-                                        *block = json!({
-                                            "type": "image",
-                                            "source": {
-                                                "type": "base64",
-                                                "media_type": media_type,
-                                                "data": data
-                                            }
-                                        });
+                                *block = json!({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": data
                                     }
-                                }
+                                });
                             }
                         }
                     }
@@ -111,26 +110,22 @@ impl AnthropicAdapter {
                 .iter_mut()
                 .rev()
                 .find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user"))
+                && let Some(content) = last_user.get_mut("content")
             {
-                if let Some(content) = last_user.get_mut("content") {
-                    if content.is_string() {
-                        // Convert string content to block format with cache_control
-                        let text = content.as_str().unwrap_or_default().to_string();
-                        *content = json!([{
-                            "type": "text",
-                            "text": text,
-                            "cache_control": {"type": "ephemeral"}
-                        }]);
-                    } else if let Some(blocks) = content.as_array_mut() {
-                        // Add cache_control to the last block
-                        if let Some(last_block) = blocks.last_mut() {
-                            if let Some(obj) = last_block.as_object_mut() {
-                                obj.insert(
-                                    "cache_control".into(),
-                                    json!({"type": "ephemeral"}),
-                                );
-                            }
-                        }
+                if content.is_string() {
+                    // Convert string content to block format with cache_control
+                    let text = content.as_str().unwrap_or_default().to_string();
+                    *content = json!([{
+                        "type": "text",
+                        "text": text,
+                        "cache_control": {"type": "ephemeral"}
+                    }]);
+                } else if let Some(blocks) = content.as_array_mut() {
+                    // Add cache_control to the last block
+                    if let Some(last_block) = blocks.last_mut()
+                        && let Some(obj) = last_block.as_object_mut()
+                    {
+                        obj.insert("cache_control".into(), json!({"type": "ephemeral"}));
                     }
                 }
             }
@@ -158,24 +153,24 @@ impl AnthropicAdapter {
         }
 
         // Convert tool_choice from Chat Completions to Anthropic format
-        if let Some(tc) = payload.get("tool_choice").cloned() {
-            if let Some(tc_str) = tc.as_str() {
-                match tc_str {
-                    "auto" => {
-                        payload["tool_choice"] = json!({"type": "auto"});
-                    }
-                    "none" => {
-                        // Anthropic doesn't have tool_choice "none" — just remove tools
-                        if let Some(obj) = payload.as_object_mut() {
-                            obj.remove("tools");
-                            obj.remove("tool_choice");
-                        }
-                    }
-                    "required" => {
-                        payload["tool_choice"] = json!({"type": "any"});
-                    }
-                    _ => {}
+        if let Some(tc) = payload.get("tool_choice").cloned()
+            && let Some(tc_str) = tc.as_str()
+        {
+            match tc_str {
+                "auto" => {
+                    payload["tool_choice"] = json!({"type": "auto"});
                 }
+                "none" => {
+                    // Anthropic doesn't have tool_choice "none" — just remove tools
+                    if let Some(obj) = payload.as_object_mut() {
+                        obj.remove("tools");
+                        obj.remove("tool_choice");
+                    }
+                }
+                "required" => {
+                    payload["tool_choice"] = json!({"type": "any"});
+                }
+                _ => {}
             }
         }
     }
@@ -195,19 +190,18 @@ impl AnthropicAdapter {
                 match role {
                     "assistant" => {
                         // Convert tool_calls to Anthropic tool_use content blocks
-                        if let Some(tool_calls) =
-                            msg.get("tool_calls").and_then(|tc| tc.as_array())
+                        if let Some(tool_calls) = msg.get("tool_calls").and_then(|tc| tc.as_array())
                         {
                             let mut content_blocks: Vec<Value> = Vec::new();
 
                             // Add text content if present
-                            if let Some(text) = msg.get("content").and_then(|c| c.as_str()) {
-                                if !text.is_empty() {
-                                    content_blocks.push(json!({
-                                        "type": "text",
-                                        "text": text
-                                    }));
-                                }
+                            if let Some(text) = msg.get("content").and_then(|c| c.as_str())
+                                && !text.is_empty()
+                            {
+                                content_blocks.push(json!({
+                                    "type": "text",
+                                    "text": text
+                                }));
                             }
 
                             // Convert each tool_call to a tool_use block
@@ -238,14 +232,8 @@ impl AnthropicAdapter {
                     }
                     "tool" => {
                         // Convert tool result to Anthropic user message with tool_result block
-                        let tool_call_id = msg
-                            .get("tool_call_id")
-                            .cloned()
-                            .unwrap_or(json!(""));
-                        let content = msg
-                            .get("content")
-                            .and_then(|c| c.as_str())
-                            .unwrap_or("");
+                        let tool_call_id = msg.get("tool_call_id").cloned().unwrap_or(json!(""));
+                        let content = msg.get("content").and_then(|c| c.as_str()).unwrap_or("");
 
                         // Merge consecutive tool results into one user message
                         let result_block = json!({
@@ -255,27 +243,24 @@ impl AnthropicAdapter {
                         });
 
                         // Check if the last converted message is already a user tool_result
-                        let should_merge = converted.last().map_or(false, |last| {
+                        let should_merge = converted.last().is_some_and(|last| {
                             last.get("role").and_then(|r| r.as_str()) == Some("user")
-                                && last
-                                    .get("content")
-                                    .and_then(|c| c.as_array())
-                                    .map_or(false, |blocks| {
+                                && last.get("content").and_then(|c| c.as_array()).is_some_and(
+                                    |blocks| {
                                         blocks.iter().all(|b| {
                                             b.get("type").and_then(|t| t.as_str())
                                                 == Some("tool_result")
                                         })
-                                    })
+                                    },
+                                )
                         });
 
                         if should_merge {
-                            if let Some(last) = converted.last_mut() {
-                                if let Some(blocks) = last
-                                    .get_mut("content")
-                                    .and_then(|c| c.as_array_mut())
-                                {
-                                    blocks.push(result_block);
-                                }
+                            if let Some(last) = converted.last_mut()
+                                && let Some(blocks) =
+                                    last.get_mut("content").and_then(|c| c.as_array_mut())
+                            {
+                                blocks.push(result_block);
                             }
                         } else {
                             converted.push(json!({
@@ -443,9 +428,7 @@ impl super::base::ProviderAdapter for AnthropicAdapter {
     }
 
     fn extra_headers(&self) -> Vec<(String, String)> {
-        let mut headers = vec![
-            ("anthropic-version".into(), ANTHROPIC_VERSION.into()),
-        ];
+        let mut headers = vec![("anthropic-version".into(), ANTHROPIC_VERSION.into())];
         if self.enable_caching {
             headers.push(("anthropic-beta".into(), "prompt-caching-2024-07-31".into()));
         }
@@ -480,7 +463,11 @@ mod tests {
     fn test_extra_headers() {
         let adapter = AnthropicAdapter::new();
         let headers = adapter.extra_headers();
-        assert!(headers.iter().any(|(k, v)| k == "anthropic-version" && v == ANTHROPIC_VERSION));
+        assert!(
+            headers
+                .iter()
+                .any(|(k, v)| k == "anthropic-version" && v == ANTHROPIC_VERSION)
+        );
         assert!(headers.iter().any(|(k, _)| k == "anthropic-beta"));
     }
 

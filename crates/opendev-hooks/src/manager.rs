@@ -51,11 +51,7 @@ impl HookManager {
     ///
     /// The `config` should already have `compile_all()` and
     /// `strip_unknown_events()` called on it.
-    pub fn new(
-        config: HookConfig,
-        session_id: impl Into<String>,
-        cwd: impl Into<String>,
-    ) -> Self {
+    pub fn new(config: HookConfig, session_id: impl Into<String>, cwd: impl Into<String>) -> Self {
         Self {
             config,
             session_id: session_id.into(),
@@ -130,25 +126,16 @@ impl HookManager {
 
                 if result.success() {
                     let parsed = result.parse_json_output();
-                    if let Some(ctx) = parsed
-                        .get("additionalContext")
-                        .and_then(|v| v.as_str())
-                    {
+                    if let Some(ctx) = parsed.get("additionalContext").and_then(|v| v.as_str()) {
                         outcome.additional_context = Some(ctx.to_string());
                     }
                     if let Some(input) = parsed.get("updatedInput") {
                         outcome.updated_input = Some(input.clone());
                     }
-                    if let Some(perm) = parsed
-                        .get("permissionDecision")
-                        .and_then(|v| v.as_str())
-                    {
+                    if let Some(perm) = parsed.get("permissionDecision").and_then(|v| v.as_str()) {
                         outcome.permission_decision = Some(perm.to_string());
                     }
-                    if let Some(dec) = parsed
-                        .get("decision")
-                        .and_then(|v| v.as_str())
-                    {
+                    if let Some(dec) = parsed.get("decision").and_then(|v| v.as_str()) {
                         outcome.decision = Some(dec.to_string());
                     }
                 } else if let Some(ref err) = result.error {
@@ -228,27 +215,19 @@ impl HookManager {
 
         // Tool events include tool_name
         if event.is_tool_event() {
-            payload.insert(
-                "tool_name".to_string(),
-                Value::String(mv.to_string()),
-            );
+            payload.insert("tool_name".to_string(), Value::String(mv.to_string()));
         }
 
         // Subagent events include agent_type
         if event.is_subagent_event() {
-            payload.insert(
-                "agent_type".to_string(),
-                Value::String(mv.to_string()),
-            );
+            payload.insert("agent_type".to_string(), Value::String(mv.to_string()));
         }
 
         // SessionStart includes startup_type
         if event == HookEvent::SessionStart {
             payload.insert(
                 "startup_type".to_string(),
-                Value::String(
-                    if mv.is_empty() { "startup" } else { mv }.to_string(),
-                ),
+                Value::String(if mv.is_empty() { "startup" } else { mv }.to_string()),
             );
         }
 
@@ -256,9 +235,7 @@ impl HookManager {
         if event == HookEvent::PreCompact {
             payload.insert(
                 "trigger".to_string(),
-                Value::String(
-                    if mv.is_empty() { "auto" } else { mv }.to_string(),
-                ),
+                Value::String(if mv.is_empty() { "auto" } else { mv }.to_string()),
             );
         }
 
@@ -294,11 +271,7 @@ mod tests {
     use crate::models::{HookCommand, HookMatcher};
     use serde_json::json;
 
-    fn make_config_with_echo(
-        event: HookEvent,
-        pattern: Option<&str>,
-        cmd: &str,
-    ) -> HookConfig {
+    fn make_config_with_echo(event: HookEvent, pattern: Option<&str>, cmd: &str) -> HookConfig {
         let mut config = HookConfig::empty();
         let matcher = match pattern {
             Some(p) => HookMatcher::with_pattern(p, vec![HookCommand::new(cmd)]),
@@ -317,8 +290,7 @@ mod tests {
 
     #[test]
     fn test_has_hooks_for() {
-        let config =
-            make_config_with_echo(HookEvent::PreToolUse, None, "echo test");
+        let config = make_config_with_echo(HookEvent::PreToolUse, None, "echo test");
         let manager = HookManager::new(config, "sess-1", "/tmp");
         assert!(manager.has_hooks_for(HookEvent::PreToolUse));
         assert!(!manager.has_hooks_for(HookEvent::PostToolUse));
@@ -336,11 +308,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_hooks_success() {
-        let config = make_config_with_echo(
-            HookEvent::PreToolUse,
-            None,
-            "echo ok",
-        );
+        let config = make_config_with_echo(HookEvent::PreToolUse, None, "echo ok");
         let manager = HookManager::new(config, "sess-1", "/tmp");
         let outcome = manager
             .run_hooks(HookEvent::PreToolUse, Some("bash"), None)
@@ -382,11 +350,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_hooks_matcher_filters() {
-        let config = make_config_with_echo(
-            HookEvent::PreToolUse,
-            Some(r"^bash$"),
-            "exit 2",
-        );
+        let config = make_config_with_echo(HookEvent::PreToolUse, Some(r"^bash$"), "exit 2");
         let manager = HookManager::new(config, "sess-1", "/tmp");
 
         // "bash" matches the pattern -> blocked
@@ -415,10 +379,7 @@ mod tests {
             .run_hooks(HookEvent::PostToolUse, Some("bash"), None)
             .await;
         assert!(outcome.allowed());
-        assert_eq!(
-            outcome.additional_context.as_deref(),
-            Some("extra info")
-        );
+        assert_eq!(outcome.additional_context.as_deref(), Some("extra info"));
     }
 
     #[tokio::test]
@@ -433,10 +394,7 @@ mod tests {
             .run_hooks(HookEvent::PreToolUse, Some("bash"), None)
             .await;
         assert!(outcome.allowed());
-        assert_eq!(
-            outcome.permission_decision.as_deref(),
-            Some("allow")
-        );
+        assert_eq!(outcome.permission_decision.as_deref(), Some("allow"));
     }
 
     #[tokio::test]
@@ -477,11 +435,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_hooks_error_continues() {
         // A failing command (non-zero, non-2 exit) should not block
-        let config = make_config_with_echo(
-            HookEvent::PostToolUse,
-            None,
-            "exit 1",
-        );
+        let config = make_config_with_echo(HookEvent::PostToolUse, None, "exit 1");
         let manager = HookManager::new(config, "sess-1", "/tmp");
         let outcome = manager
             .run_hooks(HookEvent::PostToolUse, Some("bash"), None)
@@ -506,11 +460,7 @@ mod tests {
         });
 
         let outcome = manager
-            .run_hooks(
-                HookEvent::PreToolUse,
-                Some("bash"),
-                Some(&event_data),
-            )
+            .run_hooks(HookEvent::PreToolUse, Some("bash"), Some(&event_data))
             .await;
 
         assert!(outcome.allowed());
@@ -527,11 +477,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_build_stdin_session_start() {
-        let config = make_config_with_echo(
-            HookEvent::SessionStart,
-            None,
-            "cat",
-        );
+        let config = make_config_with_echo(HookEvent::SessionStart, None, "cat");
         let manager = HookManager::new(config, "sess-1", "/tmp");
 
         let outcome = manager
@@ -546,16 +492,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_build_stdin_session_start_default() {
-        let config = make_config_with_echo(
-            HookEvent::SessionStart,
-            None,
-            "cat",
-        );
+        let config = make_config_with_echo(HookEvent::SessionStart, None, "cat");
         let manager = HookManager::new(config, "sess-1", "/tmp");
 
-        let outcome = manager
-            .run_hooks(HookEvent::SessionStart, None, None)
-            .await;
+        let outcome = manager.run_hooks(HookEvent::SessionStart, None, None).await;
 
         let stdout = &outcome.results[0].stdout;
         let parsed: Value = serde_json::from_str(stdout).unwrap();
@@ -565,19 +505,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_build_stdin_subagent_event() {
-        let config = make_config_with_echo(
-            HookEvent::SubagentStart,
-            None,
-            "cat",
-        );
+        let config = make_config_with_echo(HookEvent::SubagentStart, None, "cat");
         let manager = HookManager::new(config, "sess-1", "/tmp");
 
         let outcome = manager
-            .run_hooks(
-                HookEvent::SubagentStart,
-                Some("code_explorer"),
-                None,
-            )
+            .run_hooks(HookEvent::SubagentStart, Some("code_explorer"), None)
             .await;
 
         let stdout = &outcome.results[0].stdout;
@@ -587,11 +519,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_build_stdin_pre_compact() {
-        let config = make_config_with_echo(
-            HookEvent::PreCompact,
-            None,
-            "cat",
-        );
+        let config = make_config_with_echo(HookEvent::PreCompact, None, "cat");
         let manager = HookManager::new(config, "sess-1", "/tmp");
 
         let outcome = manager

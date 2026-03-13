@@ -6,7 +6,9 @@
 use std::collections::HashMap;
 
 use opendev_tools_core::{BaseTool, ToolContext};
-use opendev_tools_impl::{BashTool, FileEditTool, FileReadTool, FileSearchTool, FileWriteTool, GitTool};
+use opendev_tools_impl::{
+    BashTool, FileEditTool, FileReadTool, FileSearchTool, FileWriteTool, GitTool,
+};
 use tempfile::TempDir;
 
 fn make_args(pairs: &[(&str, serde_json::Value)]) -> HashMap<String, serde_json::Value> {
@@ -31,7 +33,11 @@ async fn bash_executes_command_and_captures_stdout() {
     let result = tool.execute(args, &ctx).await;
     assert!(result.success, "bash should succeed: {:?}", result.error);
     assert!(
-        result.output.as_ref().unwrap().contains("integration_test_marker"),
+        result
+            .output
+            .as_ref()
+            .unwrap()
+            .contains("integration_test_marker"),
         "stdout should contain marker"
     );
 }
@@ -93,7 +99,10 @@ async fn bash_nonzero_exit_code_is_failure() {
 
     let result = tool.execute(args, &ctx).await;
     assert!(!result.success);
-    assert_eq!(result.metadata.get("exit_code"), Some(&serde_json::json!(7)));
+    assert_eq!(
+        result.metadata.get("exit_code"),
+        Some(&serde_json::json!(7))
+    );
 }
 
 /// Verify that BashTool blocks dangerous patterns.
@@ -118,7 +127,10 @@ async fn bash_pipes_work() {
     let result = tool.execute(args, &ctx).await;
     assert!(result.success);
     let output = result.output.unwrap().trim().to_string();
-    assert!(output.contains("3"), "pipe should count 3 lines, got: {output}");
+    assert!(
+        output.contains("3"),
+        "pipe should count 3 lines, got: {output}"
+    );
 }
 
 // ========================================================================
@@ -137,7 +149,10 @@ async fn file_write_read_edit_lifecycle() {
     let ctx = ToolContext::new(tmp.path());
     let write_args = make_args(&[
         ("file_path", serde_json::json!(file_str)),
-        ("content", serde_json::json!("line one\nline two\nline three\n")),
+        (
+            "content",
+            serde_json::json!("line one\nline two\nline three\n"),
+        ),
     ]);
     let result = write_tool.execute(write_args, &ctx).await;
     assert!(result.success, "write should succeed: {:?}", result.error);
@@ -393,7 +408,10 @@ async fn git_init_commit_and_log() {
     // Create a file and stage it
     std::fs::write(tmp.path().join("hello.txt"), "hello world\n").unwrap();
     let add_result = bash
-        .execute(make_args(&[("command", serde_json::json!("git add hello.txt"))]), &ctx)
+        .execute(
+            make_args(&[("command", serde_json::json!("git add hello.txt"))]),
+            &ctx,
+        )
         .await;
     assert!(add_result.success);
 
@@ -414,7 +432,10 @@ async fn git_init_commit_and_log() {
     let result = git.execute(log_args, &ctx).await;
     assert!(result.success);
     let output = result.output.unwrap();
-    assert!(output.contains("Initial commit"), "log should show commit message");
+    assert!(
+        output.contains("Initial commit"),
+        "log should show commit message"
+    );
 
     // Check status (should be clean)
     let status_args = make_args(&[("action", serde_json::json!("status"))]);
@@ -456,7 +477,11 @@ async fn git_diff_staged_changes() {
 
     // Modify and stage
     std::fs::write(tmp.path().join("file.txt"), "modified\n").unwrap();
-    bash.execute(make_args(&[("command", serde_json::json!("git add file.txt"))]), &ctx).await;
+    bash.execute(
+        make_args(&[("command", serde_json::json!("git add file.txt"))]),
+        &ctx,
+    )
+    .await;
 
     let git = GitTool;
     let diff_args = make_args(&[
@@ -466,7 +491,10 @@ async fn git_diff_staged_changes() {
     let result = git.execute(diff_args, &ctx).await;
     assert!(result.success);
     let output = result.output.unwrap();
-    assert!(output.contains("modified"), "diff should show staged changes");
+    assert!(
+        output.contains("modified"),
+        "diff should show staged changes"
+    );
 }
 
 /// Verify force push to protected branch is blocked.
@@ -597,7 +625,11 @@ async fn file_list_shows_directory_contents() {
     let args = make_args(&[("pattern", serde_json::json!("**/*"))]);
 
     let result = tool.execute(args, &ctx).await;
-    assert!(result.success, "file_list should succeed: {:?}", result.error);
+    assert!(
+        result.success,
+        "file_list should succeed: {:?}",
+        result.error
+    );
     let output = result.output.unwrap();
     assert!(output.contains("file1.rs"));
     assert!(output.contains("file2.txt"));
@@ -624,7 +656,11 @@ async fn git_branch_creation() {
         ("branch", serde_json::json!("feature-test")),
     ]);
     let result = git.execute(args, &ctx).await;
-    assert!(result.success, "branch creation should succeed: {:?}", result.error);
+    assert!(
+        result.success,
+        "branch creation should succeed: {:?}",
+        result.error
+    );
 
     // List branches
     let list_args = make_args(&[("action", serde_json::json!("branch"))]);

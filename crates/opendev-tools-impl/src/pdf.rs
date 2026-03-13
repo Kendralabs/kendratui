@@ -105,7 +105,9 @@ impl BaseTool for PdfTool {
                         metadata.insert("method".into(), serde_json::json!("basic"));
                         metadata.insert(
                             "warning".into(),
-                            serde_json::json!("pdftotext not available; text extraction may be incomplete"),
+                            serde_json::json!(
+                                "pdftotext not available; text extraction may be incomplete"
+                            ),
                         );
                         ToolResult::ok_with_metadata(text, metadata)
                     }
@@ -220,10 +222,12 @@ mod tests {
     async fn test_pdf_file_not_found() {
         let tool = PdfTool;
         let ctx = ToolContext::new("/tmp");
-        let args: HashMap<String, serde_json::Value> =
-            [("file_path".to_string(), serde_json::json!("/nonexistent/file.pdf"))]
-                .into_iter()
-                .collect();
+        let args: HashMap<String, serde_json::Value> = [(
+            "file_path".to_string(),
+            serde_json::json!("/nonexistent/file.pdf"),
+        )]
+        .into_iter()
+        .collect();
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("not found"));
@@ -237,10 +241,12 @@ mod tests {
 
         let tool = PdfTool;
         let ctx = ToolContext::new(tmp.path());
-        let args: HashMap<String, serde_json::Value> =
-            [("file_path".to_string(), serde_json::json!(path.to_str().unwrap()))]
-                .into_iter()
-                .collect();
+        let args: HashMap<String, serde_json::Value> = [(
+            "file_path".to_string(),
+            serde_json::json!(path.to_str().unwrap()),
+        )]
+        .into_iter()
+        .collect();
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("Not a valid PDF"));

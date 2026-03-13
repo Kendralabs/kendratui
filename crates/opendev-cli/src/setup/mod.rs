@@ -5,8 +5,8 @@
 //! 9-step railway-style wizard with arrow-key navigation, search filtering,
 //! and multi-slot model configuration.
 
-pub mod providers;
 mod interactive_menu;
+pub mod providers;
 mod rail_ui;
 
 use std::collections::HashMap;
@@ -98,7 +98,8 @@ pub async fn run_setup_wizard() -> Result<AppConfig, SetupError> {
     rail_separator();
 
     // Step 4: Select model
-    let model_id = select_model_with_label(&provider_id, &provider_config, &registry, Some("4 of 9"))?;
+    let model_id =
+        select_model_with_label(&provider_id, &provider_config, &registry, Some("4 of 9"))?;
 
     // Look up model info for smart defaults
     let normal_model_info = registry.find_model_by_id(&model_id);
@@ -162,19 +163,21 @@ pub async fn run_setup_wizard() -> Result<AppConfig, SetupError> {
     )?;
 
     // Build config
-    let mut config = AppConfig::default();
-    config.model_provider = provider_id.clone();
-    config.model = model_id.clone();
-    config.api_key = Some(api_key);
-    config.auto_save_interval = 5;
-    config.model_thinking = Some(thinking_model.clone());
-    config.model_thinking_provider = Some(thinking_provider.clone());
-    config.model_critique = Some(critique_model.clone());
-    config.model_critique_provider = Some(critique_provider.clone());
-    config.model_vlm = Some(vlm_model.clone());
-    config.model_vlm_provider = Some(vlm_provider.clone());
-    config.model_compact = Some(compact_model.clone());
-    config.model_compact_provider = Some(compact_provider.clone());
+    let config = AppConfig {
+        model_provider: provider_id.clone(),
+        model: model_id.clone(),
+        api_key: Some(api_key),
+        auto_save_interval: 5,
+        model_thinking: Some(thinking_model.clone()),
+        model_thinking_provider: Some(thinking_provider.clone()),
+        model_critique: Some(critique_model.clone()),
+        model_critique_provider: Some(critique_provider.clone()),
+        model_vlm: Some(vlm_model.clone()),
+        model_vlm_provider: Some(vlm_provider.clone()),
+        model_compact: Some(compact_model.clone()),
+        model_compact_provider: Some(compact_provider.clone()),
+        ..AppConfig::default()
+    };
 
     // Step 9: Summary + save
     show_config_summary(
@@ -278,11 +281,10 @@ fn configure_slot_model(
         if rail_confirm("Validate API key?", true)? {
             match tokio::runtime::Handle::try_current() {
                 Ok(handle) => {
-                    let result = handle
-                        .block_on(ProviderSetup::validate_api_key(
-                            &slot_provider_config,
-                            &slot_api_key,
-                        ));
+                    let result = handle.block_on(ProviderSetup::validate_api_key(
+                        &slot_provider_config,
+                        &slot_api_key,
+                    ));
                     match result {
                         Ok(()) => rail_success("Valid!"),
                         Err(e) => {
@@ -343,12 +345,11 @@ fn show_config_summary(
 
     let normal_display = model_display(provider_id, model_id);
 
-    let thinking_display =
-        if thinking_model == model_id && thinking_provider == provider_id {
-            "(same as Normal)".to_string()
-        } else {
-            model_display(thinking_provider, thinking_model)
-        };
+    let thinking_display = if thinking_model == model_id && thinking_provider == provider_id {
+        "(same as Normal)".to_string()
+    } else {
+        model_display(thinking_provider, thinking_model)
+    };
 
     let critique_display =
         if critique_model == thinking_model && critique_provider == thinking_provider {
@@ -363,12 +364,11 @@ fn show_config_summary(
         model_display(vlm_provider, vlm_model)
     };
 
-    let compact_display =
-        if compact_model == model_id && compact_provider == provider_id {
-            "(same as Normal)".to_string()
-        } else {
-            model_display(compact_provider, compact_model)
-        };
+    let compact_display = if compact_model == model_id && compact_provider == provider_id {
+        "(same as Normal)".to_string()
+    } else {
+        model_display(compact_provider, compact_model)
+    };
 
     let rows: Vec<(&str, &str)> = vec![
         ("Normal:", &normal_display),
@@ -425,10 +425,7 @@ fn select_provider_with_label(
     Ok(provider_id)
 }
 
-fn get_api_key(
-    _provider_id: &str,
-    provider_config: &ProviderConfig,
-) -> Result<String, SetupError> {
+fn get_api_key(_provider_id: &str, provider_config: &ProviderConfig) -> Result<String, SetupError> {
     get_api_key_with_label(_provider_id, provider_config, None)
 }
 
@@ -442,12 +439,12 @@ fn get_api_key_with_label(
 
     rail_step(&format!("{} API Key", provider_config.name), step_label);
 
-    if let Some(ref ek) = env_key {
-        if rail_confirm(&format!("Found ${env_var} in environment. Use it?"), true)? {
-            rail_success("Using API key from environment");
-            rail_separator();
-            return Ok(ek.clone());
-        }
+    if let Some(ref ek) = env_key
+        && rail_confirm(&format!("Found ${env_var} in environment. Use it?"), true)?
+    {
+        rail_success("Using API key from environment");
+        rail_separator();
+        return Ok(ek.clone());
     }
 
     let api_key = rail_prompt(

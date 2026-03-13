@@ -191,10 +191,7 @@ mod tests {
     async fn test_task_complete_trims_summary() {
         let tool = TaskCompleteTool;
         let ctx = ToolContext::new("/tmp");
-        let args = make_args(&[(
-            "summary",
-            serde_json::json!("  Trimmed summary  "),
-        )]);
+        let args = make_args(&[("summary", serde_json::json!("  Trimmed summary  "))]);
         let result = tool.execute(args, &ctx).await;
         assert!(result.success);
         assert_eq!(

@@ -113,10 +113,7 @@ impl BaseTool for DiffPreviewTool {
         let mut metadata = HashMap::new();
         metadata.insert("lines_added".into(), serde_json::json!(added));
         metadata.insert("lines_removed".into(), serde_json::json!(removed));
-        metadata.insert(
-            "lines_changed".into(),
-            serde_json::json!(added + removed),
-        );
+        metadata.insert("lines_changed".into(), serde_json::json!(added + removed));
         metadata.insert("file_path".into(), serde_json::json!(file_path));
 
         ToolResult::ok_with_metadata(output, metadata)
@@ -300,10 +297,7 @@ mod tests {
         let original = vec!["a", "c"];
         let modified = vec!["a", "b", "c"];
         let edits = compute_edit_script(&original, &modified);
-        let adds: Vec<_> = edits
-            .iter()
-            .filter(|e| matches!(e, Edit::Add(_)))
-            .collect();
+        let adds: Vec<_> = edits.iter().filter(|e| matches!(e, Edit::Add(_))).collect();
         assert_eq!(adds.len(), 1);
     }
 

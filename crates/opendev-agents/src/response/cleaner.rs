@@ -86,10 +86,7 @@ mod tests {
     fn test_clean_tool_call_tags() {
         let cleaner = ResponseCleaner::new();
         let input = "<tool_call>some content</tool_call>";
-        assert_eq!(
-            cleaner.clean(Some(input)),
-            Some("some content".to_string())
-        );
+        assert_eq!(cleaner.clean(Some(input)), Some("some content".to_string()));
     }
 
     #[test]

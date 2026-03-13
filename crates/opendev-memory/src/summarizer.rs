@@ -235,10 +235,7 @@ impl ConversationSummarizer {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_uppercase();
-            let content = msg
-                .get("content")
-                .and_then(Value::as_str)
-                .unwrap_or("");
+            let content = msg.get("content").and_then(Value::as_str).unwrap_or("");
 
             match role.as_str() {
                 "USER" => {
@@ -364,7 +361,9 @@ mod tests {
     #[test]
     fn test_generate_summary_too_few_messages() {
         let mut s = ConversationSummarizer::new().with_exclude_last(6);
-        let messages: Vec<Value> = (0..5).map(|i| make_msg("user", &format!("msg {i}"))).collect();
+        let messages: Vec<Value> = (0..5)
+            .map(|i| make_msg("user", &format!("msg {i}")))
+            .collect();
         let result = s.generate_summary(&messages, |_| Some("summary".into()));
         assert_eq!(result, ""); // Not enough messages after excluding last 6
     }
@@ -405,8 +404,9 @@ mod tests {
             make_msg("user", "last"),
         ];
 
-        let result =
-            s.generate_summary(&messages, |_| Some("This is a very long summary text".into()));
+        let result = s.generate_summary(&messages, |_| {
+            Some("This is a very long summary text".into())
+        });
         assert_eq!(result.len(), 10);
         assert_eq!(result, "This is a ");
     }

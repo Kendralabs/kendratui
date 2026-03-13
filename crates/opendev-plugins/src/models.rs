@@ -10,18 +10,11 @@ use std::path::PathBuf;
 #[serde(rename_all = "snake_case")]
 pub enum PluginSource {
     /// Installed from a git repository.
-    Git {
-        url: String,
-        branch: String,
-    },
+    Git { url: String, branch: String },
     /// Installed from a local directory.
-    Local {
-        path: PathBuf,
-    },
+    Local { path: PathBuf },
     /// Installed from a marketplace.
-    Marketplace {
-        marketplace: String,
-    },
+    Marketplace { marketplace: String },
 }
 
 /// Status of a plugin.

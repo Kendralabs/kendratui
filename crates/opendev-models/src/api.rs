@@ -147,11 +147,13 @@ mod tests {
         assert_eq!(nested_responses.len(), 1);
         assert_eq!(nested_responses[0].name, "bash");
         // Non-string result should be serialized to JSON string
-        assert!(nested_responses[0]
-            .result
-            .as_ref()
-            .unwrap()
-            .contains("exit_code"));
+        assert!(
+            nested_responses[0]
+                .result
+                .as_ref()
+                .unwrap()
+                .contains("exit_code")
+        );
     }
 
     #[test]

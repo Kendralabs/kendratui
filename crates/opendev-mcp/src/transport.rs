@@ -117,16 +117,14 @@ impl McpTransport for StdioTransport {
             .stderr(std::process::Stdio::piped());
 
         let mut child = cmd.spawn().map_err(|e| {
-            McpError::Transport(format!(
-                "Failed to spawn '{}': {}",
-                self.command, e
-            ))
+            McpError::Transport(format!("Failed to spawn '{}': {}", self.command, e))
         })?;
 
         // Take stdout for the reader task.
-        let stdout = child.stdout.take().ok_or_else(|| {
-            McpError::Transport("Failed to capture child stdout".to_string())
-        })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| McpError::Transport("Failed to capture child stdout".to_string()))?;
 
         // Take stderr to log it.
         let stderr = child.stderr.take();
@@ -195,24 +193,27 @@ impl McpTransport for StdioTransport {
     async fn send_request(&self, request: &JsonRpcRequest) -> McpResult<JsonRpcResponse> {
         let rx = {
             let mut lock = self.state.lock().await;
-            let proc = lock.as_mut().ok_or_else(|| {
-                McpError::Transport("Transport not connected".to_string())
-            })?;
+            let proc = lock
+                .as_mut()
+                .ok_or_else(|| McpError::Transport("Transport not connected".to_string()))?;
 
             let payload = serde_json::to_vec(request)?;
 
             let (tx, rx) = oneshot::channel();
             proc.pending.insert(request.id, tx);
 
-            let stdin = proc.child.stdin.as_mut().ok_or_else(|| {
-                McpError::Transport("Child stdin not available".to_string())
-            })?;
+            let stdin = proc
+                .child
+                .stdin
+                .as_mut()
+                .ok_or_else(|| McpError::Transport("Child stdin not available".to_string()))?;
 
-            Self::write_message(stdin, &payload).await.map_err(|e| {
-                // Remove pending entry on write failure.
-                proc.pending.remove(&request.id);
-                e
-            })?;
+            Self::write_message(stdin, &payload)
+                .await
+                .inspect_err(|_e| {
+                    // Remove pending entry on write failure.
+                    proc.pending.remove(&request.id);
+                })?;
 
             rx
         };
@@ -221,24 +222,24 @@ impl McpTransport for StdioTransport {
         let response = timeout(REQUEST_TIMEOUT, rx)
             .await
             .map_err(|_| McpError::Timeout(REQUEST_TIMEOUT.as_secs()))?
-            .map_err(|_| {
-                McpError::Transport("Response channel closed unexpectedly".to_string())
-            })?;
+            .map_err(|_| McpError::Transport("Response channel closed unexpectedly".to_string()))?;
 
         Ok(response)
     }
 
     async fn send_notification(&self, notification: &JsonRpcNotification) -> McpResult<()> {
         let mut lock = self.state.lock().await;
-        let proc = lock.as_mut().ok_or_else(|| {
-            McpError::Transport("Transport not connected".to_string())
-        })?;
+        let proc = lock
+            .as_mut()
+            .ok_or_else(|| McpError::Transport("Transport not connected".to_string()))?;
 
         let payload = serde_json::to_vec(notification)?;
 
-        let stdin = proc.child.stdin.as_mut().ok_or_else(|| {
-            McpError::Transport("Child stdin not available".to_string())
-        })?;
+        let stdin = proc
+            .child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| McpError::Transport("Child stdin not available".to_string()))?;
 
         Self::write_message(stdin, &payload).await
     }
@@ -312,16 +313,18 @@ async fn read_message<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Mcp
         }
 
         if let Some(value) = trimmed.strip_prefix("Content-Length:") {
-            content_length = Some(value.trim().parse::<usize>().map_err(|e| {
-                McpError::Protocol(format!("Invalid Content-Length: {}", e))
-            })?);
+            content_length = Some(
+                value
+                    .trim()
+                    .parse::<usize>()
+                    .map_err(|e| McpError::Protocol(format!("Invalid Content-Length: {}", e)))?,
+            );
         }
         // Ignore other headers (e.g., Content-Type).
     }
 
-    let length = content_length.ok_or_else(|| {
-        McpError::Protocol("Missing Content-Length header".to_string())
-    })?;
+    let length = content_length
+        .ok_or_else(|| McpError::Protocol("Missing Content-Length header".to_string()))?;
 
     let mut body = vec![0u8; length];
     reader.read_exact(&mut body).await?;
@@ -382,10 +385,7 @@ impl McpTransport for HttpTransport {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(McpError::Transport(format!(
-                "HTTP {} — {}",
-                status, body
-            )));
+            return Err(McpError::Transport(format!("HTTP {} — {}", status, body)));
         }
 
         let rpc_response = response.json::<JsonRpcResponse>().await?;
@@ -655,8 +655,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_message_with_extra_header() {
-        let input =
-            b"Content-Length: 2\r\nContent-Type: application/json\r\n\r\n{}";
+        let input = b"Content-Length: 2\r\nContent-Type: application/json\r\n\r\n{}";
         let mut reader = tokio::io::BufReader::new(&input[..]);
         let body = read_message(&mut reader).await.unwrap();
         assert_eq!(body, b"{}");

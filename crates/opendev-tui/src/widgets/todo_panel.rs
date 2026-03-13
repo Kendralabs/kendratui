@@ -6,6 +6,7 @@
 //! Mirrors Python's `TaskProgressDisplay` from
 //! `opendev/ui_textual/components/task_progress.py`.
 
+use crate::formatters::style_tokens;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -13,7 +14,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Widget},
 };
-use crate::formatters::style_tokens;
 
 /// Status of a single todo item for display purposes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

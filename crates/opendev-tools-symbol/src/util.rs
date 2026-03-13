@@ -23,11 +23,14 @@ pub enum LangCategory {
     Other,
 }
 
+#[allow(dead_code)]
 pub fn detect_lang(path: &Path) -> LangCategory {
     match path.extension().and_then(|e| e.to_str()) {
         Some("py" | "pyi" | "pyw") => LangCategory::Python,
-        Some("c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "java" | "js" | "ts" | "tsx" | "jsx"
-        | "go" | "rs" | "cs" | "swift" | "kt" | "scala" | "m" | "mm") => LangCategory::CLike,
+        Some(
+            "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "java" | "js" | "ts" | "tsx" | "jsx" | "go"
+            | "rs" | "cs" | "swift" | "kt" | "scala" | "m" | "mm",
+        ) => LangCategory::CLike,
         _ => LangCategory::Other,
     }
 }

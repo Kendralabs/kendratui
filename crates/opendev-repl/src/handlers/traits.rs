@@ -51,11 +51,7 @@ pub trait ToolHandler: Send + Sync {
     /// Pre-execution check. Called before the tool runs.
     ///
     /// Can approve, deny, or modify the tool call arguments.
-    fn pre_check(
-        &self,
-        tool_name: &str,
-        args: &HashMap<String, Value>,
-    ) -> PreCheckResult {
+    fn pre_check(&self, tool_name: &str, args: &HashMap<String, Value>) -> PreCheckResult {
         let _ = (tool_name, args);
         PreCheckResult::Allow
     }

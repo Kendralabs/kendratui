@@ -23,10 +23,7 @@ fn truncate_value(value: &Value) -> Value {
     match value {
         Value::String(s) if s.len() > MAX_PREVIEW_LEN => {
             let total = s.len();
-            Value::String(format!(
-                "{}... ({total} chars)",
-                &s[..MAX_PREVIEW_LEN]
-            ))
+            Value::String(format!("{}... ({total} chars)", &s[..MAX_PREVIEW_LEN]))
         }
         Value::Object(map) => {
             let truncated: serde_json::Map<String, Value> = map

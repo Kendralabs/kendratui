@@ -55,10 +55,7 @@ impl LocalRuntime {
             return Err(DockerError::SessionExists(request.session.clone()));
         }
 
-        let session = DockerSession::new(
-            &self.container_id,
-            &request.session,
-        );
+        let session = DockerSession::new(&self.container_id, &request.session);
 
         self.sessions.insert(request.session.clone(), session);
         info!("Created session '{}'", request.session);
@@ -74,21 +71,21 @@ impl LocalRuntime {
     pub async fn run_in_session(&mut self, action: &BashAction) -> Result<BashObservation> {
         if !self.sessions.contains_key(&action.session) {
             if action.session == "default" {
-                self.create_session(&CreateSessionRequest::default()).await?;
+                self.create_session(&CreateSessionRequest::default())
+                    .await?;
             } else {
                 return Err(DockerError::SessionNotFound(action.session.clone()));
             }
         }
 
         let session = self.sessions.get(&action.session).unwrap();
-        session.exec_command(&action.command, action.timeout, action.check).await
+        session
+            .exec_command(&action.command, action.timeout, action.check)
+            .await
     }
 
     /// Close a session.
-    pub async fn close_session(
-        &mut self,
-        request: &CloseSessionRequest,
-    ) -> CloseSessionResponse {
+    pub async fn close_session(&mut self, request: &CloseSessionRequest) -> CloseSessionResponse {
         if let Some(_session) = self.sessions.remove(&request.session) {
             info!("Closed session '{}'", request.session);
             CloseSessionResponse {
@@ -107,11 +104,7 @@ impl LocalRuntime {
     pub async fn read_file(&self, request: &ReadFileRequest) -> Result<ReadFileResponse> {
         let session = self.get_or_default_session()?;
         let obs = session
-            .exec_command(
-                &format!("cat '{}'", request.path),
-                30.0,
-                CheckMode::Silent,
-            )
+            .exec_command(&format!("cat '{}'", request.path), 30.0, CheckMode::Silent)
             .await?;
 
         if obs.exit_code == Some(0) || obs.exit_code.is_none() {
@@ -163,7 +156,8 @@ impl LocalRuntime {
     pub async fn close(&mut self) {
         let names: Vec<String> = self.sessions.keys().cloned().collect();
         for name in names {
-            self.close_session(&CloseSessionRequest { session: name }).await;
+            self.close_session(&CloseSessionRequest { session: name })
+                .await;
         }
         self.closed = true;
         info!("Runtime closed");
@@ -224,10 +218,8 @@ mod tests {
     async fn test_create_session_duplicate() {
         let mut rt = LocalRuntime::new("abc123");
         // Manually insert a session
-        rt.sessions.insert(
-            "default".into(),
-            DockerSession::new("abc123", "default"),
-        );
+        rt.sessions
+            .insert("default".into(), DockerSession::new("abc123", "default"));
         let err = rt
             .create_session(&CreateSessionRequest::default())
             .await

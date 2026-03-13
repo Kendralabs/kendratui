@@ -87,7 +87,11 @@ impl DockerToolHandler {
 
         full_command.push_str(command);
 
-        match self.session.exec_command(&full_command, timeout, CheckMode::Silent).await {
+        match self
+            .session
+            .exec_command(&full_command, timeout, CheckMode::Silent)
+            .await
+        {
             Ok(obs) => {
                 let success = obs.exit_code == Some(0) || obs.exit_code.is_none();
                 ToolResult {
@@ -120,7 +124,11 @@ impl DockerToolHandler {
         let container_path = self.translate_path(path);
         let cmd = format!("cat '{}'", container_path);
 
-        match self.session.exec_command(&cmd, 30.0, CheckMode::Silent).await {
+        match self
+            .session
+            .exec_command(&cmd, 30.0, CheckMode::Silent)
+            .await
+        {
             Ok(obs) if obs.exit_code == Some(0) || obs.exit_code.is_none() => ToolResult {
                 success: true,
                 output: Some(obs.output),
@@ -165,10 +173,18 @@ impl DockerToolHandler {
             parent, escaped, container_path
         );
 
-        match self.session.exec_command(&cmd, 30.0, CheckMode::Silent).await {
+        match self
+            .session
+            .exec_command(&cmd, 30.0, CheckMode::Silent)
+            .await
+        {
             Ok(obs) if obs.exit_code == Some(0) || obs.exit_code.is_none() => ToolResult {
                 success: true,
-                output: Some(format!("Wrote {} bytes to {}", content.len(), container_path)),
+                output: Some(format!(
+                    "Wrote {} bytes to {}",
+                    content.len(),
+                    container_path
+                )),
                 error: None,
                 exit_code: obs.exit_code,
             },
@@ -206,7 +222,11 @@ impl DockerToolHandler {
             format!("ls -la {} 2>/dev/null", container_path)
         };
 
-        match self.session.exec_command(&cmd, 30.0, CheckMode::Silent).await {
+        match self
+            .session
+            .exec_command(&cmd, 30.0, CheckMode::Silent)
+            .await
+        {
             Ok(obs) => ToolResult {
                 success: obs.exit_code == Some(0) || obs.exit_code.is_none(),
                 output: Some(if obs.output.is_empty() {
@@ -243,7 +263,11 @@ impl DockerToolHandler {
             query, container_path
         );
 
-        match self.session.exec_command(&cmd, 60.0, CheckMode::Silent).await {
+        match self
+            .session
+            .exec_command(&cmd, 60.0, CheckMode::Silent)
+            .await
+        {
             Ok(obs) => ToolResult {
                 success: true,
                 output: Some(if obs.output.is_empty() {
@@ -347,7 +371,10 @@ mod tests {
             0,
             "Traceback (most recent call last)"
         ));
-        assert!(DockerToolHandler::check_command_has_error(0, "ModuleNotFoundError: foo"));
+        assert!(DockerToolHandler::check_command_has_error(
+            0,
+            "ModuleNotFoundError: foo"
+        ));
         assert!(!DockerToolHandler::check_command_has_error(0, "all good"));
     }
 

@@ -97,7 +97,9 @@ impl BaseTool for MemoryTool {
                 memory_search(&memory_dir, query)
             }
             "list" => memory_list(&memory_dir),
-            _ => ToolResult::fail(format!("Unknown action: {action}. Available: read, write, search, list")),
+            _ => ToolResult::fail(format!(
+                "Unknown action: {action}. Available: read, write, search, list"
+            )),
         }
     }
 }
@@ -177,7 +179,10 @@ fn memory_search(dir: &Path, query: &str) -> ToolResult {
         };
 
         let content_lower = content.to_lowercase();
-        let score: usize = keywords.iter().filter(|kw| content_lower.contains(*kw)).count();
+        let score: usize = keywords
+            .iter()
+            .filter(|kw| content_lower.contains(*kw))
+            .count();
 
         if score > 0 {
             let filename = path
@@ -210,7 +215,10 @@ fn memory_search(dir: &Path, query: &str) -> ToolResult {
 
     let mut output = format!("Found matches in {} files:\n\n", results.len());
     for (score, filename, lines) in &results {
-        output.push_str(&format!("{filename} (relevance: {score}/{}):\n", keywords.len()));
+        output.push_str(&format!(
+            "{filename} (relevance: {score}/{}):\n",
+            keywords.len()
+        ));
         for line in lines {
             output.push_str(&format!("{line}\n"));
         }
@@ -293,7 +301,11 @@ mod tests {
     #[test]
     fn test_memory_search() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(tmp.path().join("notes.md"), "Rust is a systems language\nPython is dynamic").unwrap();
+        std::fs::write(
+            tmp.path().join("notes.md"),
+            "Rust is a systems language\nPython is dynamic",
+        )
+        .unwrap();
         std::fs::write(tmp.path().join("other.md"), "unrelated content").unwrap();
 
         let result = memory_search(tmp.path(), "rust systems");
