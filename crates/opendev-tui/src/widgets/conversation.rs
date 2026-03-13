@@ -65,7 +65,7 @@ impl<'a> ConversationWidget<'a> {
     fn build_welcome_panel(&self) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = Vec::new();
         // Use a width that fits inside the conversation border (minus 2 for border chars)
-        let inner_w = (self.terminal_width.saturating_sub(4) as usize).max(80).min(110);
+        let inner_w = (self.terminal_width.saturating_sub(4) as usize).clamp(80, 110);
         let h_bar: String = style_tokens::BOX_H.repeat(inner_w);
         let border_style = Style::default().fg(style_tokens::BORDER);
 
@@ -223,14 +223,30 @@ impl<'a> ConversationWidget<'a> {
                 DisplayRole::Assistant => {
                     // Use markdown renderer for assistant messages
                     let md_lines = MarkdownRenderer::render(&content);
-                    for (i, md_line) in md_lines.into_iter().enumerate() {
-                        let mut spans = vec![Span::raw(if i == 0 {
-                            "  ".to_string()
+                    let mut leading_consumed = false;
+                    for md_line in md_lines.into_iter() {
+                        // Check if this line has non-empty content
+                        let line_text: String = md_line.spans.iter()
+                            .map(|s| s.content.to_string())
+                            .collect();
+                        let has_content = !line_text.trim().is_empty();
+
+                        if !leading_consumed && has_content {
+                            // First non-empty line gets ⏺ leading marker (green)
+                            let mut spans = vec![
+                                Span::styled(
+                                    format!("{} ", COMPLETED_CHAR),
+                                    Style::default().fg(style_tokens::GREEN_BRIGHT),
+                                ),
+                            ];
+                            spans.extend(md_line.spans);
+                            lines.push(Line::from(spans));
+                            leading_consumed = true;
                         } else {
-                            "  ".to_string()
-                        })];
-                        spans.extend(md_line.spans);
-                        lines.push(Line::from(spans));
+                            let mut spans = vec![Span::raw("  ".to_string())];
+                            spans.extend(md_line.spans);
+                            lines.push(Line::from(spans));
+                        }
                     }
                 }
                 DisplayRole::User => {
@@ -369,7 +385,7 @@ fn format_tool_call(tc: &DisplayToolCall) -> Line<'static> {
     let color = tool_color(category);
 
     let (icon, icon_color) = if tc.success {
-        (COMPLETED_CHAR, style_tokens::SUCCESS)
+        (COMPLETED_CHAR, style_tokens::GREEN_BRIGHT)
     } else {
         (COMPLETED_CHAR, style_tokens::ERROR)
     };
@@ -397,7 +413,7 @@ fn format_nested_tool_call(tc: &DisplayToolCall, depth: usize) -> Line<'static> 
     let color = tool_color(category);
 
     let (icon, icon_color) = if tc.success {
-        (COMPLETED_CHAR, style_tokens::SUCCESS)
+        (COMPLETED_CHAR, style_tokens::GREEN_BRIGHT)
     } else {
         (COMPLETED_CHAR, style_tokens::ERROR)
     };

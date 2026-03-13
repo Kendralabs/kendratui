@@ -64,13 +64,36 @@ impl MarkdownRenderer {
                         .fg(style_tokens::HEADING_1)
                         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
                 )));
-            } else if raw_line.starts_with("- ") || raw_line.starts_with("* ") {
-                // Bullet list
-                let content = &raw_line[2..];
-                lines.push(Line::from(vec![
-                    Span::styled("  * ", Style::default().fg(style_tokens::BULLET)),
-                    Span::raw(render_inline(content)),
-                ]));
+            } else if is_bullet_line(raw_line) {
+                // Bullet list (supports nesting)
+                let trimmed = raw_line.trim_start();
+                let indent_len = raw_line.len() - trimmed.len();
+                let indent_level = indent_len / 2;
+                let content = &trimmed[2..];
+                let prefix = if indent_level == 0 {
+                    "  - ".to_string()
+                } else {
+                    format!("{}  - ", "  ".repeat(indent_level))
+                };
+                let mut spans = vec![
+                    Span::styled(prefix, Style::default().fg(style_tokens::BULLET)),
+                ];
+                spans.extend(parse_inline_spans(content));
+                lines.push(Line::from(spans));
+            } else if is_ordered_list_line(raw_line) {
+                // Ordered list
+                let trimmed = raw_line.trim_start();
+                let indent_len = raw_line.len() - trimmed.len();
+                let indent_level = indent_len / 2;
+                let dot_pos = trimmed.find(". ").unwrap();
+                let number = &trimmed[..dot_pos];
+                let content = &trimmed[dot_pos + 2..];
+                let prefix = format!("{}  {}. ", "  ".repeat(indent_level), number);
+                let mut spans = vec![
+                    Span::styled(prefix, Style::default().fg(style_tokens::BULLET)),
+                ];
+                spans.extend(parse_inline_spans(content));
+                lines.push(Line::from(spans));
             } else {
                 // Regular text with inline formatting
                 lines.push(render_inline_line(raw_line));
@@ -88,9 +111,20 @@ fn render_inline_line(text: &str) -> Line<'static> {
     Line::from(spans)
 }
 
-/// Render inline text stripping markdown markers (for use inside list items, etc.).
-fn render_inline(text: &str) -> String {
-    text.replace("**", "").replace("__", "").replace('`', "")
+/// Check if a line is a bullet list item (possibly indented).
+fn is_bullet_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ")
+}
+
+/// Check if a line is an ordered list item (possibly indented).
+fn is_ordered_list_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    if let Some(dot_pos) = trimmed.find(". ") {
+        dot_pos > 0 && trimmed[..dot_pos].chars().all(|c| c.is_ascii_digit())
+    } else {
+        false
+    }
 }
 
 /// Parse inline spans handling backtick code and bold markers.
@@ -194,6 +228,40 @@ mod tests {
         let md = "- item one\n- item two";
         let lines = MarkdownRenderer::render(md);
         assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn test_nested_bullets() {
+        let md = "- top\n  - nested\n    - deep";
+        let lines = MarkdownRenderer::render(md);
+        assert_eq!(lines.len(), 3);
+        // Check prefixes
+        let first: String = lines[0].spans.iter().map(|s| s.content.to_string()).collect();
+        assert!(first.starts_with("  - "), "top-level should start with '  - '");
+        let second: String = lines[1].spans.iter().map(|s| s.content.to_string()).collect();
+        assert!(second.starts_with("    - "), "nested should start with '    - '");
+        let third: String = lines[2].spans.iter().map(|s| s.content.to_string()).collect();
+        assert!(third.starts_with("      - "), "deep nested should start with '      - '");
+    }
+
+    #[test]
+    fn test_ordered_list() {
+        let md = "1. first\n2. second\n3. third";
+        let lines = MarkdownRenderer::render(md);
+        assert_eq!(lines.len(), 3);
+        let first: String = lines[0].spans.iter().map(|s| s.content.to_string()).collect();
+        assert!(first.contains("1. "));
+        let second: String = lines[1].spans.iter().map(|s| s.content.to_string()).collect();
+        assert!(second.contains("2. "));
+    }
+
+    #[test]
+    fn test_bullet_with_inline_formatting() {
+        let md = "- **bold** and `code`";
+        let lines = MarkdownRenderer::render(md);
+        assert_eq!(lines.len(), 1);
+        // Should have more than 2 spans (prefix + inline formatted content)
+        assert!(lines[0].spans.len() > 2, "bullet content should preserve inline formatting");
     }
 
     #[test]

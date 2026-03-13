@@ -39,7 +39,7 @@ pub const HEADING_2: Color = Color::Rgb(0, 191, 255);
 pub const HEADING_3: Color = Color::Rgb(255, 179, 71);
 pub const CODE_FG: Color = Color::Rgb(106, 209, 143);
 pub const CODE_BG: Color = Color::Rgb(30, 30, 30);
-pub const BULLET: Color = Color::Rgb(130, 160, 255);
+pub const BULLET: Color = Color::Rgb(0, 255, 0);
 
 // Icons
 pub const THINKING_ICON: &str = "\u{27e1}"; // ⟡
