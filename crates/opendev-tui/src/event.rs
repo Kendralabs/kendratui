@@ -3,7 +3,7 @@
 //! Bridges crossterm terminal events with application-level events
 //! (agent messages, tool execution updates, etc.).
 
-use crossterm::event::{Event as CrosstermEvent, KeyEvent, MouseEvent};
+use crossterm::event::{Event as CrosstermEvent, KeyEvent};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -17,8 +17,6 @@ pub enum AppEvent {
     Terminal(CrosstermEvent),
     /// Key press (extracted from terminal event for convenience).
     Key(KeyEvent),
-    /// Mouse event.
-    Mouse(MouseEvent),
     /// Terminal resize.
     Resize(u16, u16),
     /// Tick for periodic UI updates (spinner animation, etc.).
@@ -148,7 +146,7 @@ impl EventHandler {
                     maybe_event = reader.next() => {
                         match maybe_event {
                             Some(Ok(CrosstermEvent::Key(key))) => AppEvent::Key(key),
-                            Some(Ok(CrosstermEvent::Mouse(mouse))) => AppEvent::Mouse(mouse),
+                            Some(Ok(CrosstermEvent::Mouse(_))) => continue,
                             Some(Ok(CrosstermEvent::Resize(w, h))) => AppEvent::Resize(w, h),
                             Some(Ok(other)) => AppEvent::Terminal(other),
                             Some(Err(_)) => continue,

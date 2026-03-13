@@ -467,6 +467,15 @@ pub fn create_default_composer(templates_dir: impl AsRef<Path>) -> PromptCompose
 pub fn create_thinking_composer(templates_dir: impl AsRef<Path>) -> PromptComposer {
     let mut composer = PromptComposer::new(templates_dir.as_ref());
 
+    // Core thinking identity - MUST be first (matches Python's core_prompt loading)
+    composer.register_section(
+        "thinking_core",
+        "system/thinking.md",
+        None,
+        10,
+        true,
+    );
+
     composer.register_section(
         "available_tools",
         "system/thinking/thinking-available-tools.md",
@@ -703,7 +712,7 @@ mod tests {
     fn test_create_thinking_composer() {
         let dir = tempfile::TempDir::new().unwrap();
         let composer = create_thinking_composer(dir.path());
-        assert_eq!(composer.section_count(), 4);
+        assert_eq!(composer.section_count(), 5);
     }
 
     #[test]
@@ -714,7 +723,7 @@ mod tests {
         assert!(main.section_count() > 15);
 
         let thinking = create_composer(dir.path(), "system/thinking");
-        assert_eq!(thinking.section_count(), 4);
+        assert_eq!(thinking.section_count(), 5);
     }
 
     #[test]
