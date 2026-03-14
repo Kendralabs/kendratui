@@ -802,10 +802,7 @@ async fn run_interactive(
                         let mut buf = String::new();
                         if io::stdin().read_line(&mut buf).is_ok() {
                             let input = buf.trim();
-                            if input.is_empty() {
-                                session_manager.create_session();
-                                break;
-                            } else if input == "q" {
+                            if input.is_empty() || input == "q" {
                                 session_manager.create_session();
                                 break;
                             } else if let Ok(n) = input.parse::<usize>() {

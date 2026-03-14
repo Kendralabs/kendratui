@@ -206,14 +206,16 @@ fn command_failure_suffix(exit_code: i32, output: &str) -> String {
     let lower = output.to_lowercase();
 
     if lower.contains("permission denied") {
-        "The command failed due to a permission error. Try using sudo or check file permissions.".to_string()
+        "The command failed due to a permission error. Try using sudo or check file permissions."
+            .to_string()
     } else if lower.contains("command not found") || lower.contains("no such file or directory") {
         format!(
             "The command failed (exit code {exit_code}). Check that the command/path exists \
              and is spelled correctly. Use `which` or `ls` to verify."
         )
     } else if lower.contains("syntax error") || lower.contains("unexpected token") {
-        "The command had a syntax error. Review the command for typos or missing quotes/brackets.".to_string()
+        "The command had a syntax error. Review the command for typos or missing quotes/brackets."
+            .to_string()
     } else if exit_code == 1 && (lower.contains("error") || lower.contains("failed")) {
         format!(
             "The command failed (exit code {exit_code}). Read the error output carefully, \
@@ -225,11 +227,13 @@ fn command_failure_suffix(exit_code: i32, output: &str) -> String {
              Check the command arguments and flags."
         )
     } else if exit_code == 126 {
-        "The command was found but is not executable. Check file permissions with `ls -la`.".to_string()
+        "The command was found but is not executable. Check file permissions with `ls -la`."
+            .to_string()
     } else if exit_code == 127 {
         "The command was not found. Check spelling or install the missing tool.".to_string()
     } else if exit_code == 128 + 9 || exit_code == 128 + 15 {
-        "The process was killed (likely OOM or external signal). Try reducing resource usage.".to_string()
+        "The process was killed (likely OOM or external signal). Try reducing resource usage."
+            .to_string()
     } else {
         format!(
             "The command failed with exit code {exit_code}. Read the error output, \
@@ -557,8 +561,11 @@ impl BashTool {
                     error: Some(timeout_msg),
                     metadata,
                     duration_ms: None,
-                    llm_suffix: Some("The command timed out. Consider breaking it into smaller steps, \
-                        adding a timeout flag, or checking if the process is hanging.".to_string()),
+                    llm_suffix: Some(
+                        "The command timed out. Consider breaking it into smaller steps, \
+                        adding a timeout flag, or checking if the process is hanging."
+                            .to_string(),
+                    ),
                 }
             }
         }

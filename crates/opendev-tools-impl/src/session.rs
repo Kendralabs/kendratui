@@ -196,7 +196,8 @@ mod tests {
     #[test]
     fn test_redact_secrets_in_session() {
         // Anthropic API key pattern
-        let text = "key: sk-ant-api03-abcdefghij1234567890abcdefghij1234567890abcdefghij normal text";
+        let text =
+            "key: sk-ant-api03-abcdefghij1234567890abcdefghij1234567890abcdefghij normal text";
         let redacted = redact_secrets(text);
         assert!(!redacted.contains("abcdefghij1234567890"));
         assert!(redacted.contains("[REDACTED]"));

@@ -130,7 +130,10 @@ impl BaseTool for WebFetchTool {
         metadata.insert("status".into(), serde_json::json!(status));
         metadata.insert("content_type".into(), serde_json::json!(content_type));
         metadata.insert("truncated".into(), serde_json::json!(truncated));
-        metadata.insert("extracted_markdown".into(), serde_json::json!(extract_markdown));
+        metadata.insert(
+            "extracted_markdown".into(),
+            serde_json::json!(extract_markdown),
+        );
 
         if status >= 400 {
             return ToolResult {
@@ -160,7 +163,9 @@ fn html_to_markdown(html: &str) -> String {
     let mut text = html.to_string();
 
     // Remove script, style, nav, footer, header tags and their content
-    for tag in &["script", "style", "nav", "footer", "header", "noscript", "svg"] {
+    for tag in &[
+        "script", "style", "nav", "footer", "header", "noscript", "svg",
+    ] {
         if let Ok(re) = Regex::new(&format!(r"(?is)<{tag}[^>]*>.*?</{tag}>")) {
             text = re.replace_all(&text, "").to_string();
         }
@@ -214,7 +219,8 @@ fn html_to_markdown(html: &str) -> String {
             .replace_all(&text, |caps: &regex::Captures| {
                 let href = &caps[1];
                 let link_text = strip_tags(&caps[2]);
-                if link_text.is_empty() || href.starts_with('#') || href.starts_with("javascript:") {
+                if link_text.is_empty() || href.starts_with('#') || href.starts_with("javascript:")
+                {
                     link_text
                 } else {
                     format!("[{link_text}]({href})")
