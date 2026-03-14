@@ -81,6 +81,15 @@ pub const BUILTIN_COMMANDS: &[SlashCommand] = &[
         name: "plugins",
         description: "manage plugins and marketplaces",
     },
+    // Utility commands
+    SlashCommand {
+        name: "sound",
+        description: "play a test notification sound",
+    },
+    SlashCommand {
+        name: "compact",
+        description: "manually compact conversation context",
+    },
 ];
 
 /// Find commands matching a query prefix.
@@ -131,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_builtin_count() {
-        // Ensure we have all 15 commands from Python
-        assert_eq!(BUILTIN_COMMANDS.len(), 15);
+        // Ensure we have all 17 commands
+        assert_eq!(BUILTIN_COMMANDS.len(), 17);
     }
 }

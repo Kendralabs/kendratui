@@ -2,6 +2,7 @@
 //!
 //! Mirrors `opendev/repl/repl.py::_handle_command`.
 
+use opendev_config::ModelRegistry;
 use opendev_runtime::{AutonomyLevel, ThinkingLevel};
 
 use crate::repl::{OperationMode, ReplState};
@@ -88,6 +89,10 @@ impl BuiltinCommands {
                 self.handle_init();
                 CommandOutcome::Handled
             }
+            "/sound" => {
+                self.handle_sound();
+                CommandOutcome::Handled
+            }
             _ => CommandOutcome::Unknown,
         }
     }
@@ -102,12 +107,13 @@ impl BuiltinCommands {
         println!("  /autonomy [manual|semi-auto|auto] Set approval level");
         println!("  /status                 Show current mode/thinking/autonomy");
         println!("  /compact                Compact conversation context");
-        println!("  /models                 Show model selector");
+        println!("  /models                 Show model picker (from models.dev registry)");
         println!("  /mcp <subcommand>       Manage MCP servers");
         println!("  /agents <args>          Manage agents");
         println!("  /skills <args>          Manage skills");
         println!("  /plugins <args>         Manage plugins");
         println!("  /session-models         Session model management");
+        println!("  /sound                  Play test notification sound");
         println!("  /init                   Initialize codebase context");
     }
 
@@ -139,16 +145,72 @@ impl BuiltinCommands {
     }
 
     fn handle_models(&self) {
+        self.handle_model_picker(None);
+    }
+
+    /// Display a numbered list of models from the models.dev registry.
+    ///
+    /// If `cache_dir` is `None`, uses the default `~/.opendev/cache` directory.
+    /// Returns the list of `(provider_id, model_id)` pairs for use by callers
+    /// that want to act on the user's selection.
+    pub fn handle_model_picker(
+        &self,
+        cache_dir: Option<&std::path::Path>,
+    ) -> Vec<(String, String)> {
+        let cache = cache_dir.map(std::path::PathBuf::from).unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+                .join(".opendev")
+                .join("cache")
+        });
+
+        let registry = ModelRegistry::load_from_cache(&cache);
+
+        if registry.providers.is_empty() {
+            println!("No models available. Run `opendev setup` or check network connectivity.");
+            return Vec::new();
+        }
+
+        let models = registry.list_all_models(None, None);
+
+        if models.is_empty() {
+            println!("No models found in registry.");
+            return Vec::new();
+        }
+
         println!("Available models:");
-        println!("  1. gpt-4o (OpenAI)");
-        println!("  2. gpt-4o-mini (OpenAI)");
-        println!("  3. claude-3.5-sonnet (Anthropic)");
-        println!("  4. claude-3-opus (Anthropic)");
-        println!("  5. claude-3-haiku (Anthropic)");
-        println!("  6. gemini-1.5-pro (Google)");
-        println!("  7. deepseek-chat (DeepSeek)");
+        println!();
+
+        let mut entries: Vec<(String, String)> = Vec::new();
+        for (i, (provider_id, model)) in models.iter().enumerate() {
+            let num = i + 1;
+            let pricing = model.format_pricing();
+            let ctx = if model.context_length >= 1_000_000 {
+                format!("{}M ctx", model.context_length / 1_000_000)
+            } else if model.context_length >= 1_000 {
+                format!("{}K ctx", model.context_length / 1_000)
+            } else {
+                format!("{} ctx", model.context_length)
+            };
+            let caps = if model.capabilities.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", model.capabilities.join(", "))
+            };
+
+            println!(
+                "  {num:>3}. {name} ({provider}) - {ctx}, {pricing}{caps}",
+                name = model.name,
+                provider = model.provider,
+            );
+
+            entries.push((provider_id.to_string(), model.id.clone()));
+        }
+
         println!();
         println!("Use /session-models set model <name> to change the active model.");
+
+        entries
     }
 
     fn handle_mcp(&self, args: &str) {
@@ -382,6 +444,11 @@ impl BuiltinCommands {
         println!("  Autonomy:  {}", state.autonomy_level);
     }
 
+    fn handle_sound(&self) {
+        opendev_runtime::play_finish_sound();
+        println!("Playing test sound...");
+    }
+
     fn handle_init(&self) {
         println!("Scanning codebase...");
         match std::env::current_dir() {
@@ -541,5 +608,74 @@ mod tests {
             cmds.dispatch("/status", "", &mut state),
             CommandOutcome::Handled
         );
+    }
+
+    #[test]
+    fn test_models_command_dispatches() {
+        let cmds = BuiltinCommands::new();
+        let mut state = ReplState::default();
+        assert_eq!(
+            cmds.dispatch("/models", "", &mut state),
+            CommandOutcome::Handled
+        );
+    }
+
+    #[test]
+    fn test_model_picker_with_cache() {
+        let cmds = BuiltinCommands::new();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let providers_dir = tmp.path().join("providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+
+        let provider_json = serde_json::json!({
+            "id": "test-provider",
+            "name": "Test Provider",
+            "description": "A test provider",
+            "api_key_env": "TEST_KEY",
+            "api_base_url": "https://api.test.com",
+            "models": {
+                "model-a": {
+                    "id": "model-a",
+                    "name": "Model A",
+                    "provider": "Test Provider",
+                    "context_length": 128000,
+                    "capabilities": ["text", "vision"],
+                    "pricing": {"input": 3.0, "output": 15.0, "unit": "per 1M tokens"},
+                    "recommended": true
+                },
+                "model-b": {
+                    "id": "model-b",
+                    "name": "Model B",
+                    "provider": "Test Provider",
+                    "context_length": 4096,
+                    "capabilities": ["text"],
+                    "pricing": {"input": 0.5, "output": 1.0, "unit": "per 1M tokens"},
+                    "recommended": false
+                }
+            }
+        });
+
+        std::fs::write(
+            providers_dir.join("test-provider.json"),
+            serde_json::to_string_pretty(&provider_json).unwrap(),
+        )
+        .unwrap();
+
+        let entries = cmds.handle_model_picker(Some(tmp.path()));
+        assert_eq!(entries.len(), 2);
+        // All entries should reference the test provider
+        assert!(entries.iter().all(|(pid, _)| pid == "test-provider"));
+    }
+
+    #[test]
+    fn test_model_picker_empty_cache() {
+        let cmds = BuiltinCommands::new();
+        let tmp = tempfile::TempDir::new().unwrap();
+        // Set OPENDEV_DISABLE_REMOTE_MODELS to prevent network access in test
+        // SAFETY: This test is single-threaded and the env var is restored immediately.
+        unsafe { std::env::set_var("OPENDEV_DISABLE_REMOTE_MODELS", "1") };
+        let entries = cmds.handle_model_picker(Some(tmp.path()));
+        unsafe { std::env::remove_var("OPENDEV_DISABLE_REMOTE_MODELS") };
+        assert!(entries.is_empty());
     }
 }

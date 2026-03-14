@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use crate::controllers::{ApprovalController, MessageController};
 use crate::event::{AppEvent, EventHandler};
+use crate::history::CommandHistory;
 use crate::managers::InterruptManager;
 use crate::widgets::{
     ConversationWidget, InputWidget, NestedToolWidget, StatusBarWidget, TodoDisplayItem,
@@ -149,6 +150,14 @@ pub struct AppState {
     pub scroll_last_time: Option<Instant>,
     /// Scroll acceleration: current acceleration level (0 = base, increases).
     pub scroll_accel_level: u8,
+    /// Active color theme for the TUI.
+    pub theme: crate::formatters::style_tokens::Theme,
+    /// Name of the active theme.
+    pub theme_name: crate::formatters::style_tokens::ThemeName,
+    /// Command history for Up/Down arrow navigation.
+    pub command_history: CommandHistory,
+    /// Flag set by /compact command; agent loop consumes and triggers compaction.
+    pub compact_requested: bool,
 }
 
 /// A message prepared for display in the conversation widget.
@@ -291,6 +300,10 @@ impl Default for AppState {
             scroll_last_direction: None,
             scroll_last_time: None,
             scroll_accel_level: 0,
+            theme: crate::formatters::style_tokens::Theme::dark(),
+            theme_name: crate::formatters::style_tokens::ThemeName::Dark,
+            command_history: CommandHistory::new(),
+            compact_requested: false,
         }
     }
 }
@@ -483,7 +496,11 @@ impl App {
             .iter()
             .map(|msg| {
                 let content = strip_system_reminders(&msg.content);
-                let text_lines = if content.is_empty() { 0 } else { content.lines().count() };
+                let text_lines = if content.is_empty() {
+                    0
+                } else {
+                    content.lines().count()
+                };
                 let tool_lines = if let Some(ref tc) = msg.tool_call {
                     1 + if !tc.collapsed {
                         tc.result_lines.len()
@@ -511,10 +528,9 @@ impl App {
         let msg_visible: Vec<bool> = msg_line_estimates
             .iter()
             .map(|&est| {
-                let msg_start = cumulative;
                 let msg_end = cumulative + est;
                 cumulative = msg_end;
-                // Visible if this message's range overlaps the visible window
+                // Visible if this message's line range reaches into the visible window
                 msg_end > cull_start
             })
             .collect();
@@ -978,6 +994,25 @@ impl App {
                 }
             }
 
+            // Budget events
+            AppEvent::BudgetExhausted {
+                cost_usd,
+                budget_usd,
+            } => {
+                self.state.agent_active = false;
+                self.state.messages.push(DisplayMessage {
+                    role: DisplayRole::System,
+                    content: format!(
+                        "Session cost budget exhausted: ${:.4} spent of ${:.2} budget. \
+                         Agent paused. Use /budget to adjust.",
+                        cost_usd, budget_usd
+                    ),
+                    tool_call: None,
+                });
+                self.state.dirty = true;
+                self.state.message_generation += 1;
+            }
+
             // Agent events
             AppEvent::AgentStarted => {
                 self.state.agent_active = true;
@@ -1355,6 +1390,7 @@ impl App {
                     self.state.input_buffer.clear();
                     self.state.input_cursor = 0;
                     self.state.autocomplete.dismiss();
+                    self.state.command_history.record(&msg);
 
                     if self.state.agent_active {
                         // Queue silently — message will display when consumed
@@ -1482,10 +1518,20 @@ impl App {
                     self.state.input_cursor += 1;
                 }
             }
-            // Up/Down arrow — navigate autocomplete or scroll (with acceleration)
+            // Up/Down arrow — autocomplete > command history > scroll
             (_, KeyCode::Up) => {
                 if self.state.autocomplete.is_visible() {
                     self.state.autocomplete.select_prev();
+                } else if !self.state.input_buffer.contains('\n') && !self.state.agent_active {
+                    // Single-line input: navigate command history
+                    if let Some(text) = self
+                        .state
+                        .command_history
+                        .navigate_up(&self.state.input_buffer)
+                    {
+                        self.state.input_buffer = text.to_string();
+                        self.state.input_cursor = self.state.input_buffer.len();
+                    }
                 } else {
                     let amount = self.accelerated_scroll(true);
                     self.state.scroll_offset = self.state.scroll_offset.saturating_add(amount);
@@ -1495,6 +1541,12 @@ impl App {
             (_, KeyCode::Down) => {
                 if self.state.autocomplete.is_visible() {
                     self.state.autocomplete.select_next();
+                } else if self.state.command_history.is_navigating() {
+                    // Navigate command history down
+                    if let Some(text) = self.state.command_history.navigate_down() {
+                        self.state.input_buffer = text.to_string();
+                        self.state.input_cursor = self.state.input_buffer.len();
+                    }
                 } else if self.state.scroll_offset > 0 {
                     let amount = self.accelerated_scroll(false);
                     self.state.scroll_offset = self.state.scroll_offset.saturating_sub(amount);
@@ -1542,6 +1594,7 @@ impl App {
             }
             // Regular character input
             (KeyModifiers::NONE | KeyModifiers::SHIFT, KeyCode::Char(c)) => {
+                self.state.command_history.reset_navigation();
                 self.state.input_buffer.insert(self.state.input_cursor, c);
                 self.state.input_cursor += c.len_utf8();
                 // Update autocomplete on input change
@@ -1643,6 +1696,33 @@ impl App {
                 });
                 self.state.message_generation += 1;
             }
+            "sound" => {
+                opendev_runtime::play_finish_sound();
+                self.state.messages.push(DisplayMessage {
+                    role: DisplayRole::System,
+                    content: "Playing test sound...".to_string(),
+                    tool_call: None,
+                });
+                self.state.message_generation += 1;
+            }
+            "compact" => {
+                if self.state.messages.len() < 5 {
+                    self.state.messages.push(DisplayMessage {
+                        role: DisplayRole::System,
+                        content: "Not enough messages to compact (need at least 5).".to_string(),
+                        tool_call: None,
+                    });
+                } else {
+                    self.state.compact_requested = true;
+                    self.state.messages.push(DisplayMessage {
+                        role: DisplayRole::System,
+                        content: "Context compaction triggered. Will compact on next query."
+                            .to_string(),
+                        tool_call: None,
+                    });
+                }
+                self.state.message_generation += 1;
+            }
             "help" => {
                 self.state.messages.push(DisplayMessage {
                     role: DisplayRole::System,
@@ -1653,6 +1733,8 @@ impl App {
                         "  /mode       — Toggle Normal/Plan mode",
                         "  /thinking   — Cycle thinking level",
                         "  /autonomy   — Cycle autonomy level",
+                        "  /sound      — Play test notification sound",
+                        "  /compact    — Compact conversation context",
                         "  /exit       — Quit OpenDev",
                         "",
                         "Keyboard shortcuts:",
@@ -1808,10 +1890,11 @@ mod tests {
         let mut app = App::new();
         let pgup = crossterm::event::KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE);
         app.handle_key(pgup);
-        assert_eq!(app.state.scroll_offset, 10);
+        // First press: base=3 (no accel), page multiplier 3x = 9
+        assert_eq!(app.state.scroll_offset, 9);
         assert!(app.state.user_scrolled);
 
-        // Page down reduces offset but user is still scrolled
+        // Page down reduces offset; direction change resets accel, so base=3, 3x=9
         let pgdn = crossterm::event::KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE);
         app.handle_key(pgdn);
         assert_eq!(app.state.scroll_offset, 0);
@@ -1821,5 +1904,86 @@ mod tests {
         // One more page down at 0 clears user_scrolled
         app.handle_key(pgdn);
         assert!(!app.state.user_scrolled);
+    }
+
+    #[test]
+    fn test_scroll_acceleration() {
+        let mut app = App::new();
+        // Set agent_active so Up/Down arrow scrolls (bypasses command history)
+        app.state.agent_active = true;
+        // First up-arrow: base amount = 3
+        let up = crossterm::event::KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        app.handle_key(up);
+        assert_eq!(app.state.scroll_offset, 3);
+        assert_eq!(app.state.scroll_accel_level, 0);
+
+        // Immediate second press (within 200ms): accelerates to 6
+        app.handle_key(up);
+        assert_eq!(app.state.scroll_offset, 9); // 3 + 6
+        assert_eq!(app.state.scroll_accel_level, 1);
+
+        // Third press: accelerates to 12
+        app.handle_key(up);
+        assert_eq!(app.state.scroll_offset, 21); // 9 + 12
+        assert_eq!(app.state.scroll_accel_level, 2);
+
+        // Fourth press: stays at 12 (capped)
+        app.handle_key(up);
+        assert_eq!(app.state.scroll_offset, 33); // 21 + 12
+        assert_eq!(app.state.scroll_accel_level, 2);
+    }
+
+    #[test]
+    fn test_scroll_acceleration_resets_on_direction_change() {
+        let mut app = App::new();
+        // Set agent_active so Up/Down arrow scrolls (bypasses command history)
+        app.state.agent_active = true;
+        let up = crossterm::event::KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        let down = crossterm::event::KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+
+        // Build up acceleration
+        app.handle_key(up);
+        app.handle_key(up);
+        assert_eq!(app.state.scroll_accel_level, 1);
+        assert_eq!(app.state.scroll_offset, 9); // 3 + 6
+
+        // Direction change resets acceleration
+        app.handle_key(down);
+        assert_eq!(app.state.scroll_accel_level, 0);
+        assert_eq!(app.state.scroll_offset, 6); // 9 - 3
+    }
+
+    #[test]
+    fn test_dirty_flag_default() {
+        let state = AppState::default();
+        assert!(
+            state.dirty,
+            "AppState should start dirty for initial render"
+        );
+    }
+
+    #[test]
+    fn test_viewport_culling_cached_lines() {
+        let mut app = App::new();
+        // Add many messages
+        for i in 0..100 {
+            app.state.messages.push(DisplayMessage {
+                role: DisplayRole::User,
+                content: format!("Message {i}"),
+                tool_call: None,
+            });
+        }
+        app.state.message_generation = 1;
+        app.state.terminal_height = 24;
+        app.state.scroll_offset = 0;
+
+        // Build cached lines
+        app.rebuild_cached_lines();
+
+        // Should have lines for all messages (some may be placeholders)
+        assert!(
+            !app.state.cached_lines.is_empty(),
+            "cached_lines should not be empty"
+        );
     }
 }
