@@ -3,10 +3,11 @@
 //! Bridges crossterm terminal events with application-level events
 //! (agent messages, tool execution updates, etc.).
 
-use crossterm::event::{Event as CrosstermEvent, KeyEvent};
+use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use opendev_runtime::InterruptToken;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 use opendev_models::message::ChatMessage;
@@ -21,6 +22,10 @@ pub enum AppEvent {
     Key(KeyEvent),
     /// Terminal resize.
     Resize(u16, u16),
+    /// Mouse-wheel scroll up (detected via arrow-key debounce from xterm alternate scroll).
+    ScrollUp,
+    /// Mouse-wheel scroll down (detected via arrow-key debounce from xterm alternate scroll).
+    ScrollDown,
     /// Tick for periodic UI updates (spinner animation, etc.).
     Tick,
 
@@ -55,11 +60,26 @@ pub enum AppEvent {
     },
     /// A tool execution completed.
     ToolFinished { tool_id: String, success: bool },
-    /// Tool requires user approval.
+    /// Tool requires user approval (legacy, no channel — kept for recording compatibility).
     ToolApprovalRequired {
         tool_id: String,
         tool_name: String,
         description: String,
+    },
+
+    /// Tool approval request with bidirectional channel.
+    ToolApprovalRequested {
+        command: String,
+        working_dir: String,
+        response_tx: tokio::sync::oneshot::Sender<opendev_runtime::ToolApprovalDecision>,
+    },
+
+    /// Ask-user request with bidirectional channel.
+    AskUserRequested {
+        question: String,
+        options: Vec<String>,
+        default: Option<String>,
+        response_tx: tokio::sync::oneshot::Sender<String>,
     },
 
     // -- Subagent events --
@@ -122,8 +142,14 @@ pub enum AppEvent {
     UserSubmit(String),
     /// User requested interrupt (Escape).
     Interrupt,
+    /// Set the interrupt token for the current query (sent by agent backend).
+    SetInterruptToken(InterruptToken),
+    /// Agent run was interrupted (sent by agent backend after cancellation).
+    AgentInterrupted,
     /// Mode changed (normal/plan).
     ModeChanged(String),
+    /// Kill a background task by ID.
+    KillTask(String),
     /// Quit the application.
     Quit,
 }
@@ -154,6 +180,12 @@ impl EventHandler {
     ///
     /// Uses crossterm's async `EventStream` for zero-latency event delivery
     /// instead of `spawn_blocking` + poll which adds up to 160ms delay.
+    ///
+    /// Includes a debounce state machine that distinguishes touchpad/mouse scroll
+    /// (rapid-fire Up/Down arrows via xterm alternate scroll mode) from keyboard
+    /// arrow presses. Touchpad scroll generates arrows every 8-16ms in bursts;
+    /// keyboard presses are single events with ~300ms before repeat starts.
+    /// A 25ms debounce window cleanly separates these two input sources.
     pub fn start(&self) {
         use futures::StreamExt;
         let tx = self.tx.clone();
@@ -163,24 +195,138 @@ impl EventHandler {
             let mut reader = crossterm::event::EventStream::new();
             let mut tick_interval = tokio::time::interval(tick_rate);
 
+            // Debounce state for distinguishing mouse scroll from keyboard arrows
+            let debounce_window = Duration::from_millis(25);
+            let scroll_burst_timeout = Duration::from_millis(100);
+            let mut pending_arrow: Option<(KeyEvent, Instant)> = None;
+            let mut scroll_burst = false;
+            let mut last_arrow_time: Option<Instant> = None;
+
             loop {
-                let event = tokio::select! {
+                // Compute debounce deadline if we have a pending arrow
+                let debounce_deadline = pending_arrow
+                    .as_ref()
+                    .map(|(_, t)| tokio::time::Instant::from_std(*t + debounce_window));
+
+                tokio::select! {
                     biased;
-                    maybe_event = reader.next() => {
-                        match maybe_event {
-                            Some(Ok(CrosstermEvent::Key(key))) => AppEvent::Key(key),
-                            Some(Ok(CrosstermEvent::Mouse(_))) => continue,
-                            Some(Ok(CrosstermEvent::Resize(w, h))) => AppEvent::Resize(w, h),
-                            Some(Ok(other)) => AppEvent::Terminal(other),
-                            Some(Err(_)) => continue,
-                            None => break, // stream ended
+
+                    // Debounce timer fires — pending arrow was a keyboard press
+                    _ = async {
+                        match debounce_deadline {
+                            Some(deadline) => tokio::time::sleep_until(deadline).await,
+                            None => std::future::pending().await,
+                        }
+                    } => {
+                        if let Some((key, _)) = pending_arrow.take() {
+                            scroll_burst = false;
+                            if tx.send(AppEvent::Key(key)).is_err() {
+                                break;
+                            }
                         }
                     }
-                    _ = tick_interval.tick() => AppEvent::Tick,
-                };
 
-                if tx.send(event).is_err() {
-                    break;
+                    maybe_event = reader.next() => {
+                        match maybe_event {
+                            Some(Ok(CrosstermEvent::Key(key))) => {
+                                let is_unmodified_arrow = matches!(
+                                    key.code,
+                                    KeyCode::Up | KeyCode::Down
+                                ) && key.modifiers == KeyModifiers::NONE
+                                  && key.kind == KeyEventKind::Press;
+
+                                if is_unmodified_arrow {
+                                    let now = Instant::now();
+
+                                    // Check if we're in a scroll burst
+                                    let in_burst = scroll_burst
+                                        && last_arrow_time.is_some_and(|t| {
+                                            now.duration_since(t) < scroll_burst_timeout
+                                        });
+
+                                    if let Some((prev_key, _)) = pending_arrow.take() {
+                                        // Second arrow arrived within debounce window → mouse scroll
+                                        scroll_burst = true;
+                                        last_arrow_time = Some(now);
+                                        let ev1 = if prev_key.code == KeyCode::Up {
+                                            AppEvent::ScrollUp
+                                        } else {
+                                            AppEvent::ScrollDown
+                                        };
+                                        let ev2 = if key.code == KeyCode::Up {
+                                            AppEvent::ScrollUp
+                                        } else {
+                                            AppEvent::ScrollDown
+                                        };
+                                        if tx.send(ev1).is_err() || tx.send(ev2).is_err() {
+                                            break;
+                                        }
+                                    } else if in_burst {
+                                        // Continuing a scroll burst
+                                        last_arrow_time = Some(now);
+                                        let ev = if key.code == KeyCode::Up {
+                                            AppEvent::ScrollUp
+                                        } else {
+                                            AppEvent::ScrollDown
+                                        };
+                                        if tx.send(ev).is_err() {
+                                            break;
+                                        }
+                                    } else {
+                                        // First arrow — buffer it, wait for debounce
+                                        pending_arrow = Some((key, now));
+                                    }
+                                } else {
+                                    // Non-arrow key or arrow with modifiers/repeat:
+                                    // flush any pending arrow as keyboard first
+                                    if let Some((prev_key, _)) = pending_arrow.take() {
+                                        scroll_burst = false;
+                                        if tx.send(AppEvent::Key(prev_key)).is_err() {
+                                            break;
+                                        }
+                                    }
+                                    // Key repeat on arrows bypasses debounce (keyboard hold)
+                                    if tx.send(AppEvent::Key(key)).is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                            Some(Ok(CrosstermEvent::Mouse(_))) => continue,
+                            Some(Ok(CrosstermEvent::Resize(w, h))) => {
+                                // Flush pending arrow before resize
+                                if let Some((prev_key, _)) = pending_arrow.take() {
+                                    scroll_burst = false;
+                                    if tx.send(AppEvent::Key(prev_key)).is_err() {
+                                        break;
+                                    }
+                                }
+                                if tx.send(AppEvent::Resize(w, h)).is_err() {
+                                    break;
+                                }
+                            }
+                            Some(Ok(other)) => {
+                                // Flush pending arrow before other events
+                                if let Some((prev_key, _)) = pending_arrow.take() {
+                                    scroll_burst = false;
+                                    if tx.send(AppEvent::Key(prev_key)).is_err() {
+                                        break;
+                                    }
+                                }
+                                if tx.send(AppEvent::Terminal(other)).is_err() {
+                                    break;
+                                }
+                            }
+                            Some(Err(_)) => continue,
+                            None => break,
+                        }
+                    }
+
+                    _ = tick_interval.tick() => {
+                        // Don't flush pending arrow on tick — let debounce timer handle it
+                        if tx.send(AppEvent::Tick).is_err() {
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -227,6 +373,8 @@ impl RecordedEvent {
             AppEvent::Terminal(e) => ("Terminal".to_string(), serde_json::json!(format!("{e:?}"))),
             AppEvent::Key(k) => ("Key".to_string(), serde_json::json!(format!("{k:?}"))),
             AppEvent::Resize(w, h) => ("Resize".to_string(), serde_json::json!({"w": w, "h": h})),
+            AppEvent::ScrollUp => ("ScrollUp".to_string(), serde_json::Value::Null),
+            AppEvent::ScrollDown => ("ScrollDown".to_string(), serde_json::Value::Null),
             AppEvent::Tick => ("Tick".to_string(), serde_json::Value::Null),
             AppEvent::AgentStarted => ("AgentStarted".to_string(), serde_json::Value::Null),
             AppEvent::AgentChunk(s) => ("AgentChunk".to_string(), serde_json::json!({"chunk": s})),
@@ -356,6 +504,14 @@ impl RecordedEvent {
             AppEvent::ContextUsage(pct) => {
                 ("ContextUsage".to_string(), serde_json::json!({"pct": pct}))
             }
+            AppEvent::ToolApprovalRequested { command, working_dir, .. } => (
+                "ToolApprovalRequested".to_string(),
+                serde_json::json!({"command": command, "working_dir": working_dir}),
+            ),
+            AppEvent::AskUserRequested { question, options, default, .. } => (
+                "AskUserRequested".to_string(),
+                serde_json::json!({"question": question, "options": options, "default": default}),
+            ),
             AppEvent::PlanApprovalRequested { plan_content, .. } => (
                 "PlanApprovalRequested".to_string(),
                 serde_json::json!({"plan_content": plan_content}),
@@ -364,7 +520,12 @@ impl RecordedEvent {
                 ("UserSubmit".to_string(), serde_json::json!({"message": s}))
             }
             AppEvent::Interrupt => ("Interrupt".to_string(), serde_json::Value::Null),
+            AppEvent::SetInterruptToken(_) => {
+                ("SetInterruptToken".to_string(), serde_json::Value::Null)
+            }
+            AppEvent::AgentInterrupted => ("AgentInterrupted".to_string(), serde_json::Value::Null),
             AppEvent::ModeChanged(m) => ("ModeChanged".to_string(), serde_json::json!({"mode": m})),
+            AppEvent::KillTask(id) => ("KillTask".to_string(), serde_json::json!({"task_id": id})),
             AppEvent::Quit => ("Quit".to_string(), serde_json::Value::Null),
         };
 
@@ -520,18 +681,29 @@ impl RecordedEvent {
                 let pct = self.payload.get("pct")?.as_f64()?;
                 Some(AppEvent::ContextUsage(pct))
             }
-            // PlanApprovalRequested cannot be reconstructed (contains oneshot sender)
+            // These cannot be reconstructed (contain oneshot senders)
             "PlanApprovalRequested" => None,
+            "ToolApprovalRequested" => None,
+            "AskUserRequested" => None,
             "UserSubmit" => {
                 let message = self.payload.get("message")?.as_str()?.to_string();
                 Some(AppEvent::UserSubmit(message))
             }
             "Interrupt" => Some(AppEvent::Interrupt),
+            // SetInterruptToken and AgentInterrupted cannot be reconstructed
+            "SetInterruptToken" => None,
+            "AgentInterrupted" => Some(AppEvent::AgentInterrupted),
             "ModeChanged" => {
                 let mode = self.payload.get("mode")?.as_str()?.to_string();
                 Some(AppEvent::ModeChanged(mode))
             }
+            "KillTask" => {
+                let task_id = self.payload.get("task_id")?.as_str()?.to_string();
+                Some(AppEvent::KillTask(task_id))
+            }
             "Quit" => Some(AppEvent::Quit),
+            "ScrollUp" => Some(AppEvent::ScrollUp),
+            "ScrollDown" => Some(AppEvent::ScrollDown),
             // Terminal/Key/Resize cannot be reconstructed
             _ => None,
         }

@@ -10,8 +10,12 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::controllers::{ApprovalController, MessageController, PlanApprovalController};
+use crate::controllers::{
+    ApprovalController, AskUserController, McpCommandController, MessageController,
+    PlanApprovalController,
+};
 use crate::event::{AppEvent, EventHandler};
+use crate::managers::BackgroundTaskManager;
 use crate::history::CommandHistory;
 use crate::widgets::{
     ConversationWidget, InputWidget, NestedToolWidget, StatusBarWidget, TodoDisplayItem,
@@ -44,6 +48,17 @@ impl std::fmt::Display for OperationMode {
     }
 }
 
+impl OperationMode {
+    /// Parse from string (case-insensitive).
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "normal" => Some(Self::Normal),
+            "plan" => Some(Self::Plan),
+            _ => None,
+        }
+    }
+}
+
 /// Autonomy level — mirrors Python `StatusBar.autonomy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutonomyLevel {
@@ -58,6 +73,18 @@ impl std::fmt::Display for AutonomyLevel {
             Self::Manual => write!(f, "Manual"),
             Self::SemiAuto => write!(f, "Semi-Auto"),
             Self::Auto => write!(f, "Auto"),
+        }
+    }
+}
+
+impl AutonomyLevel {
+    /// Parse from string (case-insensitive).
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "manual" => Some(Self::Manual),
+            "semi-auto" | "semiauto" | "semi" => Some(Self::SemiAuto),
+            "auto" | "full" => Some(Self::Auto),
+            _ => None,
         }
     }
 }
@@ -429,8 +456,14 @@ pub struct App {
     event_tx: mpsc::UnboundedSender<AppEvent>,
     /// Message controller for handling user submissions.
     message_controller: MessageController,
+    /// Ask-user controller for interactive question prompts.
+    ask_user_controller: AskUserController,
+    /// Oneshot sender to forward the ask-user answer back to the tool.
+    ask_user_response_tx: Option<tokio::sync::oneshot::Sender<String>>,
     /// Approval controller for inline command approval prompts.
     approval_controller: ApprovalController,
+    /// Oneshot sender to forward the approval decision back to the react loop.
+    approval_response_tx: Option<tokio::sync::oneshot::Sender<opendev_runtime::ToolApprovalDecision>>,
     /// Plan approval controller for plan review prompts.
     plan_approval_controller: PlanApprovalController,
     /// Oneshot sender to forward the plan decision back to the tool.
@@ -439,6 +472,10 @@ pub struct App {
     interrupt_token: Option<opendev_runtime::InterruptToken>,
     /// Optional channel for forwarding user messages to the agent backend.
     user_message_tx: Option<mpsc::UnboundedSender<String>>,
+    /// MCP command controller for managing MCP servers.
+    mcp_controller: McpCommandController,
+    /// Background task manager (shared with async kill tasks).
+    task_manager: Arc<tokio::sync::Mutex<BackgroundTaskManager>>,
 }
 
 impl Default for App {
@@ -457,11 +494,16 @@ impl App {
             event_handler,
             event_tx,
             message_controller: MessageController::new(),
+            ask_user_controller: AskUserController::new(),
+            ask_user_response_tx: None,
             approval_controller: ApprovalController::new(),
+            approval_response_tx: None,
             plan_approval_controller: PlanApprovalController::new(),
             plan_approval_response_tx: None,
             interrupt_token: None,
             user_message_tx: None,
+            mcp_controller: McpCommandController::new(vec![]),
+            task_manager: Arc::new(tokio::sync::Mutex::new(BackgroundTaskManager::default())),
         }
     }
 
@@ -723,6 +765,7 @@ impl App {
                     next_role,
                     &mut self.state.cached_lines,
                     &mut self.state.markdown_cache,
+                    self.state.terminal_width,
                 );
             }
 
@@ -740,6 +783,7 @@ impl App {
         next_role: Option<&DisplayRole>,
         lines: &mut Vec<ratatui::text::Line<'static>>,
         markdown_cache: &mut HashMap<u64, Vec<ratatui::text::Line<'static>>>,
+        terminal_width: u16,
     ) {
         use crate::formatters::display::strip_system_reminders;
         use crate::formatters::markdown::MarkdownRenderer;
@@ -887,23 +931,33 @@ impl App {
                 ),
             ]));
 
-            if !tc.collapsed && !tc.result_lines.is_empty() {
-                use crate::widgets::conversation::{is_diff_tool, render_diff_line};
+            // Diff tools are never collapsed
+            use crate::widgets::conversation::{is_diff_tool, parse_unified_diff, render_diff_entries};
+            let effective_collapsed = tc.collapsed && !is_diff_tool(&tc.name);
+            if !effective_collapsed && !tc.result_lines.is_empty() {
                 let use_diff = is_diff_tool(&tc.name);
-                for (i, result_line) in tc.result_lines.iter().enumerate() {
-                    let prefix_char: Cow<'static, str> = if i == 0 {
-                        format!("  {}  ", CONTINUATION_CHAR).into()
-                    } else {
-                        Cow::Borrowed(Indent::RESULT_CONT)
-                    };
-                    if use_diff {
-                        let line = render_diff_line(result_line, i, prefix_char);
-                        if !(line.spans.is_empty()
-                            || line.spans.len() == 1 && line.spans[0].content.is_empty())
-                        {
-                            lines.push(line);
-                        }
-                    } else {
+                if use_diff {
+                    let (summary, entries) = parse_unified_diff(&tc.result_lines);
+                    if !summary.is_empty() {
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("  {}  ", CONTINUATION_CHAR),
+                                Style::default().fg(style_tokens::GREY),
+                            ),
+                            Span::styled(
+                                summary,
+                                Style::default().fg(style_tokens::SUBTLE),
+                            ),
+                        ]));
+                    }
+                    render_diff_entries(&entries, lines, terminal_width);
+                } else {
+                    for (i, result_line) in tc.result_lines.iter().enumerate() {
+                        let prefix_char: Cow<'static, str> = if i == 0 {
+                            format!("  {}  ", CONTINUATION_CHAR).into()
+                        } else {
+                            Cow::Borrowed(Indent::RESULT_CONT)
+                        };
                         lines.push(Line::from(vec![
                             Span::styled(
                                 prefix_char,
@@ -916,7 +970,7 @@ impl App {
                         ]));
                     }
                 }
-            } else if tc.collapsed && !tc.result_lines.is_empty() {
+            } else if effective_collapsed && !tc.result_lines.is_empty() {
                 let count = tc.result_lines.len();
                 lines.push(Line::from(Span::styled(
                     format!(
@@ -1070,6 +1124,16 @@ impl App {
         // Plan approval panel (rendered over input area when active)
         if self.plan_approval_controller.active() {
             self.render_plan_approval(frame, chunks[3]);
+        }
+
+        // Ask-user panel (rendered over input area when active)
+        if self.ask_user_controller.active() {
+            self.render_ask_user(frame, chunks[3]);
+        }
+
+        // Tool approval panel (rendered over input area when active)
+        if self.approval_controller.active() {
+            self.render_approval(frame, chunks[3]);
         }
 
         // Status bar
@@ -1232,6 +1296,142 @@ impl App {
         frame.render_widget(paragraph, popup_area);
     }
 
+    /// Render the ask-user prompt panel (mirrors `render_plan_approval`).
+    fn render_ask_user(&self, frame: &mut ratatui::Frame, input_area: layout::Rect) {
+        use crate::formatters::style_tokens;
+        use ratatui::style::{Modifier, Style};
+        use ratatui::text::{Line, Span};
+        use ratatui::widgets::{Block, Borders, Paragraph};
+
+        let options = self.ask_user_controller.options();
+        let selected = self.ask_user_controller.selected_index();
+        let question = self.ask_user_controller.question();
+
+        let mut lines = vec![
+            Line::from(Span::styled(
+                format!("  {question}"),
+                Style::default().fg(style_tokens::PRIMARY),
+            )),
+            Line::from(Span::styled(
+                " \u{2191}/\u{2193} choose \u{00b7} Enter confirm \u{00b7} Esc cancel",
+                Style::default().fg(style_tokens::SUBTLE),
+            )),
+        ];
+
+        for (i, opt) in options.iter().enumerate() {
+            let is_selected = i == selected;
+            let pointer = if is_selected { "\u{25b8}" } else { " " };
+            let label_style = if is_selected {
+                Style::default()
+                    .fg(style_tokens::CYAN)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(style_tokens::PRIMARY)
+            };
+
+            lines.push(Line::from(Span::styled(
+                format!("  {pointer} {}. {opt}", i + 1),
+                label_style,
+            )));
+        }
+
+        let panel_height = (lines.len() as u16 + 2).min(input_area.y);
+        let popup_area = layout::Rect {
+            x: input_area.x,
+            y: input_area.y.saturating_sub(panel_height),
+            width: input_area.width,
+            height: panel_height,
+        };
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(style_tokens::CYAN))
+            .title(Span::styled(
+                " Question ",
+                Style::default()
+                    .fg(style_tokens::CYAN)
+                    .add_modifier(Modifier::BOLD),
+            ));
+
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(ratatui::widgets::Clear, popup_area);
+        frame.render_widget(paragraph, popup_area);
+    }
+
+    /// Render the tool approval prompt panel (mirrors `render_plan_approval`).
+    fn render_approval(&self, frame: &mut ratatui::Frame, input_area: layout::Rect) {
+        use crate::formatters::style_tokens;
+        use ratatui::style::{Modifier, Style};
+        use ratatui::text::{Line, Span};
+        use ratatui::widgets::{Block, Borders, Paragraph};
+
+        let options = self.approval_controller.options();
+        let selected = self.approval_controller.selected_index();
+        let command = self.approval_controller.command();
+        let working_dir = self.approval_controller.working_dir();
+
+        let mut lines = vec![
+            Line::from(Span::styled(
+                format!("  {command}"),
+                Style::default().fg(style_tokens::CYAN),
+            )),
+            Line::from(Span::styled(
+                format!("  in {working_dir}"),
+                Style::default().fg(style_tokens::SUBTLE),
+            )),
+            Line::from(Span::styled(
+                " \u{2191}/\u{2193} choose \u{00b7} Enter confirm \u{00b7} Esc cancel",
+                Style::default().fg(style_tokens::SUBTLE),
+            )),
+        ];
+
+        for (i, opt) in options.iter().enumerate() {
+            let is_selected = i == selected;
+            let pointer = if is_selected { "\u{25b8}" } else { " " };
+            let label_style = if is_selected {
+                Style::default()
+                    .fg(style_tokens::CYAN)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(style_tokens::PRIMARY)
+            };
+            let desc_style = if is_selected {
+                Style::default()
+                    .fg(style_tokens::CODE_BG)
+                    .bg(style_tokens::CYAN)
+            } else {
+                Style::default().fg(style_tokens::SUBTLE)
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {pointer} {}. {}", opt.choice, opt.label), label_style),
+                Span::styled(format!("  {}", opt.description), desc_style),
+            ]));
+        }
+
+        let panel_height = (lines.len() as u16 + 2).min(input_area.y);
+        let popup_area = layout::Rect {
+            x: input_area.x,
+            y: input_area.y.saturating_sub(panel_height),
+            width: input_area.width,
+            height: panel_height,
+        };
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(style_tokens::CYAN))
+            .title(Span::styled(
+                " Approve Command ",
+                Style::default()
+                    .fg(style_tokens::CYAN)
+                    .add_modifier(Modifier::BOLD),
+            ));
+
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(ratatui::widgets::Clear, popup_area);
+        frame.render_widget(paragraph, popup_area);
+    }
+
     /// Drain the next pending message from the queue.
     /// Displays the user message and sends it to the agent backend.
     fn drain_next_pending_message(&mut self) {
@@ -1257,6 +1457,21 @@ impl App {
             }
             AppEvent::Resize(_, _) => {
                 // ratatui handles resize automatically, but we need to re-render
+                self.state.dirty = true;
+            }
+            AppEvent::ScrollUp => {
+                let amount = self.accelerated_scroll(true);
+                self.state.scroll_offset = self.state.scroll_offset.saturating_add(amount);
+                self.state.user_scrolled = true;
+                self.state.dirty = true;
+            }
+            AppEvent::ScrollDown => {
+                if self.state.scroll_offset > 0 {
+                    let amount = self.accelerated_scroll(false);
+                    self.state.scroll_offset = self.state.scroll_offset.saturating_sub(amount);
+                } else {
+                    self.state.user_scrolled = false;
+                }
                 self.state.dirty = true;
             }
             AppEvent::Tick => {
@@ -1441,6 +1656,7 @@ impl App {
                     );
                     (vec![summary], false)
                 } else {
+                    use crate::widgets::conversation::is_diff_tool;
                     let result_lines: Vec<String> =
                         output.lines().take(50).map(|l| l.to_string()).collect();
                     let lines = if result_lines.is_empty() && !output.is_empty() {
@@ -1448,7 +1664,7 @@ impl App {
                     } else {
                         result_lines
                     };
-                    let collapse = lines.len() > 5;
+                    let collapse = lines.len() > 5 && !is_diff_tool(&tool_name);
                     (lines, collapse)
                 };
 
@@ -1525,12 +1741,28 @@ impl App {
                 tool_name: _,
                 description,
             } => {
-                // Activate the approval controller for this command.
-                // The working directory comes from the app state.
+                // Legacy event without channel — activate controller without response_tx
                 let wd = self.state.working_dir.clone();
                 let _rx = self.approval_controller.start(description, wd);
-                // The receiver will be consumed by the agent runner
-                // via the event loop (Up/Down/Enter/Esc handled in handle_key).
+                self.state.dirty = true;
+            }
+            AppEvent::ToolApprovalRequested {
+                command,
+                working_dir,
+                response_tx,
+            } => {
+                let _rx = self.approval_controller.start(command, working_dir);
+                self.approval_response_tx = Some(response_tx);
+                self.state.dirty = true;
+            }
+            AppEvent::AskUserRequested {
+                question,
+                options,
+                default,
+                response_tx,
+            } => {
+                let _rx = self.ask_user_controller.start(question, options, default);
+                self.ask_user_response_tx = Some(response_tx);
                 self.state.dirty = true;
             }
 
@@ -1643,12 +1875,18 @@ impl App {
                 self.state.dirty = true;
             }
             AppEvent::Interrupt => {
-                // Cancel plan approval if active
+                // Cancel all active prompt controllers
+                if self.ask_user_controller.active() {
+                    self.ask_user_controller.cancel();
+                    self.ask_user_response_tx.take();
+                }
                 if self.plan_approval_controller.active() {
                     self.plan_approval_controller.cancel();
-                    // cancel() sends "modify" via the controller's internal oneshot.
-                    // Clean up our stored sender (already consumed by cancel).
                     self.plan_approval_response_tx.take();
+                }
+                if self.approval_controller.active() {
+                    self.approval_controller.cancel();
+                    self.approval_response_tx.take();
                 }
                 if self.state.agent_active {
                     if let Some(ref token) = self.interrupt_token {
@@ -1682,6 +1920,26 @@ impl App {
                     "plan" => OperationMode::Plan,
                     _ => OperationMode::Normal,
                 };
+                self.state.dirty = true;
+            }
+            AppEvent::KillTask(id) => {
+                let tm = self.task_manager.clone();
+                let tx = self.event_tx.clone();
+                let id_display = id.clone();
+                tokio::spawn(async move {
+                    let mut mgr = tm.lock().await;
+                    let msg = if mgr.get_task(&id).is_some() {
+                        if mgr.kill_task(&id).await {
+                            format!("Killed task '{id}'.")
+                        } else {
+                            format!("Failed to kill task '{id}'.")
+                        }
+                    } else {
+                        format!("Task '{id}' not found.")
+                    };
+                    let _ = tx.send(AppEvent::AgentError(msg));
+                });
+                self.push_system_message(format!("Killing task '{id_display}'..."));
                 self.state.dirty = true;
             }
             AppEvent::Quit => {
@@ -1724,6 +1982,28 @@ impl App {
             return;
         }
 
+        // Delegate to ask-user controller when active
+        if self.ask_user_controller.active() {
+            match key.code {
+                KeyCode::Up => self.ask_user_controller.prev(),
+                KeyCode::Down => self.ask_user_controller.next(),
+                KeyCode::Enter => {
+                    if let Some(_answer) = self.ask_user_controller.confirm() {
+                        // confirm() already sent via the controller's internal oneshot.
+                        // Clean up our stored sender (already consumed by confirm).
+                        self.ask_user_response_tx.take();
+                    }
+                }
+                KeyCode::Esc => {
+                    self.ask_user_controller.cancel();
+                    self.ask_user_response_tx.take();
+                }
+                _ => {}
+            }
+            self.state.dirty = true;
+            return;
+        }
+
         // Delegate to plan approval controller when active
         if self.plan_approval_controller.active() {
             match key.code {
@@ -1763,10 +2043,18 @@ impl App {
             match key.code {
                 KeyCode::Up => self.approval_controller.move_selection(-1),
                 KeyCode::Down => self.approval_controller.move_selection(1),
-                KeyCode::Enter => self.approval_controller.confirm(),
-                KeyCode::Esc => self.approval_controller.cancel(),
+                KeyCode::Enter => {
+                    self.approval_controller.confirm();
+                    // confirm() already sent via the controller's internal oneshot.
+                    self.approval_response_tx.take();
+                }
+                KeyCode::Esc => {
+                    self.approval_controller.cancel();
+                    self.approval_response_tx.take();
+                }
                 _ => {}
             }
+            self.state.dirty = true;
             return;
         }
 
@@ -2008,11 +2296,13 @@ impl App {
             }
             // Ctrl+O — toggle collapsed state on the most recent collapsible tool result
             (KeyModifiers::CONTROL, KeyCode::Char('o')) => {
-                // Priority 1: Most recent collapsible tool result
+                use crate::widgets::conversation::is_diff_tool;
+                // Priority 1: Most recent collapsible tool result (excluding edit/write)
                 let mut toggled = false;
                 for msg in self.state.messages.iter_mut().rev() {
                     if let Some(ref mut tc) = msg.tool_call
                         && !tc.result_lines.is_empty()
+                        && !is_diff_tool(&tc.name)
                     {
                         tc.collapsed = !tc.collapsed;
                         self.state.message_generation += 1;
@@ -2109,10 +2399,22 @@ impl App {
         self.state.autocomplete.update(&text_before_cursor);
     }
 
+    /// Push a system message to the conversation display.
+    fn push_system_message(&mut self, content: String) {
+        self.state.messages.push(DisplayMessage {
+            role: DisplayRole::System,
+            content,
+            tool_call: None,
+            collapsed: false,
+        });
+        self.state.message_generation += 1;
+    }
+
     /// Execute a slash command locally.
     fn execute_slash_command(&mut self, cmd: &str) {
         let parts: Vec<&str> = cmd[1..].splitn(2, ' ').collect();
         let name = parts[0];
+        let args = parts.get(1).map(|s| s.trim());
 
         match name {
             "exit" | "quit" | "q" => {
@@ -2125,90 +2427,228 @@ impl App {
                 self.state.message_generation += 1;
             }
             "mode" => {
-                self.state.mode = match self.state.mode {
-                    OperationMode::Normal => OperationMode::Plan,
-                    OperationMode::Plan => OperationMode::Normal,
-                };
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::System,
-                    content: format!("Mode: {}", self.state.mode),
-                    tool_call: None,
-                    collapsed: false,
-                });
-                self.state.message_generation += 1;
+                match args {
+                    Some(arg) => {
+                        if let Some(mode) = OperationMode::from_str_loose(arg) {
+                            self.state.mode = mode;
+                        } else {
+                            self.push_system_message(format!(
+                                "Unknown mode: '{arg}'. Use: normal, plan"
+                            ));
+                            return;
+                        }
+                    }
+                    None => {
+                        self.state.mode = match self.state.mode {
+                            OperationMode::Normal => OperationMode::Plan,
+                            OperationMode::Plan => OperationMode::Normal,
+                        };
+                    }
+                }
+                self.push_system_message(format!("Mode: {}", self.state.mode));
             }
             "thinking" => {
-                self.state.thinking_level = match self.state.thinking_level {
-                    ThinkingLevel::Off => ThinkingLevel::Low,
-                    ThinkingLevel::Low => ThinkingLevel::Medium,
-                    ThinkingLevel::Medium => ThinkingLevel::High,
-                    ThinkingLevel::High => ThinkingLevel::Off,
-                };
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::System,
-                    content: format!("Thinking: {}", self.state.thinking_level),
-                    tool_call: None,
-                    collapsed: false,
-                });
-                self.state.message_generation += 1;
+                match args {
+                    Some(arg) => {
+                        if let Some(level) = ThinkingLevel::from_str_loose(arg) {
+                            self.state.thinking_level = level;
+                        } else {
+                            self.push_system_message(format!(
+                                "Unknown thinking level: '{arg}'. Use: off, low, medium, high"
+                            ));
+                            return;
+                        }
+                    }
+                    None => {
+                        self.state.thinking_level = match self.state.thinking_level {
+                            ThinkingLevel::Off => ThinkingLevel::Low,
+                            ThinkingLevel::Low => ThinkingLevel::Medium,
+                            ThinkingLevel::Medium => ThinkingLevel::High,
+                            ThinkingLevel::High => ThinkingLevel::Off,
+                        };
+                    }
+                }
+                self.push_system_message(format!("Thinking: {}", self.state.thinking_level));
             }
             "autonomy" => {
-                self.state.autonomy = match self.state.autonomy {
-                    AutonomyLevel::Manual => AutonomyLevel::SemiAuto,
-                    AutonomyLevel::SemiAuto => AutonomyLevel::Auto,
-                    AutonomyLevel::Auto => AutonomyLevel::Manual,
-                };
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::System,
-                    content: format!("Autonomy: {}", self.state.autonomy),
-                    tool_call: None,
-                    collapsed: false,
-                });
-                self.state.message_generation += 1;
+                match args {
+                    Some(arg) => {
+                        if let Some(level) = AutonomyLevel::from_str_loose(arg) {
+                            self.state.autonomy = level;
+                        } else {
+                            self.push_system_message(format!(
+                                "Unknown autonomy level: '{arg}'. Use: manual, semi-auto, auto"
+                            ));
+                            return;
+                        }
+                    }
+                    None => {
+                        self.state.autonomy = match self.state.autonomy {
+                            AutonomyLevel::Manual => AutonomyLevel::SemiAuto,
+                            AutonomyLevel::SemiAuto => AutonomyLevel::Auto,
+                            AutonomyLevel::Auto => AutonomyLevel::Manual,
+                        };
+                    }
+                }
+                self.push_system_message(format!("Autonomy: {}", self.state.autonomy));
             }
+            "models" | "session-models" => {
+                let scope = if name == "session-models" {
+                    "session"
+                } else {
+                    "global"
+                };
+                match args {
+                    Some("clear") if name == "session-models" => {
+                        self.push_system_message(
+                            "Session model override cleared. Using global model.".to_string(),
+                        );
+                    }
+                    Some(model_name) => {
+                        self.state.model = model_name.to_string();
+                        self.push_system_message(format!(
+                            "Model set to: {} ({scope})",
+                            self.state.model
+                        ));
+                    }
+                    None => {
+                        self.push_system_message(format!(
+                            "Current model: {}\nUsage: /{name} <model-name>",
+                            self.state.model
+                        ));
+                    }
+                }
+            }
+            "mcp" => {
+                let result = self.mcp_controller.handle_command(args.unwrap_or(""));
+                self.push_system_message(result);
+            }
+            "tasks" => {
+                let msg = if let Ok(mgr) = self.task_manager.try_lock() {
+                    let tasks = mgr.all_tasks();
+                    if tasks.is_empty() {
+                        "No background tasks.".to_string()
+                    } else {
+                        let mut lines = vec![format!(
+                            "Background tasks ({} total, {} running):",
+                            tasks.len(),
+                            mgr.running_count()
+                        )];
+                        for task in &tasks {
+                            lines.push(format!(
+                                "  {} [{}] {} ({:.1}s)",
+                                task.task_id,
+                                task.state,
+                                task.description,
+                                task.runtime_seconds()
+                            ));
+                        }
+                        lines.join("\n")
+                    }
+                } else {
+                    "Task manager busy. Try again.".to_string()
+                };
+                self.push_system_message(msg);
+            }
+            "task" => match args {
+                Some(id) => {
+                    let msg = if let Ok(mgr) = self.task_manager.try_lock() {
+                        let output = mgr.read_output(id, 50);
+                        if output.is_empty() {
+                            format!("No output for task '{id}'.")
+                        } else {
+                            format!("Output for task {id}:\n{output}")
+                        }
+                    } else {
+                        "Task manager busy. Try again.".to_string()
+                    };
+                    self.push_system_message(msg);
+                }
+                None => {
+                    self.push_system_message("Usage: /task <id>".to_string());
+                }
+            },
+            "kill" => match args {
+                Some(id) => {
+                    let id = id.to_string();
+                    let _ = self.event_tx.send(AppEvent::KillTask(id));
+                }
+                None => {
+                    self.push_system_message("Usage: /kill <id>".to_string());
+                }
+            },
+            "init" => {
+                let path = args.unwrap_or(".");
+                self.push_system_message(format!(
+                    "Analyzing codebase at '{path}' and generating OPENDEV.md...\n\
+                     Send a message to the agent to perform initialization."
+                ));
+            }
+            "agents" => match args {
+                Some("create") => {
+                    self.push_system_message("Agent creation coming soon.".to_string());
+                }
+                _ => {
+                    self.push_system_message("No custom agents configured.".to_string());
+                }
+            },
+            "skills" => match args {
+                Some("create") => {
+                    self.push_system_message("Skill creation coming soon.".to_string());
+                }
+                _ => {
+                    self.push_system_message("No custom skills configured.".to_string());
+                }
+            },
+            "plugins" => match args {
+                Some("install") => {
+                    self.push_system_message("Plugin installation coming soon.".to_string());
+                }
+                Some("remove") => {
+                    self.push_system_message("Plugin removal coming soon.".to_string());
+                }
+                _ => {
+                    self.push_system_message("No plugins installed.".to_string());
+                }
+            },
             "sound" => {
                 opendev_runtime::play_finish_sound();
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::System,
-                    content: "Playing test sound...".to_string(),
-                    tool_call: None,
-                    collapsed: false,
-                });
-                self.state.message_generation += 1;
+                self.push_system_message("Playing test sound...".to_string());
             }
             "compact" => {
                 if self.state.messages.len() < 5 {
-                    self.state.messages.push(DisplayMessage {
-                        role: DisplayRole::System,
-                        content: "Not enough messages to compact (need at least 5).".to_string(),
-                        tool_call: None,
-                        collapsed: false,
-                    });
+                    self.push_system_message(
+                        "Not enough messages to compact (need at least 5).".to_string(),
+                    );
                 } else {
                     self.state.compact_requested = true;
-                    self.state.messages.push(DisplayMessage {
-                        role: DisplayRole::System,
-                        content: "Context compaction triggered. Will compact on next query."
-                            .to_string(),
-                        tool_call: None,
-                        collapsed: false,
-                    });
+                    self.push_system_message(
+                        "Context compaction triggered. Will compact on next query.".to_string(),
+                    );
                 }
-                self.state.message_generation += 1;
             }
             "help" => {
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::System,
-                    content: [
+                self.push_system_message(
+                    [
                         "Available commands:",
-                        "  /help       — Show this help",
-                        "  /clear      — Clear conversation",
-                        "  /mode       — Toggle Normal/Plan mode",
-                        "  /thinking   — Cycle thinking level",
-                        "  /autonomy   — Cycle autonomy level",
-                        "  /sound      — Play test notification sound",
-                        "  /compact    — Compact conversation context",
-                        "  /exit       — Quit OpenDev",
+                        "  /help              — Show this help",
+                        "  /clear             — Clear conversation",
+                        "  /mode [plan|normal]      — Toggle or set mode",
+                        "  /thinking [off|low|medium|high] — Cycle or set thinking level",
+                        "  /autonomy [manual|semi-auto|auto] — Cycle or set autonomy",
+                        "  /models [name]     — Show or set model (global)",
+                        "  /session-models [name|clear] — Set model for session",
+                        "  /mcp [list|add|remove|enable|disable] — Manage MCP servers",
+                        "  /tasks             — List background tasks",
+                        "  /task <id>         — Show task output",
+                        "  /kill <id>         — Kill a background task",
+                        "  /init [path]       — Generate OPENDEV.md",
+                        "  /agents [list|create] — Manage custom agents",
+                        "  /skills [list|create] — Manage custom skills",
+                        "  /plugins [list|install|remove] — Manage plugins",
+                        "  /sound             — Play test notification sound",
+                        "  /compact           — Compact conversation context",
+                        "  /exit              — Quit OpenDev",
                         "",
                         "Keyboard shortcuts:",
                         "  Ctrl+C      — Clear input / interrupt / quit",
@@ -2217,21 +2657,12 @@ impl App {
                         "  PageUp/Down — Scroll conversation",
                     ]
                     .join("\n"),
-                    tool_call: None,
-                    collapsed: false,
-                });
-                self.state.message_generation += 1;
+                );
             }
             _ => {
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::System,
-                    content: format!(
-                        "Unknown command: /{name}. Type /help for available commands."
-                    ),
-                    tool_call: None,
-                    collapsed: false,
-                });
-                self.state.message_generation += 1;
+                self.push_system_message(format!(
+                    "Unknown command: /{name}. Type /help for available commands."
+                ));
             }
         }
     }
@@ -2689,5 +3120,181 @@ mod tests {
         app.rebuild_cached_lines();
         assert_eq!(app.state.per_message_hashes.len(), 1);
         assert_eq!(app.state.per_message_line_counts.len(), 1);
+    }
+
+    // -- Slash command argument parsing tests --
+
+    #[test]
+    fn test_slash_mode_with_arg() {
+        let mut app = App::new();
+        assert_eq!(app.state.mode, OperationMode::Normal);
+        app.execute_slash_command("/mode plan");
+        assert_eq!(app.state.mode, OperationMode::Plan);
+        app.execute_slash_command("/mode normal");
+        assert_eq!(app.state.mode, OperationMode::Normal);
+    }
+
+    #[test]
+    fn test_slash_mode_bad_arg() {
+        let mut app = App::new();
+        app.execute_slash_command("/mode bogus");
+        // Mode should not change
+        assert_eq!(app.state.mode, OperationMode::Normal);
+        // Should have an error message
+        assert!(app.state.messages.last().unwrap().content.contains("Unknown mode"));
+    }
+
+    #[test]
+    fn test_slash_mode_no_arg_toggles() {
+        let mut app = App::new();
+        app.execute_slash_command("/mode");
+        assert_eq!(app.state.mode, OperationMode::Plan);
+        app.execute_slash_command("/mode");
+        assert_eq!(app.state.mode, OperationMode::Normal);
+    }
+
+    #[test]
+    fn test_slash_thinking_with_arg() {
+        let mut app = App::new();
+        app.execute_slash_command("/thinking high");
+        assert_eq!(app.state.thinking_level, ThinkingLevel::High);
+        app.execute_slash_command("/thinking off");
+        assert_eq!(app.state.thinking_level, ThinkingLevel::Off);
+    }
+
+    #[test]
+    fn test_slash_thinking_bad_arg() {
+        let mut app = App::new();
+        let original = app.state.thinking_level;
+        app.execute_slash_command("/thinking bogus");
+        assert_eq!(app.state.thinking_level, original);
+        assert!(app.state.messages.last().unwrap().content.contains("Unknown thinking"));
+    }
+
+    #[test]
+    fn test_slash_thinking_no_arg_cycles() {
+        let mut app = App::new();
+        // Default is Medium
+        assert_eq!(app.state.thinking_level, ThinkingLevel::Medium);
+        app.execute_slash_command("/thinking");
+        assert_eq!(app.state.thinking_level, ThinkingLevel::High);
+        app.execute_slash_command("/thinking");
+        assert_eq!(app.state.thinking_level, ThinkingLevel::Off);
+    }
+
+    #[test]
+    fn test_slash_autonomy_with_arg() {
+        let mut app = App::new();
+        app.execute_slash_command("/autonomy auto");
+        assert_eq!(app.state.autonomy, AutonomyLevel::Auto);
+        app.execute_slash_command("/autonomy manual");
+        assert_eq!(app.state.autonomy, AutonomyLevel::Manual);
+        app.execute_slash_command("/autonomy semi-auto");
+        assert_eq!(app.state.autonomy, AutonomyLevel::SemiAuto);
+    }
+
+    #[test]
+    fn test_slash_autonomy_bad_arg() {
+        let mut app = App::new();
+        app.execute_slash_command("/autonomy bogus");
+        assert_eq!(app.state.autonomy, AutonomyLevel::Manual);
+        assert!(app.state.messages.last().unwrap().content.contains("Unknown autonomy"));
+    }
+
+    #[test]
+    fn test_slash_models_show_current() {
+        let mut app = App::new();
+        app.execute_slash_command("/models");
+        assert!(app.state.messages.last().unwrap().content.contains("claude-sonnet-4"));
+    }
+
+    #[test]
+    fn test_slash_models_set() {
+        let mut app = App::new();
+        app.execute_slash_command("/models gpt-4o");
+        assert_eq!(app.state.model, "gpt-4o");
+        assert!(app.state.messages.last().unwrap().content.contains("gpt-4o"));
+    }
+
+    #[test]
+    fn test_slash_tasks_empty() {
+        let mut app = App::new();
+        app.execute_slash_command("/tasks");
+        assert!(app.state.messages.last().unwrap().content.contains("No background tasks"));
+    }
+
+    #[test]
+    fn test_slash_task_no_arg() {
+        let mut app = App::new();
+        app.execute_slash_command("/task");
+        assert!(app.state.messages.last().unwrap().content.contains("Usage"));
+    }
+
+    #[test]
+    fn test_slash_kill_no_arg() {
+        let mut app = App::new();
+        app.execute_slash_command("/kill");
+        assert!(app.state.messages.last().unwrap().content.contains("Usage"));
+    }
+
+    #[test]
+    fn test_slash_mcp_list_empty() {
+        let mut app = App::new();
+        app.execute_slash_command("/mcp list");
+        assert!(app.state.messages.last().unwrap().content.contains("No MCP servers"));
+    }
+
+    #[test]
+    fn test_slash_init() {
+        let mut app = App::new();
+        app.execute_slash_command("/init");
+        assert!(app.state.messages.last().unwrap().content.contains("OPENDEV.md"));
+    }
+
+    #[test]
+    fn test_slash_agents() {
+        let mut app = App::new();
+        app.execute_slash_command("/agents");
+        assert!(app.state.messages.last().unwrap().content.contains("No custom agents"));
+    }
+
+    #[test]
+    fn test_slash_skills() {
+        let mut app = App::new();
+        app.execute_slash_command("/skills");
+        assert!(app.state.messages.last().unwrap().content.contains("No custom skills"));
+    }
+
+    #[test]
+    fn test_slash_plugins() {
+        let mut app = App::new();
+        app.execute_slash_command("/plugins");
+        assert!(app.state.messages.last().unwrap().content.contains("No plugins"));
+    }
+
+    #[test]
+    fn test_slash_help_lists_all_commands() {
+        let mut app = App::new();
+        app.execute_slash_command("/help");
+        let help = &app.state.messages.last().unwrap().content;
+        // Check that all major commands appear
+        for cmd in &["mode", "thinking", "autonomy", "models", "mcp", "tasks", "task", "kill", "agents", "skills", "plugins"] {
+            assert!(help.contains(cmd), "Help text missing /{cmd}");
+        }
+    }
+
+    #[test]
+    fn test_operation_mode_from_str_loose() {
+        assert_eq!(OperationMode::from_str_loose("plan"), Some(OperationMode::Plan));
+        assert_eq!(OperationMode::from_str_loose("Normal"), Some(OperationMode::Normal));
+        assert_eq!(OperationMode::from_str_loose("bogus"), None);
+    }
+
+    #[test]
+    fn test_autonomy_level_from_str_loose() {
+        assert_eq!(AutonomyLevel::from_str_loose("auto"), Some(AutonomyLevel::Auto));
+        assert_eq!(AutonomyLevel::from_str_loose("Semi-Auto"), Some(AutonomyLevel::SemiAuto));
+        assert_eq!(AutonomyLevel::from_str_loose("manual"), Some(AutonomyLevel::Manual));
+        assert_eq!(AutonomyLevel::from_str_loose("bogus"), None);
     }
 }
