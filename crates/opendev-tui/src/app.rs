@@ -1647,8 +1647,9 @@ impl App {
                 };
             }
             // Ctrl+Shift+A — cycle autonomy level
-            // crossterm delivers uppercase char when Shift is held
-            (m, KeyCode::Char('A'))
+            // Kitty keyboard protocol reports base key (lowercase 'a') with SHIFT modifier;
+            // legacy terminals report uppercase 'A'. Handle both.
+            (m, KeyCode::Char('A' | 'a'))
                 if m.contains(KeyModifiers::CONTROL) && m.contains(KeyModifiers::SHIFT) =>
             {
                 self.state.autonomy = match self.state.autonomy {
@@ -1658,8 +1659,8 @@ impl App {
                 };
             }
             // Ctrl+Shift+T — cycle thinking level
-            // crossterm delivers uppercase char when Shift is held
-            (m, KeyCode::Char('T'))
+            // Same Kitty vs legacy handling as above.
+            (m, KeyCode::Char('T' | 't'))
                 if m.contains(KeyModifiers::CONTROL) && m.contains(KeyModifiers::SHIFT) =>
             {
                 self.state.thinking_level = match self.state.thinking_level {

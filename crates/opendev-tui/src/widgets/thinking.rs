@@ -42,40 +42,62 @@ pub struct ThinkingBlock {
 }
 
 /// Render a thinking block into styled lines for the conversation widget.
+///
+/// Matches the Python rendering: `⟡ first line\n  continuation lines`
+/// with dim italic styling and no phase label prefix.
 pub fn render_thinking_block(block: &ThinkingBlock) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
-    let (header_text, header_color) = match block.phase {
-        ThinkingPhase::Thinking => ("Thinking", style_tokens::PHASE_THINKING),
-        ThinkingPhase::Critique => ("Critique", style_tokens::PHASE_CRITIQUE),
-        ThinkingPhase::Refinement => ("Refined Thinking", style_tokens::PHASE_REFINEMENT),
+    let phase_color = match block.phase {
+        ThinkingPhase::Thinking => style_tokens::PHASE_THINKING,
+        ThinkingPhase::Critique => style_tokens::PHASE_CRITIQUE,
+        ThinkingPhase::Refinement => style_tokens::PHASE_REFINEMENT,
     };
 
-    // Header line: ⟡ icon at col 0 (aligned with ⏺ / > / !)
-    let collapse_char = if block.collapsed { "+" } else { "-" };
-    lines.push(Line::from(vec![
-        Span::styled(
-            format!("{} ", style_tokens::THINKING_ICON),
-            Style::default().fg(style_tokens::GREY),
-        ),
-        Span::styled(
-            format!("{collapse_char} {header_text}"),
-            Style::default()
-                .fg(header_color)
-                .add_modifier(Modifier::BOLD | Modifier::ITALIC),
-        ),
-    ]));
+    let content_lines: Vec<&str> = block.content.lines().collect();
 
-    // Content lines (only if expanded) — 2-char indent matching other roles
-    if !block.collapsed {
-        for content_line in block.content.lines() {
-            lines.push(Line::from(vec![
-                Span::raw(Indent::CONT),
-                Span::styled(
-                    content_line.to_string(),
-                    Style::default().fg(style_tokens::THINKING_BG),
-                ),
-            ]));
+    if block.collapsed {
+        // Collapsed: show icon + first line (or empty) with collapse indicator
+        let first = content_lines.first().copied().unwrap_or("");
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{} ", style_tokens::THINKING_ICON),
+                Style::default().fg(phase_color),
+            ),
+            Span::styled(
+                format!("+ {first}"),
+                Style::default()
+                    .fg(phase_color)
+                    .add_modifier(Modifier::ITALIC),
+            ),
+        ]));
+    } else {
+        // Expanded: icon + first line, then indented continuation
+        for (i, content_line) in content_lines.iter().enumerate() {
+            if i == 0 {
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("{} ", style_tokens::THINKING_ICON),
+                        Style::default().fg(phase_color),
+                    ),
+                    Span::styled(
+                        content_line.to_string(),
+                        Style::default()
+                            .fg(phase_color)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::raw(Indent::CONT),
+                    Span::styled(
+                        content_line.to_string(),
+                        Style::default()
+                            .fg(phase_color)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
+            }
         }
     }
 
@@ -101,8 +123,8 @@ mod tests {
             collapsed: false,
         };
         let lines = render_thinking_block(&block);
-        // Header + 2 content lines
-        assert_eq!(lines.len(), 3);
+        // First line (icon + content) + 1 continuation line = 2 lines
+        assert_eq!(lines.len(), 2);
     }
 
     #[test]
@@ -113,7 +135,7 @@ mod tests {
             collapsed: true,
         };
         let lines = render_thinking_block(&block);
-        // Only header when collapsed
+        // Only collapsed header line
         assert_eq!(lines.len(), 1);
     }
 }
