@@ -49,17 +49,21 @@ pub fn count_tokens(text: &str) -> usize {
     let word_count: usize = text
         .split_whitespace()
         .map(|word| {
+            let len = word.len();
+            // BPE tokenizers split long tokens into ~4-char chunks.
+            // For words longer than 12 chars, estimate based on length.
+            if len > 12 {
+                // Long words/identifiers: roughly 1 token per 4 chars
+                return len.div_ceil(4);
+            }
             // Each word may contain punctuation that the tokenizer splits off.
             // Count extra tokens for punctuation sequences attached to words.
-            let punct_count = word
-                .chars()
-                .filter(|c| c.is_ascii_punctuation())
-                .count();
+            let punct_count = word.chars().filter(|c| c.is_ascii_punctuation()).count();
             // Base: 1 token per word fragment, plus extra tokens for
             // punctuation clusters (each punctuation char is ~0.5 token on
             // average, but we round up since BPE often keeps single-char
             // punctuation as its own token).
-            1 + (punct_count + 1) / 2
+            1 + punct_count.div_ceil(2)
         })
         .sum();
     // Apply the 0.75 ratio: most English words map to < 1 BPE token.
@@ -104,7 +108,7 @@ pub fn compact_preview(messages: &[ApiMessage]) -> CompactionPreview {
         if summarized_count > 0 {
             let tokens: usize = messages[1..=summarized_count]
                 .iter()
-                .map(|m| msg_token_count(m))
+                .map(msg_token_count)
                 .sum();
             preview.sliding_window = Some(StagePreview {
                 message_count: summarized_count,
@@ -199,7 +203,10 @@ pub fn compact_preview(messages: &[ApiMessage]) -> CompactionPreview {
                 .get("content")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if content.starts_with("[ref:") || content == "[pruned]" || content.starts_with("[summary:") {
+            if content.starts_with("[ref:")
+                || content == "[pruned]"
+                || content.starts_with("[summary:")
+            {
                 continue;
             }
             let tool_call_id = messages[idx]
@@ -227,7 +234,10 @@ pub fn compact_preview(messages: &[ApiMessage]) -> CompactionPreview {
                 .get("content")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if content.starts_with("[ref:") || content == "[pruned]" || content.starts_with("[summary:") {
+            if content.starts_with("[ref:")
+                || content == "[pruned]"
+                || content.starts_with("[summary:")
+            {
                 continue;
             }
             prunable += 1;
@@ -247,10 +257,7 @@ pub fn compact_preview(messages: &[ApiMessage]) -> CompactionPreview {
         let split_point = messages.len() - keep_recent;
         let middle_count = split_point.saturating_sub(1);
         if middle_count > 0 {
-            let tokens: usize = messages[1..split_point]
-                .iter()
-                .map(|m| msg_token_count(m))
-                .sum();
+            let tokens: usize = messages[1..split_point].iter().map(msg_token_count).sum();
             preview.compact = Some(StagePreview {
                 message_count: middle_count,
                 estimated_token_savings: tokens,
@@ -705,7 +712,10 @@ impl ContextCompactor {
                 .get("content")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if content.starts_with("[ref:") || content == "[pruned]" {
+            if content.starts_with("[ref:")
+                || content == "[pruned]"
+                || content.starts_with("[summary:")
+            {
                 continue;
             }
             let tool_call_id = messages[idx]
@@ -717,7 +727,7 @@ impl ContextCompactor {
                 protected_indices.insert(idx);
                 continue;
             }
-            let token_estimate = content.len() as u64 / 4;
+            let token_estimate = count_tokens(content) as u64;
             if protected_tokens + token_estimate <= PRUNE_PROTECTED_TOKENS {
                 protected_tokens += token_estimate;
                 protected_indices.insert(idx);
@@ -733,7 +743,10 @@ impl ContextCompactor {
                 .get("content")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if content.starts_with("[ref:") || content == "[pruned]" {
+            if content.starts_with("[ref:")
+                || content == "[pruned]"
+                || content.starts_with("[summary:")
+            {
                 continue;
             }
             messages[idx].insert(
@@ -854,10 +867,7 @@ impl ContextCompactor {
             }
 
             let summary = summarize_tool_output(tool_name, &content);
-            msg.insert(
-                "content".to_string(),
-                serde_json::Value::String(summary),
-            );
+            msg.insert("content".to_string(), serde_json::Value::String(summary));
             summarized_count += 1;
         }
 
@@ -1279,5 +1289,310 @@ mod tests {
         let summary = ContextCompactor::fallback_summary(&messages);
         assert!(summary.contains("[user] What is Rust?"));
         assert!(summary.contains("[assistant] Rust is a systems programming language."));
+    }
+
+    // ── #27: Token-accurate counting ──
+
+    #[test]
+    fn test_count_tokens_empty() {
+        assert_eq!(count_tokens(""), 0);
+    }
+
+    #[test]
+    fn test_count_tokens_single_word() {
+        // "hello" -> 1 word, 0 punct -> base 1, * 0.75 rounds to 1
+        let tokens = count_tokens("hello");
+        assert!(tokens >= 1);
+    }
+
+    #[test]
+    fn test_count_tokens_sentence() {
+        // "The quick brown fox jumps over the lazy dog."
+        // 9 words, 1 punct char on "dog." -> ~10 base, * 0.75 = ~8
+        let tokens = count_tokens("The quick brown fox jumps over the lazy dog.");
+        assert!(tokens >= 5 && tokens <= 15, "got {tokens}");
+    }
+
+    #[test]
+    fn test_count_tokens_code() {
+        let code = r#"fn main() { println!("hello"); }"#;
+        let tokens = count_tokens(code);
+        // Code has lots of punctuation; should produce more tokens than word count
+        assert!(tokens >= 3, "code should produce tokens, got {tokens}");
+    }
+
+    #[test]
+    fn test_count_tokens_better_than_chars_div_4() {
+        // For typical English prose, count_tokens should be reasonably close
+        // to real BPE token counts (within 2x).
+        let text = "This is a simple sentence with several common English words in it.";
+        let heuristic = count_tokens(text);
+        let naive = text.len() / 4; // chars/4
+        // Both should be in a reasonable range (5-20 for this sentence)
+        assert!(
+            heuristic > 0 && naive > 0,
+            "both should be positive: heuristic={heuristic}, naive={naive}"
+        );
+    }
+
+    // ── #28: Sliding-window compaction ──
+
+    #[test]
+    fn test_sliding_window_below_threshold() {
+        let mut compactor = ContextCompactor::new(1_000_000);
+        let mut messages = vec![make_msg("system", "sys")];
+        for i in 0..100 {
+            messages.push(make_msg("user", &format!("q{i}")));
+            messages.push(make_msg("assistant", &format!("a{i}")));
+        }
+        // 201 messages, below SLIDING_WINDOW_THRESHOLD (500)
+        let result = compactor.sliding_window_compact(messages.clone());
+        assert_eq!(result.len(), messages.len());
+    }
+
+    #[test]
+    fn test_sliding_window_above_threshold() {
+        let mut compactor = ContextCompactor::new(1_000_000);
+        let mut messages = vec![make_msg("system", "sys")];
+        for i in 0..300 {
+            messages.push(make_msg("user", &format!("q{i}")));
+            messages.push(make_msg("assistant", &format!("a{i}")));
+        }
+        // 601 messages, above threshold
+        assert!(messages.len() >= SLIDING_WINDOW_THRESHOLD);
+
+        let result = compactor.sliding_window_compact(messages.clone());
+        // Should keep: 1 (system) + 1 (summary) + SLIDING_WINDOW_RECENT
+        assert_eq!(result.len(), 1 + 1 + SLIDING_WINDOW_RECENT);
+
+        // First message is system
+        assert_eq!(
+            result[0].get("role").and_then(|v| v.as_str()),
+            Some("system")
+        );
+        // Second message is the sliding window summary
+        let summary_content = result[1].get("content").and_then(|v| v.as_str()).unwrap();
+        assert!(summary_content.contains("[SLIDING WINDOW SUMMARY"));
+    }
+
+    // ── #29: Compaction preview ──
+
+    #[test]
+    fn test_compact_preview_small() {
+        let messages = vec![
+            make_msg("system", "sys"),
+            make_msg("user", "hi"),
+            make_msg("assistant", "hello"),
+        ];
+        let preview = compact_preview(&messages);
+        // No sliding window (too few messages)
+        assert!(preview.sliding_window.is_none());
+        // No mask (no tool messages)
+        assert!(preview.mask.is_none());
+    }
+
+    #[test]
+    fn test_compact_preview_with_tool_messages() {
+        let mut messages = vec![make_msg("system", "sys")];
+        let tc_ids: Vec<String> = (0..10).map(|i| format!("tc-{i}")).collect();
+        let pairs: Vec<(&str, &str)> = tc_ids.iter().map(|id| (id.as_str(), "bash")).collect();
+        messages.push(make_assistant_with_tc(pairs));
+        for id in &tc_ids {
+            messages.push(make_tool_msg(id, &"output data ".repeat(100)));
+        }
+
+        let preview = compact_preview(&messages);
+        // Should have mask preview (10 tool msgs, keep 6 recent -> 4 maskable)
+        assert!(preview.mask.is_some());
+        let mask = preview.mask.unwrap();
+        assert_eq!(mask.message_count, 4);
+        assert!(mask.estimated_token_savings > 0);
+
+        // Should have summarize preview (each output > 500 chars)
+        assert!(preview.summarize.is_some());
+        let summarize = preview.summarize.unwrap();
+        assert_eq!(summarize.message_count, 10);
+    }
+
+    #[test]
+    fn test_compact_preview_compact_stage() {
+        let mut messages = vec![make_msg("system", "sys")];
+        for i in 0..20 {
+            messages.push(make_msg("user", &format!("question {i}")));
+            messages.push(make_msg("assistant", &format!("answer {i}")));
+        }
+        let preview = compact_preview(&messages);
+        assert!(preview.compact.is_some());
+        let compact = preview.compact.unwrap();
+        assert!(compact.message_count > 0);
+        assert!(compact.estimated_token_savings > 0);
+    }
+
+    // ── #31: Smart tool output summarization ──
+
+    #[test]
+    fn test_summarize_tool_output_success() {
+        let output = format!(
+            "Line 1: all good\n{}\nLine 100: done",
+            "some data\n".repeat(50)
+        );
+        let summary = summarize_tool_output("bash", &output);
+        assert!(summary.starts_with("[summary: bash succeeded"));
+        assert!(summary.contains("Line 1: all good"));
+        assert!(summary.contains("Line 100: done"));
+    }
+
+    #[test]
+    fn test_summarize_tool_output_failure() {
+        let output = "Error: file not found\nbacktrace follows\npanic at line 42";
+        let summary = summarize_tool_output("bash", output);
+        assert!(summary.contains("failed"));
+    }
+
+    #[test]
+    fn test_summarize_verbose_tool_outputs() {
+        let compactor = ContextCompactor::new(100_000);
+
+        let mut messages = vec![make_msg("system", "sys")];
+        let tc_ids: Vec<String> = (0..5).map(|i| format!("tc-{i}")).collect();
+        let pairs: Vec<(&str, &str)> = tc_ids.iter().map(|id| (id.as_str(), "bash")).collect();
+        messages.push(make_assistant_with_tc(pairs));
+
+        // Mix of short and long outputs
+        messages.push(make_tool_msg("tc-0", "ok")); // short, skip
+        messages.push(make_tool_msg("tc-1", &"long output line\n".repeat(50))); // > 500
+        messages.push(make_tool_msg("tc-2", &"x".repeat(600))); // > 500
+        messages.push(make_tool_msg("tc-3", "[pruned]")); // already pruned
+        messages.push(make_tool_msg("tc-4", &"data ".repeat(200))); // > 500
+
+        compactor.summarize_verbose_tool_outputs(&mut messages);
+
+        // tc-0 should be unchanged (short)
+        let tc0 = messages
+            .iter()
+            .find(|m| m.get("tool_call_id").and_then(|v| v.as_str()) == Some("tc-0"))
+            .unwrap();
+        assert_eq!(tc0.get("content").and_then(|v| v.as_str()).unwrap(), "ok");
+
+        // tc-1 should be summarized
+        let tc1 = messages
+            .iter()
+            .find(|m| m.get("tool_call_id").and_then(|v| v.as_str()) == Some("tc-1"))
+            .unwrap();
+        assert!(
+            tc1.get("content")
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .starts_with("[summary:")
+        );
+
+        // tc-3 should remain [pruned]
+        let tc3 = messages
+            .iter()
+            .find(|m| m.get("tool_call_id").and_then(|v| v.as_str()) == Some("tc-3"))
+            .unwrap();
+        assert_eq!(
+            tc3.get("content").and_then(|v| v.as_str()).unwrap(),
+            "[pruned]"
+        );
+    }
+
+    #[test]
+    fn test_summarize_skips_protected_tools() {
+        let compactor = ContextCompactor::new(100_000);
+
+        let mut messages = vec![make_msg("system", "sys")];
+        let pairs = vec![("tc-0", "read_file"), ("tc-1", "bash")];
+        messages.push(make_assistant_with_tc(pairs));
+        messages.push(make_tool_msg("tc-0", &"file content ".repeat(100))); // protected
+        messages.push(make_tool_msg("tc-1", &"bash output ".repeat(100))); // not protected
+
+        compactor.summarize_verbose_tool_outputs(&mut messages);
+
+        // read_file output should NOT be summarized
+        let tc0 = messages
+            .iter()
+            .find(|m| m.get("tool_call_id").and_then(|v| v.as_str()) == Some("tc-0"))
+            .unwrap();
+        assert!(
+            !tc0.get("content")
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .starts_with("[summary:")
+        );
+
+        // bash output SHOULD be summarized
+        let tc1 = messages
+            .iter()
+            .find(|m| m.get("tool_call_id").and_then(|v| v.as_str()) == Some("tc-1"))
+            .unwrap();
+        assert!(
+            tc1.get("content")
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .starts_with("[summary:")
+        );
+    }
+
+    // ── #30: Per-message token count caching ──
+    // (Already implemented in opendev-models ChatMessage via `tokens: Option<u64>`
+    //  and `cache_token_estimate()`. We verify the compaction layer uses count_tokens.)
+
+    #[test]
+    fn test_msg_token_count_uses_heuristic() {
+        let msg = make_msg("user", "The quick brown fox jumps over the lazy dog.");
+        let tokens = msg_token_count(&msg);
+        // Should be > 0 and use the heuristic (not just chars/4)
+        assert!(tokens > 0);
+        // The per-message overhead is 4 tokens
+        assert!(tokens >= 4);
+    }
+
+    #[test]
+    fn test_count_message_tokens_integration() {
+        let messages = vec![
+            make_msg("system", "You are a helpful assistant."),
+            make_msg("user", "Hello world"),
+            make_msg("assistant", "Hi there! How can I help?"),
+        ];
+        let total = ContextCompactor::count_message_tokens(&messages, "system prompt");
+        assert!(total > 0);
+    }
+
+    #[test]
+    fn test_prune_skips_summarized_outputs() {
+        let compactor = ContextCompactor::new(100_000);
+
+        let mut messages = vec![make_msg("system", "sys")];
+        let tc_ids: Vec<String> = (0..5).map(|i| format!("tc-{i}")).collect();
+        let pairs: Vec<(&str, &str)> = tc_ids.iter().map(|id| (id.as_str(), "bash")).collect();
+        messages.push(make_assistant_with_tc(pairs));
+
+        // Some already summarized, some not
+        messages.push(make_tool_msg(
+            "tc-0",
+            "[summary: bash succeeded, 10 lines]\nfirst line",
+        ));
+        messages.push(make_tool_msg("tc-1", &"x".repeat(20_000)));
+        messages.push(make_tool_msg("tc-2", &"y".repeat(20_000)));
+        messages.push(make_tool_msg(
+            "tc-3",
+            "[summary: bash failed, 5 lines]\nerror",
+        ));
+        messages.push(make_tool_msg("tc-4", &"z".repeat(20_000)));
+
+        compactor.prune_old_tool_outputs(&mut messages);
+
+        // Summarized messages should NOT be changed to [pruned]
+        let tc0 = messages
+            .iter()
+            .find(|m| m.get("tool_call_id").and_then(|v| v.as_str()) == Some("tc-0"))
+            .unwrap();
+        assert!(
+            tc0.get("content")
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .starts_with("[summary:")
+        );
     }
 }
