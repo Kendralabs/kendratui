@@ -10,7 +10,7 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::controllers::{ApprovalController, MessageController};
+use crate::controllers::{ApprovalController, MessageController, PlanApprovalController};
 use crate::event::{AppEvent, EventHandler};
 use crate::history::CommandHistory;
 use crate::managers::InterruptManager;
@@ -170,6 +170,10 @@ pub struct AppState {
     pub command_history: CommandHistory,
     /// Flag set by /compact command; agent loop consumes and triggers compaction.
     pub compact_requested: bool,
+    /// Plan mode flag — when true, next UserSubmit injects plan reminder.
+    pub pending_plan_request: bool,
+    /// Plan content to display in the conversation (consumed after first render).
+    pub plan_content_display: Option<String>,
 }
 
 /// Compute a hash key for markdown cache lookup from role and content.
@@ -350,6 +354,8 @@ impl Default for AppState {
             theme_name: crate::formatters::style_tokens::ThemeName::Dark,
             command_history: CommandHistory::new(),
             compact_requested: false,
+            pending_plan_request: false,
+            plan_content_display: None,
         }
     }
 }
@@ -366,6 +372,10 @@ pub struct App {
     message_controller: MessageController,
     /// Approval controller for inline command approval prompts.
     approval_controller: ApprovalController,
+    /// Plan approval controller for plan review prompts.
+    plan_approval_controller: PlanApprovalController,
+    /// Oneshot sender to forward the plan decision back to the tool.
+    plan_approval_response_tx: Option<tokio::sync::oneshot::Sender<opendev_runtime::PlanDecision>>,
     /// Interrupt manager for signaling cancellation to the agent.
     interrupt_manager: InterruptManager,
     /// Optional channel for forwarding user messages to the agent backend.
@@ -389,6 +399,8 @@ impl App {
             event_tx,
             message_controller: MessageController::new(),
             approval_controller: ApprovalController::new(),
+            plan_approval_controller: PlanApprovalController::new(),
+            plan_approval_response_tx: None,
             interrupt_manager: InterruptManager::new(),
             user_message_tx: None,
         }
@@ -968,6 +980,11 @@ impl App {
             self.render_autocomplete(frame, chunks[3]);
         }
 
+        // Plan approval panel (rendered over input area when active)
+        if self.plan_approval_controller.active() {
+            self.render_plan_approval(frame, chunks[3]);
+        }
+
         // Status bar
         let status = StatusBarWidget::new(
             &self.state.model,
@@ -1054,6 +1071,72 @@ impl App {
             .border_style(Style::default().fg(style_tokens::BORDER))
             .title(Span::styled(
                 title,
+                Style::default()
+                    .fg(style_tokens::CYAN)
+                    .add_modifier(Modifier::BOLD),
+            ));
+
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(ratatui::widgets::Clear, popup_area);
+        frame.render_widget(paragraph, popup_area);
+    }
+
+    /// Render the plan approval panel above the input area.
+    fn render_plan_approval(&self, frame: &mut ratatui::Frame, input_area: layout::Rect) {
+        use crate::formatters::style_tokens;
+        use ratatui::style::{Modifier, Style};
+        use ratatui::text::{Line, Span};
+        use ratatui::widgets::{Block, Borders, Paragraph};
+
+        let options = self.plan_approval_controller.options();
+        let selected = self.plan_approval_controller.selected_action();
+
+        // Build lines: header hint + options
+        let mut lines = vec![
+            Line::from(Span::styled(
+                " \u{2191}/\u{2193} choose \u{00b7} Enter confirm \u{00b7} Esc cancel",
+                Style::default().fg(style_tokens::SUBTLE),
+            )),
+        ];
+
+        for (i, opt) in options.iter().enumerate() {
+            let is_selected = i == selected;
+            let pointer = if is_selected { "\u{25b8}" } else { " " };
+            let label_style = if is_selected {
+                Style::default()
+                    .fg(style_tokens::CYAN)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(style_tokens::PRIMARY)
+            };
+            let desc_style = if is_selected {
+                Style::default()
+                    .fg(style_tokens::CODE_BG)
+                    .bg(style_tokens::CYAN)
+            } else {
+                Style::default().fg(style_tokens::SUBTLE)
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {pointer} {}. {}", i + 1, opt.label), label_style),
+                Span::styled(format!("  {}", opt.description), desc_style),
+            ]));
+        }
+
+        // Panel height: 1 hint + options + 2 borders
+        let panel_height = (lines.len() as u16 + 2).min(input_area.y);
+        let popup_area = layout::Rect {
+            x: input_area.x,
+            y: input_area.y.saturating_sub(panel_height),
+            width: input_area.width,
+            height: panel_height,
+        };
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(style_tokens::CYAN))
+            .title(Span::styled(
+                " Plan \u{00b7} Ready for review ",
                 Style::default()
                     .fg(style_tokens::CYAN)
                     .add_modifier(Modifier::BOLD),
@@ -1166,29 +1249,44 @@ impl App {
 
             // Thinking events
             AppEvent::ThinkingTrace(content) => {
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::Thinking,
-                    content: format!("Thinking: {content}"),
-                    tool_call: None,
-                });
+                // Replace previous thinking message if present (completion nudge
+                // can trigger thinking phase again in the same agent turn).
+                if let Some(last) = self.state.messages.last_mut()
+                    && last.role == DisplayRole::Thinking
+                {
+                    last.content = content;
+                } else {
+                    self.state.messages.push(DisplayMessage {
+                        role: DisplayRole::Thinking,
+                        content,
+                        tool_call: None,
+                    });
+                }
                 self.state.dirty = true;
                 self.state.message_generation += 1;
             }
             AppEvent::CritiqueTrace(content) => {
                 self.state.messages.push(DisplayMessage {
                     role: DisplayRole::Thinking,
-                    content: format!("Critique: {content}"),
+                    content,
                     tool_call: None,
                 });
                 self.state.dirty = true;
                 self.state.message_generation += 1;
             }
             AppEvent::RefinedThinkingTrace(content) => {
-                self.state.messages.push(DisplayMessage {
-                    role: DisplayRole::Thinking,
-                    content: format!("Refined: {content}"),
-                    tool_call: None,
-                });
+                // Replace previous thinking/critique if the refinement supersedes them
+                if let Some(last) = self.state.messages.last_mut()
+                    && last.role == DisplayRole::Thinking
+                {
+                    last.content = content;
+                } else {
+                    self.state.messages.push(DisplayMessage {
+                        role: DisplayRole::Thinking,
+                        content,
+                        tool_call: None,
+                    });
+                }
                 self.state.dirty = true;
                 self.state.message_generation += 1;
             }
@@ -1418,6 +1516,27 @@ impl App {
             }
 
             // UI events
+            // Plan approval events
+            AppEvent::PlanApprovalRequested {
+                plan_content,
+                response_tx,
+            } => {
+                // Store plan content for display in conversation
+                self.state.plan_content_display = Some(plan_content.clone());
+                // Add plan as a message in the conversation
+                self.state.messages.push(DisplayMessage {
+                    role: DisplayRole::System,
+                    content: format!("── Plan ──\n{plan_content}"),
+                    tool_call: None,
+                });
+                self.state.message_generation += 1;
+                // Start the plan approval controller
+                let _rx = self.plan_approval_controller.start(plan_content);
+                // Store the oneshot sender to forward the decision back to the tool
+                self.plan_approval_response_tx = Some(response_tx);
+                self.state.dirty = true;
+            }
+
             AppEvent::UserSubmit(ref msg) => {
                 // Forward to backend if channel is configured
                 if let Some(ref tx) = self.user_message_tx {
@@ -1427,6 +1546,13 @@ impl App {
                 self.state.dirty = true;
             }
             AppEvent::Interrupt => {
+                // Cancel plan approval if active
+                if self.plan_approval_controller.active() {
+                    self.plan_approval_controller.cancel();
+                    // cancel() sends "modify" via the controller's internal oneshot.
+                    // Clean up our stored sender (already consumed by cancel).
+                    self.plan_approval_response_tx.take();
+                }
                 if self.state.agent_active {
                     self.interrupt_manager.interrupt();
                     self.state.agent_active = false;
@@ -1478,6 +1604,40 @@ impl App {
     fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
         // Only process key-press events (Kitty protocol also sends Release/Repeat)
         if key.kind != crossterm::event::KeyEventKind::Press {
+            return;
+        }
+
+        // Delegate to plan approval controller when active
+        if self.plan_approval_controller.active() {
+            match key.code {
+                KeyCode::Up => self.plan_approval_controller.prev(),
+                KeyCode::Down => self.plan_approval_controller.next(),
+                KeyCode::Enter => {
+                    if let Some(decision) = self.plan_approval_controller.confirm() {
+                        // Switch mode based on decision
+                        match decision.action.as_str() {
+                            "approve_auto" | "approve" => {
+                                self.state.mode = OperationMode::Normal;
+                            }
+                            _ => {} // "modify" stays in Plan mode
+                        }
+                        // Forward decision back to the blocking tool
+                        if let Some(tx) = self.plan_approval_response_tx.take() {
+                            let _ = tx.send(decision);
+                        }
+                    }
+                }
+                KeyCode::Esc => {
+                    self.plan_approval_controller.cancel();
+                    // cancel() internally confirms with "modify" via the controller's
+                    // oneshot — but we also need to forward through our stored sender.
+                    // The controller already sent via its own oneshot in cancel(),
+                    // so just clean up our stored tx (it's already consumed by cancel).
+                    self.plan_approval_response_tx.take();
+                }
+                _ => {}
+            }
+            self.state.dirty = true;
             return;
         }
 
@@ -1639,11 +1799,17 @@ impl App {
                     self.state.user_scrolled = false;
                 }
             }
-            // Shift+Tab — cycle mode
+            // Shift+Tab — cycle mode and set pending plan flag
             (KeyModifiers::SHIFT, KeyCode::BackTab) => {
                 self.state.mode = match self.state.mode {
-                    OperationMode::Normal => OperationMode::Plan,
-                    OperationMode::Plan => OperationMode::Normal,
+                    OperationMode::Normal => {
+                        self.state.pending_plan_request = true;
+                        OperationMode::Plan
+                    }
+                    OperationMode::Plan => {
+                        self.state.pending_plan_request = false;
+                        OperationMode::Normal
+                    }
                 };
             }
             // Ctrl+Shift+A — cycle autonomy level
