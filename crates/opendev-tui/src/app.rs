@@ -227,6 +227,61 @@ pub enum DisplayRole {
     Interrupt,
 }
 
+/// Rendering configuration for simple (non-markdown, non-collapsible) roles.
+pub struct RoleStyle {
+    /// Prefix string for the first line (e.g. "> ", "! ", "  ⎿  ")
+    pub icon: String,
+    /// Style for the icon span
+    pub icon_style: ratatui::style::Style,
+    /// Color for the content text
+    pub text_color: ratatui::style::Color,
+    /// Continuation prefix for wrapped lines (must match icon visual width)
+    pub continuation: &'static str,
+    /// Whether to suppress the blank line before this message
+    pub attach_to_previous: bool,
+}
+
+impl DisplayRole {
+    /// Returns a `RoleStyle` for roles that use the standard icon+text pattern.
+    /// Returns `None` for Assistant and Thinking (they have custom rendering).
+    pub fn style(&self) -> Option<RoleStyle> {
+        use crate::formatters::style_tokens::{self, Indent};
+        use crate::widgets::spinner::CONTINUATION_CHAR;
+        use ratatui::style::{Modifier, Style};
+
+        match self {
+            Self::User => Some(RoleStyle {
+                icon: "> ".to_string(),
+                icon_style: Style::default()
+                    .fg(style_tokens::ACCENT)
+                    .add_modifier(Modifier::BOLD),
+                text_color: style_tokens::PRIMARY,
+                continuation: Indent::CONT,
+                attach_to_previous: false,
+            }),
+            Self::System => Some(RoleStyle {
+                icon: "! ".to_string(),
+                icon_style: Style::default()
+                    .fg(style_tokens::WARNING)
+                    .add_modifier(Modifier::ITALIC),
+                text_color: style_tokens::SUBTLE,
+                continuation: Indent::CONT,
+                attach_to_previous: false,
+            }),
+            Self::Interrupt => Some(RoleStyle {
+                icon: format!("  {CONTINUATION_CHAR}  "),
+                icon_style: Style::default()
+                    .fg(style_tokens::ERROR)
+                    .add_modifier(Modifier::BOLD),
+                text_color: style_tokens::ERROR,
+                continuation: Indent::RESULT_CONT,
+                attach_to_previous: true,
+            }),
+            Self::Assistant | Self::Thinking => None,
+        }
+    }
+}
+
 /// Tool call display info.
 #[derive(Debug, Clone)]
 pub struct DisplayToolCall {
@@ -643,8 +698,14 @@ impl App {
                     self.state.cached_lines.push(ratatui::text::Line::from(""));
                 }
             } else {
+                let next_role = self
+                    .state
+                    .messages
+                    .get(msg_idx + 1)
+                    .map(|m| &m.role);
                 Self::render_single_message(
                     msg,
+                    next_role,
                     &mut self.state.cached_lines,
                     &mut self.state.markdown_cache,
                 );
@@ -657,8 +718,11 @@ impl App {
     }
 
     /// Render a single `DisplayMessage` into styled lines, appending to `lines`.
+    /// `next_role` is the role of the following message (if any), used to suppress
+    /// the trailing blank line before messages that attach to the previous one.
     fn render_single_message(
         msg: &DisplayMessage,
+        next_role: Option<&DisplayRole>,
         lines: &mut Vec<ratatui::text::Line<'static>>,
         markdown_cache: &mut HashMap<u64, Vec<ratatui::text::Line<'static>>>,
     ) {
@@ -721,55 +785,23 @@ impl App {
                     }
                 }
             }
-            DisplayRole::User => {
-                let content_lines: Vec<&str> = content.lines().collect();
-                for (i, content_line) in content_lines.iter().enumerate() {
+            DisplayRole::User | DisplayRole::System | DisplayRole::Interrupt => {
+                let rs = msg.role.style().unwrap();
+                for (i, line_text) in content.lines().enumerate() {
                     if i == 0 {
                         lines.push(Line::from(vec![
+                            Span::styled(rs.icon.clone(), rs.icon_style),
                             Span::styled(
-                                "> ".to_string(),
-                                Style::default()
-                                    .fg(style_tokens::ACCENT)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                content_line.to_string(),
-                                Style::default().fg(style_tokens::PRIMARY),
+                                line_text.to_string(),
+                                Style::default().fg(rs.text_color),
                             ),
                         ]));
                     } else {
                         lines.push(Line::from(vec![
-                            Span::raw(Indent::CONT),
+                            Span::raw(rs.continuation),
                             Span::styled(
-                                content_line.to_string(),
-                                Style::default().fg(style_tokens::PRIMARY),
-                            ),
-                        ]));
-                    }
-                }
-            }
-            DisplayRole::System => {
-                let content_lines: Vec<&str> = content.lines().collect();
-                for (i, content_line) in content_lines.iter().enumerate() {
-                    if i == 0 {
-                        lines.push(Line::from(vec![
-                            Span::styled(
-                                "! ".to_string(),
-                                Style::default()
-                                    .fg(style_tokens::WARNING)
-                                    .add_modifier(Modifier::ITALIC),
-                            ),
-                            Span::styled(
-                                content_line.to_string(),
-                                Style::default().fg(style_tokens::SUBTLE),
-                            ),
-                        ]));
-                    } else {
-                        lines.push(Line::from(vec![
-                            Span::raw(Indent::CONT),
-                            Span::styled(
-                                content_line.to_string(),
-                                Style::default().fg(style_tokens::SUBTLE),
+                                line_text.to_string(),
+                                Style::default().fg(rs.text_color),
                             ),
                         ]));
                     }
@@ -841,19 +873,33 @@ impl App {
             ]));
 
             if !tc.collapsed && !tc.result_lines.is_empty() {
+                use crate::widgets::conversation::{is_diff_tool, render_diff_line};
+                let use_diff = is_diff_tool(&tc.name);
                 for (i, result_line) in tc.result_lines.iter().enumerate() {
                     let prefix_char: Cow<'static, str> = if i == 0 {
                         format!("  {}  ", CONTINUATION_CHAR).into()
                     } else {
                         Cow::Borrowed(Indent::RESULT_CONT)
                     };
-                    lines.push(Line::from(vec![
-                        Span::styled(prefix_char, Style::default().fg(style_tokens::SUBTLE)),
-                        Span::styled(
-                            result_line.clone(),
-                            Style::default().fg(style_tokens::SUBTLE),
-                        ),
-                    ]));
+                    if use_diff {
+                        let line = render_diff_line(result_line, i, prefix_char);
+                        if !(line.spans.is_empty()
+                            || line.spans.len() == 1 && line.spans[0].content.is_empty())
+                        {
+                            lines.push(line);
+                        }
+                    } else {
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                prefix_char,
+                                Style::default().fg(style_tokens::SUBTLE),
+                            ),
+                            Span::styled(
+                                result_line.clone(),
+                                Style::default().fg(style_tokens::SUBTLE),
+                            ),
+                        ]));
+                    }
                 }
             } else if tc.collapsed && !tc.result_lines.is_empty() {
                 let count = tc.result_lines.len();
@@ -888,8 +934,13 @@ impl App {
             }
         }
 
-        // Blank line between messages
-        lines.push(Line::from(""));
+        // Blank line between messages — skip before messages that attach to previous
+        let next_attaches = next_role
+            .and_then(|r| r.style())
+            .is_some_and(|s| s.attach_to_previous);
+        if !next_attaches {
+            lines.push(Line::from(""));
+        }
     }
 
     /// Render the full UI layout.
@@ -1604,7 +1655,7 @@ impl App {
                 // Show interrupt feedback in the conversation
                 self.state.messages.push(DisplayMessage {
                     role: DisplayRole::Interrupt,
-                    content: "Interrupted".to_string(),
+                    content: "Interrupted. What should I do instead?".to_string(),
                     tool_call: None,
                     collapsed: false,
                 });

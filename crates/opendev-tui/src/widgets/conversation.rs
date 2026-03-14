@@ -11,16 +11,53 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Paragraph, Widget, Wrap},
+    widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget, Widget, Wrap},
 };
 
-use crate::app::{DisplayMessage, DisplayRole, DisplayToolCall, ToolExecution};
+use crate::app::{DisplayMessage, DisplayRole, DisplayToolCall, RoleStyle, ToolExecution};
 use crate::formatters::display::strip_system_reminders;
 use crate::formatters::markdown::MarkdownRenderer;
 use crate::formatters::style_tokens::{self, Indent};
 use crate::formatters::tool_registry::{categorize_tool, format_tool_call_display, tool_color};
 use crate::widgets::progress::TaskProgress;
 use crate::widgets::spinner::{COMPLETED_CHAR, CONTINUATION_CHAR, SPINNER_FRAMES};
+
+/// Check if a tool name is an edit/write tool that produces diffs.
+pub fn is_diff_tool(name: &str) -> bool {
+    matches!(name, "edit_file" | "write_file")
+}
+
+/// Render a single diff result line with appropriate styling.
+/// Returns a `Line` with the prefix span and a colored content span.
+/// `line_idx` is 0-based within the result_lines; the first line (summary) uses SUBTLE.
+pub fn render_diff_line<'a>(
+    result_line: &str,
+    line_idx: usize,
+    prefix: Cow<'a, str>,
+) -> Line<'a> {
+    let (content, color) = if line_idx == 0 {
+        // Summary line
+        (result_line.to_string(), style_tokens::SUBTLE)
+    } else if result_line.starts_with("@@") {
+        // Hunk header — parse line numbers if possible
+        (result_line.to_string(), style_tokens::CYAN)
+    } else if result_line.starts_with("---") || result_line.starts_with("+++") {
+        // File headers — skip rendering
+        return Line::from(Span::raw(""));
+    } else if result_line.starts_with('+') {
+        (result_line.to_string(), style_tokens::SUCCESS)
+    } else if result_line.starts_with('-') {
+        (result_line.to_string(), style_tokens::ERROR)
+    } else {
+        // Context line or anything else
+        (result_line.to_string(), style_tokens::GREY)
+    };
+
+    Line::from(vec![
+        Span::styled(prefix, Style::default().fg(style_tokens::SUBTLE)),
+        Span::styled(content, Style::default().fg(color)),
+    ])
+}
 
 /// Widget that renders the conversation log.
 pub struct ConversationWidget<'a> {
@@ -99,6 +136,23 @@ impl<'a> ConversationWidget<'a> {
         self
     }
 
+    /// Render a message using the standard icon+text pattern.
+    fn render_simple_role(content: &str, style: &RoleStyle, lines: &mut Vec<Line<'_>>) {
+        for (i, line) in content.lines().enumerate() {
+            if i == 0 {
+                lines.push(Line::from(vec![
+                    Span::styled(style.icon.clone(), style.icon_style),
+                    Span::styled(line.to_string(), Style::default().fg(style.text_color)),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::raw(style.continuation),
+                    Span::styled(line.to_string(), Style::default().fg(style.text_color)),
+                ]));
+            }
+        }
+    }
+
     /// Build styled lines from messages.
     fn build_lines(&self) -> Vec<Line<'a>> {
         let mut lines: Vec<Line> = Vec::new();
@@ -108,7 +162,7 @@ impl<'a> ConversationWidget<'a> {
             return lines;
         }
 
-        for msg in self.messages {
+        for (msg_idx, msg) in self.messages.iter().enumerate() {
             // Filter system reminders from displayed content
             let content = strip_system_reminders(&msg.content);
 
@@ -147,59 +201,9 @@ impl<'a> ConversationWidget<'a> {
                         }
                     }
                 }
-                DisplayRole::User => {
-                    let content_lines: Vec<&str> = content.lines().collect();
-                    for (i, content_line) in content_lines.iter().enumerate() {
-                        if i == 0 {
-                            lines.push(Line::from(vec![
-                                Span::styled(
-                                    "> ".to_string(),
-                                    Style::default()
-                                        .fg(style_tokens::ACCENT)
-                                        .add_modifier(Modifier::BOLD),
-                                ),
-                                Span::styled(
-                                    content_line.to_string(),
-                                    Style::default().fg(style_tokens::PRIMARY),
-                                ),
-                            ]));
-                        } else {
-                            lines.push(Line::from(vec![
-                                Span::raw(Indent::CONT),
-                                Span::styled(
-                                    content_line.to_string(),
-                                    Style::default().fg(style_tokens::PRIMARY),
-                                ),
-                            ]));
-                        }
-                    }
-                }
-                DisplayRole::System => {
-                    let content_lines: Vec<&str> = content.lines().collect();
-                    for (i, content_line) in content_lines.iter().enumerate() {
-                        if i == 0 {
-                            lines.push(Line::from(vec![
-                                Span::styled(
-                                    "! ".to_string(),
-                                    Style::default()
-                                        .fg(style_tokens::WARNING)
-                                        .add_modifier(Modifier::ITALIC),
-                                ),
-                                Span::styled(
-                                    content_line.to_string(),
-                                    Style::default().fg(style_tokens::SUBTLE),
-                                ),
-                            ]));
-                        } else {
-                            lines.push(Line::from(vec![
-                                Span::raw(Indent::CONT),
-                                Span::styled(
-                                    content_line.to_string(),
-                                    Style::default().fg(style_tokens::SUBTLE),
-                                ),
-                            ]));
-                        }
-                    }
+                DisplayRole::User | DisplayRole::System | DisplayRole::Interrupt => {
+                    let rs = msg.role.style().unwrap();
+                    Self::render_simple_role(&content, &rs, &mut lines);
                 }
                 DisplayRole::Thinking => {
                     if msg.collapsed {
@@ -257,19 +261,32 @@ impl<'a> ConversationWidget<'a> {
 
                 // Collapsible result lines
                 if !tc.collapsed && !tc.result_lines.is_empty() {
+                    let use_diff = is_diff_tool(&tc.name);
                     for (i, result_line) in tc.result_lines.iter().enumerate() {
                         let prefix_char: Cow<'static, str> = if i == 0 {
                             format!("  {}  ", CONTINUATION_CHAR).into()
                         } else {
                             Cow::Borrowed(Indent::RESULT_CONT)
                         };
-                        lines.push(Line::from(vec![
-                            Span::styled(prefix_char, Style::default().fg(style_tokens::SUBTLE)),
-                            Span::styled(
-                                result_line.clone(),
-                                Style::default().fg(style_tokens::SUBTLE),
-                            ),
-                        ]));
+                        if use_diff {
+                            let line = render_diff_line(result_line, i, prefix_char);
+                            if !(line.spans.is_empty()
+                                || line.spans.len() == 1 && line.spans[0].content.is_empty())
+                            {
+                                lines.push(line);
+                            }
+                        } else {
+                            lines.push(Line::from(vec![
+                                Span::styled(
+                                    prefix_char,
+                                    Style::default().fg(style_tokens::SUBTLE),
+                                ),
+                                Span::styled(
+                                    result_line.clone(),
+                                    Style::default().fg(style_tokens::SUBTLE),
+                                ),
+                            ]));
+                        }
                     }
                 } else if tc.collapsed && !tc.result_lines.is_empty() {
                     // Show collapsed indicator
@@ -292,8 +309,15 @@ impl<'a> ConversationWidget<'a> {
                 }
             }
 
-            // Blank line between messages
-            lines.push(Line::from(""));
+            // Blank line between messages — skip before messages that attach to previous
+            let next_attaches = self
+                .messages
+                .get(msg_idx + 1)
+                .and_then(|m| m.role.style())
+                .is_some_and(|s| s.attach_to_previous);
+            if !next_attaches {
+                lines.push(Line::from(""));
+            }
         }
 
         lines
@@ -423,6 +447,7 @@ impl Widget for ConversationWidget<'_> {
 
         let content_area = Rect {
             height: content_height,
+            width: area.width.saturating_sub(1),
             ..area
         };
 
@@ -480,16 +505,16 @@ impl Widget for ConversationWidget<'_> {
             }
         }
 
-        // Scroll position indicator when scrolled up
-        if self.scroll_offset > 0 && max_scroll > 0 {
-            let pct = ((max_scroll - actual_scroll) as f64 / max_scroll as f64 * 100.0) as u16;
-            let indicator = format!(" \u{2191} {}% ", pct);
-            let x = area.right().saturating_sub(indicator.len() as u16);
-            buf.set_string(
-                x,
-                area.y,
-                &indicator,
-                Style::default().fg(style_tokens::SUBTLE),
+        // Visual scrollbar when content overflows
+        if max_scroll > 0 {
+            let mut scrollbar_state = ScrollbarState::new(max_scroll)
+                .position(actual_scroll)
+                .viewport_content_length(viewport_height);
+            StatefulWidget::render(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                area,
+                buf,
+                &mut scrollbar_state,
             );
         }
     }
@@ -1004,14 +1029,17 @@ mod tests {
             .unwrap();
 
         let buf = terminal.backend().buffer().clone();
-        let first_row: String = (0..80u16)
-            .map(|x| buf[(x, 0)].symbol().to_string())
-            .collect();
 
-        // When scrolled up, the first row should contain the scroll percentage indicator
+        // When scrolled, the rightmost column should contain scrollbar characters
+        // (▲ at top, █ for thumb, ║ for track, ▼ at bottom)
+        let last_col = 79u16;
+        let right_col: String = (0..10u16)
+            .map(|y| buf[(last_col, y)].symbol().to_string())
+            .collect();
+        let scrollbar_chars = ['▲', '█', '░', '▼', '║'];
         assert!(
-            first_row.contains('%'),
-            "Expected scroll indicator with % on first row when scrolled, got: {first_row:?}"
+            right_col.chars().any(|c| scrollbar_chars.contains(&c)),
+            "Expected scrollbar characters in rightmost column when scrolled, got: {right_col:?}"
         );
     }
 
