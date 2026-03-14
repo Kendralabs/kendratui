@@ -18,7 +18,8 @@ use crate::traits::{AgentError, AgentResult, LlmResponse, TaskMonitor};
 use opendev_context::{ArtifactIndex, ContextCompactor, OptimizationLevel};
 use opendev_http::adapted_client::AdaptedClient;
 use opendev_runtime::{
-    CostTracker, ThinkingLevel, TokenUsage, play_finish_sound, summarize_tool_result,
+    CostTracker, ThinkingLevel, TodoManager, TodoStatus, TokenUsage, play_finish_sound,
+    summarize_tool_result,
 };
 use opendev_tools_core::{ToolContext, ToolRegistry, ToolResult};
 
@@ -68,6 +69,7 @@ pub static PARALLELIZABLE_TOOLS: &[&str] = &[
 ];
 
 use crate::prompts::embedded;
+use crate::prompts::reminders::{append_nudge, get_reminder};
 
 /// Extended readonly set for thinking-skip heuristic.
 /// Matches Python's `IterationMixin._READONLY_TOOLS`.
@@ -92,6 +94,21 @@ static READONLY_TOOLS: &[&str] = &[
     "list_subagents",
     "memory_search",
     "list_agents",
+];
+
+/// Read-only tool names for consecutive-reads detection.
+/// When all tool calls in an iteration are from this set, the consecutive reads
+/// counter increments. After 5 consecutive read-only iterations, a nudge is injected.
+static READ_OPS: &[&str] = &[
+    "read_file",
+    "list_files",
+    "search",
+    "fetch_url",
+    "web_search",
+    "find_symbol",
+    "list_todos",
+    "read_pdf",
+    "analyze_image",
 ];
 
 /// Result of processing a single turn in the ReAct loop.
@@ -524,6 +541,7 @@ impl ReactLoop {
         cost_tracker: Option<&Mutex<CostTracker>>,
         artifact_index: Option<&Mutex<ArtifactIndex>>,
         compactor: Option<&Mutex<ContextCompactor>>,
+        todo_manager: Option<&Mutex<TodoManager>>,
     ) -> Result<AgentResult, AgentError>
     where
         M: TaskMonitor + ?Sized,
@@ -535,6 +553,12 @@ impl ReactLoop {
         let mut iteration: usize = 0;
         let mut consecutive_no_tool_calls: usize = 0;
         let mut doom_detector = DoomLoopDetector::new();
+
+        // Nudge/reminder state tracking
+        let mut todo_nudge_count: usize = 0;
+        let mut all_todos_complete_nudged = false;
+        let mut completion_nudge_sent = false;
+        let mut consecutive_reads: usize = 0;
 
         loop {
             iteration += 1;
@@ -572,21 +596,26 @@ impl ReactLoop {
                 );
                 let _thinking_guard = _thinking_span.enter();
                 drop(_thinking_guard);
-                // Build analysis prompt based on original task
-                let analysis_prompt = self.config.original_task.as_deref().map(|task| {
-                    format!(
-                        "The user's original request: {task}\n\n\
-                         Analyze the full context and provide your reasoning for the \
-                         next step. Keep the user's complete original request in mind \
-                         — if it has multiple parts, ensure you are working toward ALL \
-                         parts, not just the first.\n\n\
-                         IMPORTANT: If your next step involves reading or searching \
-                         multiple files to understand code structure, architecture, or \
-                         patterns, you MUST delegate to Code-Explorer rather than doing \
-                         it yourself. Only use direct read_file/search for known, \
-                         specific targets (1-2 files)."
-                    )
-                });
+                // Build analysis prompt based on original task and todo state
+                let analysis_prompt = if let Some(mgr) = todo_manager
+                    && let Ok(mgr) = mgr.lock()
+                    && mgr.has_todos()
+                {
+                    let task = self.config.original_task.as_deref().unwrap_or("(unknown)");
+                    Some(get_reminder(
+                        "thinking_analysis_prompt_with_todos",
+                        &[
+                            ("original_task", task),
+                            ("done_count", &mgr.completed_count().to_string()),
+                            ("total_count", &mgr.total().to_string()),
+                            ("todo_status", &mgr.format_status_sorted()),
+                        ],
+                    ))
+                } else {
+                    self.config.original_task.as_deref().map(|task| {
+                        get_reminder("thinking_analysis_prompt", &[("original_task", task)])
+                    })
+                };
 
                 let thinking_payload = caller.build_thinking_payload(
                     messages,
@@ -806,6 +835,48 @@ impl ReactLoop {
                     ));
                 }
                 TurnResult::Complete { content, status } => {
+                    // Block completion when there are incomplete todos
+                    if let Some(mgr) = todo_manager
+                        && let Ok(mgr) = mgr.lock()
+                        && mgr.has_incomplete_todos()
+                        && todo_nudge_count < self.config.max_todo_nudges
+                    {
+                        todo_nudge_count += 1;
+                        let count = mgr.total() - mgr.completed_count();
+                        let titles: Vec<_> = mgr
+                            .all()
+                            .iter()
+                            .filter(|t| t.status != TodoStatus::Completed)
+                            .take(3)
+                            .map(|t| format!("  - {}", t.title))
+                            .collect();
+                        let nudge = get_reminder(
+                            "incomplete_todos_nudge",
+                            &[
+                                ("count", &count.to_string()),
+                                ("todo_list", &titles.join("\n")),
+                            ],
+                        );
+                        append_nudge(messages, &nudge);
+                        iter_metrics.total_duration_ms = iter_start.elapsed().as_millis() as u64;
+                        self.push_metrics(iter_metrics);
+                        continue;
+                    }
+
+                    // Implicit completion nudge — verify original task before finishing
+                    if !completion_nudge_sent
+                        && let Some(task) = self.config.original_task.as_deref()
+                    {
+                        completion_nudge_sent = true;
+                        let nudge =
+                            get_reminder("implicit_completion_nudge", &[("original_task", task)]);
+                        append_nudge(messages, &nudge);
+                        iter_metrics.total_duration_ms = iter_start.elapsed().as_millis() as u64;
+                        self.push_metrics(iter_metrics);
+                        continue;
+                    }
+
+                    // Accept completion
                     if let Some(cb) = event_callback {
                         cb.on_agent_chunk(&content);
                     }
@@ -874,9 +945,36 @@ impl ReactLoop {
                     // Execute tool calls
                     let total_tool_count = tool_calls.len();
                     let mut completed_tool_count: usize = 0;
+                    let mut any_tool_failed = false;
                     for tc in &tool_calls {
-                        // Check for task_complete
+                        // Check for task_complete — block if todos are incomplete
                         if Self::is_task_complete(tc) {
+                            if let Some(mgr) = todo_manager
+                                && let Ok(mgr) = mgr.lock()
+                                && mgr.has_incomplete_todos()
+                                && todo_nudge_count < self.config.max_todo_nudges
+                            {
+                                todo_nudge_count += 1;
+                                let count = mgr.total() - mgr.completed_count();
+                                let titles: Vec<_> = mgr
+                                    .all()
+                                    .iter()
+                                    .filter(|t| t.status != TodoStatus::Completed)
+                                    .take(3)
+                                    .map(|t| format!("  - {}", t.title))
+                                    .collect();
+                                let nudge = get_reminder(
+                                    "incomplete_todos_nudge",
+                                    &[
+                                        ("count", &count.to_string()),
+                                        ("todo_list", &titles.join("\n")),
+                                    ],
+                                );
+                                append_nudge(messages, &nudge);
+                                // Skip task_complete, continue to next tool call
+                                // (or continue loop if this was the only call)
+                                continue;
+                            }
                             let (summary, status) = Self::extract_task_complete_args(tc);
                             iter_metrics.total_duration_ms =
                                 iter_start.elapsed().as_millis() as u64;
@@ -996,6 +1094,24 @@ impl ReactLoop {
                             "content": formatted,
                         }));
 
+                        // Smart error nudge after tool failure
+                        if !tool_result.success {
+                            any_tool_failed = true;
+                            let error_text = tool_result.error.as_deref().unwrap_or("");
+                            let error_type = Self::classify_error(error_text);
+                            let nudge_name = format!("nudge_{error_type}");
+                            let nudge = get_reminder(&nudge_name, &[]);
+                            if nudge.is_empty() {
+                                // Fall back to generic failed tool nudge
+                                let generic = get_reminder("failed_tool_nudge", &[]);
+                                if !generic.is_empty() {
+                                    append_nudge(messages, &generic);
+                                }
+                            } else {
+                                append_nudge(messages, &nudge);
+                            }
+                        }
+
                         completed_tool_count += 1;
 
                         // Check for interrupt between tool executions —
@@ -1030,6 +1146,42 @@ impl ReactLoop {
                                 );
                             }
                             return Ok(result);
+                        }
+                    }
+
+                    // Consecutive reads detection
+                    let all_reads = tool_calls.iter().all(|tc| {
+                        let name = tc
+                            .get("function")
+                            .and_then(|f| f.get("name"))
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("");
+                        READ_OPS.contains(&name)
+                    });
+                    if all_reads && !any_tool_failed {
+                        consecutive_reads += 1;
+                        if consecutive_reads >= 5 {
+                            let nudge = get_reminder("consecutive_reads_nudge", &[]);
+                            if !nudge.is_empty() {
+                                append_nudge(messages, &nudge);
+                            }
+                            consecutive_reads = 0;
+                        }
+                    } else {
+                        consecutive_reads = 0;
+                    }
+
+                    // All-todos-complete signal
+                    if !all_todos_complete_nudged
+                        && let Some(mgr) = todo_manager
+                        && let Ok(mgr) = mgr.lock()
+                        && mgr.has_todos()
+                        && !mgr.has_incomplete_todos()
+                    {
+                        all_todos_complete_nudged = true;
+                        let nudge = get_reminder("all_todos_complete_nudge", &[]);
+                        if !nudge.is_empty() {
+                            append_nudge(messages, &nudge);
                         }
                     }
                 }

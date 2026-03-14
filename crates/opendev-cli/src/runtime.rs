@@ -480,6 +480,7 @@ impl AgentRuntime {
                 Some(&self.cost_tracker),
                 Some(&self.artifact_index),
                 Some(&self.compactor),
+                Some(&self.todo_manager),
             )
             .await?;
 

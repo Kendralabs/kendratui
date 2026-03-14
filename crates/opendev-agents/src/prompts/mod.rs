@@ -7,6 +7,7 @@
 pub mod composer;
 pub mod embedded;
 pub mod loader;
+pub mod reminders;
 
 pub use composer::{
     ConditionFn, PromptComposer, PromptContext, PromptSection, create_composer,
@@ -14,3 +15,4 @@ pub use composer::{
 };
 pub use embedded::{TEMPLATE_COUNT, TEMPLATES, get_embedded};
 pub use loader::{PromptLoadError, PromptLoader};
+pub use reminders::{append_nudge, get_reminder};

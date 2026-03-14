@@ -337,6 +337,7 @@ impl BaseAgent for MainAgent {
                 None,
                 None,
                 None,
+                None, // todo_manager: subagents don't track todos
             )
             .await
     }
