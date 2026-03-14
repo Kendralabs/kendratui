@@ -633,6 +633,21 @@ impl App {
             return;
         }
 
+        // If the first dirty message attaches to its predecessor, re-render that
+        // predecessor too so its trailing blank line can be suppressed.
+        let first_dirty = if first_dirty > 0
+            && self
+                .state
+                .messages
+                .get(first_dirty)
+                .and_then(|m| m.role.style())
+                .is_some_and(|s| s.attach_to_previous)
+        {
+            first_dirty - 1
+        } else {
+            first_dirty
+        };
+
         // Truncate to the point before first_dirty
         let lines_to_keep: usize = self
             .state

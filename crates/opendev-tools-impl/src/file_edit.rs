@@ -183,13 +183,16 @@ impl BaseTool for FileEditTool {
         }
 
         let fmt_note = if formatted { " (formatted)" } else { "" };
-        ToolResult::ok_with_metadata(
-            format!(
-                "Edited {file_path}: {replacements} replacement(s), \
-                 {additions} addition(s) and {removals} removal(s){fmt_note}"
-            ),
-            metadata,
-        )
+        let summary = format!(
+            "Edited {file_path}: {replacements} replacement(s), \
+             {additions} addition(s) and {removals} removal(s){fmt_note}"
+        );
+        let output_text = if diff_text.is_empty() {
+            summary
+        } else {
+            format!("{summary}\n{diff_text}")
+        };
+        ToolResult::ok_with_metadata(output_text, metadata)
     }
 }
 

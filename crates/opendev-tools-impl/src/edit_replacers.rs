@@ -932,17 +932,57 @@ mod tests {
         let positions = find_occurrence_positions(content, "foo");
         assert_eq!(positions, vec![1, 3, 5]);
     }
+
+    #[test]
+    fn test_find_occurrence_needle_at_end() {
+        let positions = find_occurrence_positions("abc", "c");
+        assert_eq!(positions, vec![1]);
+    }
+
+    #[test]
+    fn test_find_occurrence_needle_is_entire_string() {
+        let positions = find_occurrence_positions("abc", "abc");
+        assert_eq!(positions, vec![1]);
+    }
+
+    #[test]
+    fn test_find_occurrence_multibyte_utf8() {
+        // 🌍 is 4 bytes; ensure we don't panic on char boundary
+        let positions = find_occurrence_positions("a🌍b🌍c", "🌍");
+        assert_eq!(positions, vec![1, 1]);
+    }
+
+    #[test]
+    fn test_find_occurrence_empty_needle() {
+        // Empty needle matches everywhere — just ensure no panic
+        let positions = find_occurrence_positions("abc", "");
+        assert!(!positions.is_empty());
+    }
+
+    #[test]
+    fn test_find_occurrence_no_match() {
+        let positions = find_occurrence_positions("abc", "xyz");
+        assert_eq!(positions, Vec::<usize>::new());
+    }
 }
 
 /// Find line numbers (1-indexed) of all occurrences of `needle` in `haystack`.
 pub fn find_occurrence_positions(haystack: &str, needle: &str) -> Vec<usize> {
     let mut positions = Vec::new();
     let mut search_pos = 0;
-    while let Some(pos) = haystack[search_pos..].find(needle) {
-        let abs_pos = search_pos + pos;
-        let line_num = haystack[..abs_pos].matches('\n').count() + 1;
-        positions.push(line_num);
-        search_pos = abs_pos + 1;
+    while let Some(slice) = haystack.get(search_pos..) {
+        if let Some(pos) = slice.find(needle) {
+            let abs_pos = search_pos + pos;
+            let line_num = haystack[..abs_pos].matches('\n').count() + 1;
+            positions.push(line_num);
+            search_pos = abs_pos + 1;
+            // Snap to next valid UTF-8 char boundary
+            while search_pos < haystack.len() && !haystack.is_char_boundary(search_pos) {
+                search_pos += 1;
+            }
+        } else {
+            break;
+        }
     }
     positions
 }
