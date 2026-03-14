@@ -70,16 +70,33 @@ impl ConfigLoader {
         Ok(config)
     }
 
-    /// Load a config file as a partial JSON value.
+    /// Load a config file as a partial JSON value, applying migrations if needed.
     fn load_file(path: &Path) -> Result<serde_json::Value, ConfigError> {
         let content = std::fs::read_to_string(path).map_err(|e| ConfigError::ReadError {
             path: path.display().to_string(),
             source: e,
         })?;
-        serde_json::from_str(&content).map_err(|e| ConfigError::ParseError {
-            path: path.display().to_string(),
-            source: e,
-        })
+        let value: serde_json::Value =
+            serde_json::from_str(&content).map_err(|e| ConfigError::ParseError {
+                path: path.display().to_string(),
+                source: e,
+            })?;
+
+        // Apply config migrations if the version is outdated
+        let (migrated, changed) = crate::migration::migrate_config(value);
+        if changed {
+            debug!(
+                "Migrated config at {:?} to version {}",
+                path,
+                crate::migration::CURRENT_CONFIG_VERSION
+            );
+            // Best-effort write-back of migrated config
+            if let Ok(json) = serde_json::to_string_pretty(&migrated) {
+                let _ = std::fs::write(path, json);
+            }
+        }
+
+        Ok(migrated)
     }
 
     /// Merge a partial JSON config onto an existing AppConfig.

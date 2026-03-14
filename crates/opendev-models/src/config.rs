@@ -358,8 +358,15 @@ pub struct AppConfig {
     // Model variants
     #[serde(default)]
     pub model_variants: HashMap<String, ModelVariant>,
+
+    // Config version for migration support
+    #[serde(default = "default_config_version")]
+    pub config_version: u32,
 }
 
+fn default_config_version() -> u32 {
+    1
+}
 fn default_model_provider() -> String {
     "fireworks".to_string()
 }
@@ -432,6 +439,7 @@ impl Default for AppConfig {
             plan_mode_explore_variant: "enabled".to_string(),
             instructions: None,
             model_variants: HashMap::new(),
+            config_version: default_config_version(),
         }
     }
 }
