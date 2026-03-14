@@ -243,10 +243,8 @@ impl HttpClient {
                         .and_then(|v| v.to_str().ok())
                         .map(String::from);
                     let body = resp.json::<serde_json::Value>().await.ok();
-                    return Ok(
-                        HttpResult::retryable_status(status, body, retry_after)
-                            .with_request_id(request_id),
-                    );
+                    return Ok(HttpResult::retryable_status(status, body, retry_after)
+                        .with_request_id(request_id));
                 }
                 let body = resp.json::<serde_json::Value>().await?;
                 if status >= 400 {
