@@ -1032,9 +1032,14 @@ impl ReactLoop {
                                 continue;
                             }
                             let (summary, status) = Self::extract_task_complete_args(tc);
+                            // Emit summary as agent chunk so TUI displays it
+                            if let Some(cb) = event_callback {
+                                cb.on_agent_chunk(&summary);
+                            }
                             iter_metrics.total_duration_ms =
                                 iter_start.elapsed().as_millis() as u64;
                             self.push_metrics(iter_metrics);
+                            play_finish_sound();
                             let mut result = AgentResult::ok(summary, messages.clone());
                             result.completion_status = Some(status);
                             return Ok(result);
