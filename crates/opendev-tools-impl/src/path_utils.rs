@@ -7,7 +7,7 @@
 //!
 //! These utilities detect and correct such cases.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Expand tilde (`~`) and `$HOME` prefixes in a path string.
 ///
@@ -39,40 +39,78 @@ pub fn expand_home(path: &str) -> String {
     path.to_string()
 }
 
+/// Strip leading `.` and `./` components from a path, returning the
+/// meaningful portion. E.g., `./myproject/src` → `myproject/src`.
+fn strip_curdir(path: &Path) -> PathBuf {
+    path.components()
+        .filter(|c| !matches!(c, Component::CurDir))
+        .collect()
+}
+
 /// Resolve a user-provided directory path against the working directory.
 ///
 /// Handles the common LLM mistake where the path is the same as the working
 /// directory's basename (e.g., passing `"myproject"` when cwd is already
 /// `/home/user/myproject`), which would otherwise produce a doubled path.
 pub fn resolve_dir_path(user_path: &str, working_dir: &Path) -> PathBuf {
-    let path = Path::new(user_path);
+    // Expand ~/  and $HOME/ before any resolution.
+    let expanded = expand_home(user_path);
+    let path = strip_curdir(Path::new(&expanded));
+    let path = path.as_path();
     if path.is_absolute() {
         if path.is_dir() {
-            path.to_path_buf()
-        } else {
-            // Absolute path doesn't exist as a directory — check if it matches
-            // the working directory or is a parent prefix of it.
-            if working_dir.starts_with(path) || working_dir == path {
-                working_dir.to_path_buf()
-            } else {
-                path.to_path_buf()
+            return path.to_path_buf();
+        }
+        // Check if the path has a redundant component matching the working dir basename.
+        // e.g., /home/user/myproject/myproject/src -> /home/user/myproject/src
+        if let Ok(rel) = path.strip_prefix(working_dir)
+            && let Some(first) = rel.components().next()
+        {
+            let first_name = first.as_os_str();
+            if working_dir
+                .file_name()
+                .map(|n| n == first_name)
+                .unwrap_or(false)
+            {
+                let fixed = working_dir.join(rel.strip_prefix(first_name).unwrap_or(rel));
+                if fixed.is_dir() || fixed.parent().map(|p| p.is_dir()).unwrap_or(false) {
+                    return fixed;
+                }
             }
+        }
+        // Absolute path doesn't exist as a directory — check if it matches
+        // the working directory or is a parent prefix of it.
+        if working_dir.starts_with(path) || working_dir == path {
+            working_dir.to_path_buf()
+        } else {
+            path.to_path_buf()
         }
     } else {
         let joined = working_dir.join(path);
         if joined.is_dir() {
-            joined
-        } else if working_dir
-            .file_name()
-            .map(|n| n == user_path)
-            .unwrap_or(false)
-        {
-            // The relative path is the same as the working dir's basename,
-            // meaning the LLM redundantly specified it. Fall back to cwd.
-            working_dir.to_path_buf()
-        } else {
-            joined
+            return joined;
         }
+        // Check if first component matches working dir basename (redundant prefix)
+        let mut components = path.components();
+        if let Some(first) = components.next() {
+            let first_name = first.as_os_str();
+            if working_dir
+                .file_name()
+                .map(|n| n == first_name)
+                .unwrap_or(false)
+            {
+                let rest: PathBuf = components.collect();
+                if rest.as_os_str().is_empty() {
+                    // Single component matching basename — fall back to cwd
+                    return working_dir.to_path_buf();
+                }
+                let fixed = working_dir.join(&rest);
+                if fixed.is_dir() || fixed.parent().map(|p| p.is_dir()).unwrap_or(false) {
+                    return fixed;
+                }
+            }
+        }
+        joined
     }
 }
 
@@ -82,7 +120,10 @@ pub fn resolve_dir_path(user_path: &str, working_dir: &Path) -> PathBuf {
 /// doesn't exist when joined with working_dir, checks if stripping a redundant
 /// leading directory component (matching the working dir's basename) helps.
 pub fn resolve_file_path(user_path: &str, working_dir: &Path) -> PathBuf {
-    let path = Path::new(user_path);
+    // Expand ~/  and $HOME/ before any resolution.
+    let expanded = expand_home(user_path);
+    let path = strip_curdir(Path::new(&expanded));
+    let path = path.as_path();
     if path.is_absolute() {
         if path.exists() {
             return path.to_path_buf();
@@ -312,6 +353,111 @@ mod tests {
         // But test that a non-existent relative path still returns the join
         let result = resolve_dir_path("nonexistent", tmp.path());
         assert_eq!(result, tmp.path().join("nonexistent"));
+    }
+
+    #[test]
+    fn test_resolve_dir_path_absolute_redundant() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        let src = project.join("src");
+        fs::create_dir_all(&src).unwrap();
+
+        // Absolute path with doubled project name: /tmp/X/myproject/myproject/src
+        let wrong_path = project.join("myproject").join("src");
+        let result = resolve_dir_path(wrong_path.to_str().unwrap(), &project);
+        assert_eq!(result, src);
+    }
+
+    #[test]
+    fn test_resolve_dir_path_relative_multi_component() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        let src = project.join("src");
+        fs::create_dir_all(&src).unwrap();
+
+        // LLM passes "myproject/src" when cwd is already myproject
+        let result = resolve_dir_path("myproject/src", &project);
+        assert_eq!(result, src);
+    }
+
+    #[test]
+    fn test_resolve_dir_path_absolute_redundant_nonexistent() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        fs::create_dir(&project).unwrap();
+
+        // Absolute redundant path where target doesn't exist but parent does after fix
+        // /tmp/X/myproject/myproject/newdir -> /tmp/X/myproject/newdir (parent exists)
+        let wrong_path = project.join("myproject").join("newdir");
+        let result = resolve_dir_path(wrong_path.to_str().unwrap(), &project);
+        assert_eq!(result, project.join("newdir"));
+    }
+
+    #[test]
+    fn test_resolve_dir_path_dot_slash_redundant() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        let src = project.join("src");
+        fs::create_dir_all(&src).unwrap();
+
+        // LLM passes "./myproject/src" — `./` prefix must be stripped first
+        let result = resolve_dir_path("./myproject/src", &project);
+        assert_eq!(result, src);
+    }
+
+    #[test]
+    fn test_resolve_file_path_dot_slash_redundant() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        fs::create_dir(&project).unwrap();
+        fs::write(project.join("main.rs"), "fn main() {}").unwrap();
+
+        // LLM passes "./myproject/main.rs" — `./` prefix must be stripped
+        let result = resolve_file_path("./myproject/main.rs", &project);
+        assert_eq!(result, project.join("main.rs"));
+    }
+
+    #[test]
+    fn test_resolve_file_path_tilde_redundant() {
+        // Verify that tilde paths are expanded before resolution.
+        // We can't easily test with a real home dir, but we can test that
+        // expand_home is called by checking the path doesn't start with ~.
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        fs::create_dir(&project).unwrap();
+
+        // A tilde path that doesn't match anything real — should still expand
+        let result = resolve_file_path("~/nonexistent_dir_xyz/file.rs", &project);
+        assert!(
+            !result.to_string_lossy().contains('~'),
+            "tilde should be expanded: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_dir_path_tilde_expanded() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        fs::create_dir(&project).unwrap();
+
+        let result = resolve_dir_path("~/nonexistent_dir_xyz", &project);
+        assert!(
+            !result.to_string_lossy().contains('~'),
+            "tilde should be expanded: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_file_path_dot_slash_valid() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("myproject");
+        let src = project.join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("lib.rs"), "").unwrap();
+
+        // "./src/lib.rs" should resolve normally (no redundant prefix)
+        let result = resolve_file_path("./src/lib.rs", &project);
+        assert_eq!(result, project.join("src/lib.rs"));
     }
 
     #[test]

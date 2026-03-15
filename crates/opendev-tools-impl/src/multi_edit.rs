@@ -257,7 +257,8 @@ impl BaseTool for MultiEditTool {
             }
 
             // --- Auto-format ---
-            let formatted = formatter::format_file(file_path, &ctx.working_dir);
+            let formatted =
+                formatter::format_file(path.to_str().unwrap_or(file_path), &ctx.working_dir);
 
             // --- Build result ---
             let mut metadata = HashMap::new();

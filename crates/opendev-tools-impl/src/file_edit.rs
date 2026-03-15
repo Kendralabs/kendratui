@@ -183,7 +183,8 @@ impl BaseTool for FileEditTool {
             }
 
             // Auto-format if a formatter is available
-            let formatted = formatter::format_file(file_path, &ctx.working_dir);
+            let formatted =
+                formatter::format_file(path.to_str().unwrap_or(file_path), &ctx.working_dir);
 
             let replacements = if replace_all { count } else { 1 };
 

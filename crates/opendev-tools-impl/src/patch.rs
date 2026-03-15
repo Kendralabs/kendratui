@@ -6,6 +6,7 @@ use std::path::Path;
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
 use crate::diagnostics_helper;
+use crate::path_utils::resolve_file_path;
 
 /// Tool for applying unified diff patches.
 #[derive(Debug)]
@@ -255,7 +256,7 @@ fn parse_hunk_header(line: &str) -> Option<HunkBuilder> {
 }
 
 fn apply_hunks(cwd: &Path, file: &str, hunks: &[Hunk]) -> Result<(), String> {
-    let path = cwd.join(file);
+    let path = resolve_file_path(file, cwd);
 
     let original = if path.exists() {
         std::fs::read_to_string(&path).map_err(|e| format!("Cannot read {file}: {e}"))?
@@ -431,7 +432,7 @@ fn apply_structured_patch(patch: &str, cwd: &Path) -> ToolResult {
     for op in &ops {
         match op {
             PatchOp::AddFile { path, content } => {
-                let full = cwd.join(path);
+                let full = resolve_file_path(path, cwd);
                 if let Err(e) = ensure_parent(&full) {
                     return ToolResult::fail(format!("Cannot create directory for {path}: {e}"));
                 }
@@ -441,7 +442,7 @@ fn apply_structured_patch(patch: &str, cwd: &Path) -> ToolResult {
                 summary.push(format!("A {path}"));
             }
             PatchOp::DeleteFile { path } => {
-                let full = cwd.join(path);
+                let full = resolve_file_path(path, cwd);
                 if full.exists()
                     && let Err(e) = std::fs::remove_file(&full)
                 {
@@ -450,8 +451,8 @@ fn apply_structured_patch(patch: &str, cwd: &Path) -> ToolResult {
                 summary.push(format!("D {path}"));
             }
             PatchOp::MoveFile { old_path, new_path } => {
-                let old_full = cwd.join(old_path);
-                let new_full = cwd.join(new_path);
+                let old_full = resolve_file_path(old_path, cwd);
+                let new_full = resolve_file_path(new_path, cwd);
                 if let Err(e) = ensure_parent(&new_full) {
                     return ToolResult::fail(format!(
                         "Cannot create directory for {new_path}: {e}"
@@ -474,7 +475,7 @@ fn apply_structured_patch(patch: &str, cwd: &Path) -> ToolResult {
                 summary.push(format!("R {old_path} -> {new_path}"));
             }
             PatchOp::UpdateFile { path, changes } => {
-                let full = cwd.join(path);
+                let full = resolve_file_path(path, cwd);
                 let content = match std::fs::read_to_string(&full) {
                     Ok(c) => c,
                     Err(e) => {
