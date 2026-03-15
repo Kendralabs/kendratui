@@ -666,6 +666,20 @@ impl ReactLoop {
         let mut consecutive_no_tool_calls: usize = 0;
         let mut doom_detector = DoomLoopDetector::new();
 
+        // Per-subdirectory instruction injection tracker.
+        // Initialized with the working dir as root; startup instruction
+        // paths are discovered from existing instruction files.
+        let mut subdir_tracker = {
+            let startup_paths = opendev_context::discover_instruction_files(&tool_context.working_dir)
+                .into_iter()
+                .map(|f| f.path)
+                .collect::<Vec<_>>();
+            opendev_context::SubdirInstructionTracker::new(
+                tool_context.working_dir.clone(),
+                &startup_paths,
+            )
+        };
+
         // Nudge/reminder state tracking
         let mut todo_nudge_count: usize = 0;
         let mut all_todos_complete_nudged = false;
@@ -1428,6 +1442,35 @@ impl ReactLoop {
                             "name": tool_name,
                             "content": formatted,
                         }));
+
+                        // Lazy per-subdirectory instruction injection.
+                        // When the agent reads/edits a file, check if there are
+                        // AGENTS.md/CLAUDE.md files in that file's directory tree
+                        // that haven't been injected yet.
+                        if tool_result.success
+                            && matches!(tool_name, "read_file" | "edit_file" | "write_file" | "search")
+                        {
+                            let file_path_str = args_value
+                                .get("file_path")
+                                .or_else(|| args_value.get("path"))
+                                .and_then(|v| v.as_str());
+                            if let Some(fp) = file_path_str {
+                                let path = std::path::Path::new(fp);
+                                let instructions = subdir_tracker.check_file_read(path);
+                                for instr in &instructions {
+                                    let note = format!(
+                                        "<system-reminder>\nThe following project instructions apply to files in this directory ({}):\n\n{}\n</system-reminder>",
+                                        instr.relative_path,
+                                        instr.content,
+                                    );
+                                    append_directive(messages, &note);
+                                    debug!(
+                                        path = %instr.relative_path,
+                                        "Injected subdirectory instruction file"
+                                    );
+                                }
+                            }
+                        }
 
                         // Error directive after tool failure — reaches thinking model
                         // so it can plan a different approach

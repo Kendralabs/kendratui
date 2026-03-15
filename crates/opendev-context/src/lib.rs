@@ -11,6 +11,7 @@ pub mod context_picker;
 pub mod environment;
 pub mod pair_validator;
 pub mod retrieval;
+pub mod subdir_instructions;
 pub mod validated_list;
 pub mod worktree;
 
@@ -27,5 +28,6 @@ pub use retrieval::{
     CodebaseIndexer, ContextRetriever, ContextTokenMonitor, Entities, EntityExtractor, FileMatch,
     RetrievalContext,
 };
+pub use subdir_instructions::{SubdirInstruction, SubdirInstructionTracker};
 pub use validated_list::ValidatedMessageList;
 pub use worktree::{WorktreeInfo, WorktreeManager};
