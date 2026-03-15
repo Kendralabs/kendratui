@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use opendev_tools_core::{BaseTool, ToolContext, ToolRegistry, ToolResult};
+use opendev_tools_core::{BaseTool, ToolContext, ToolRegistry, ToolResult, ValidationError};
 use tracing::{debug, warn};
 
 /// Maximum number of concurrent tool calls in a single batch.
@@ -70,6 +70,26 @@ impl BaseTool for BatchTool {
             },
             "required": ["invocations"]
         })
+    }
+
+    fn format_validation_error(&self, errors: &[ValidationError]) -> Option<String> {
+        let details: Vec<String> = errors
+            .iter()
+            .map(|e| {
+                if e.path.is_empty() || e.path == "root" {
+                    format!("  - {}", e.message)
+                } else {
+                    format!("  - {}: {}", e.path, e.message)
+                }
+            })
+            .collect();
+
+        Some(format!(
+            "Invalid parameters for tool 'batch_tool':\n{}\n\n\
+             Expected format:\n\
+             {{\"invocations\": [{{\"tool\": \"tool_name\", \"input\": {{...}}}}, ...]}}",
+            details.join("\n")
+        ))
     }
 
     async fn execute(
@@ -475,6 +495,43 @@ mod tests {
         assert_eq!(results[0]["index"], 0);
         assert_eq!(results[1]["index"], 1);
         assert_eq!(results[2]["index"], 2);
+    }
+
+    #[test]
+    fn test_batch_format_validation_error() {
+        let registry = make_registry_with_tools();
+        let tool = BatchTool::new(registry);
+        let errors = vec![
+            ValidationError {
+                path: "invocations".to_string(),
+                message: "Missing required parameter: 'invocations'".to_string(),
+            },
+        ];
+        let formatted = tool.format_validation_error(&errors);
+        assert!(formatted.is_some());
+        let msg = formatted.unwrap();
+        assert!(msg.contains("Invalid parameters for tool 'batch_tool'"));
+        assert!(msg.contains("invocations"));
+        assert!(msg.contains("Expected format"));
+    }
+
+    #[test]
+    fn test_batch_format_validation_error_multiple() {
+        let registry = make_registry_with_tools();
+        let tool = BatchTool::new(registry);
+        let errors = vec![
+            ValidationError {
+                path: "invocations".to_string(),
+                message: "expected type 'array', got string".to_string(),
+            },
+            ValidationError {
+                path: "extra_field".to_string(),
+                message: "Unknown parameter".to_string(),
+            },
+        ];
+        let formatted = tool.format_validation_error(&errors).unwrap();
+        assert!(formatted.contains("invocations: expected type 'array'"));
+        assert!(formatted.contains("extra_field: Unknown parameter"));
     }
 
     #[tokio::test]

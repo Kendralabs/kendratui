@@ -23,4 +23,4 @@ pub use middleware::ToolMiddleware;
 pub use policy::ToolPolicy;
 pub use registry::ToolRegistry;
 pub use sanitizer::ToolResultSanitizer;
-pub use traits::{BaseTool, ToolContext, ToolError, ToolResult, ToolTimeoutConfig};
+pub use traits::{BaseTool, ToolContext, ToolError, ToolResult, ToolTimeoutConfig, ValidationError};

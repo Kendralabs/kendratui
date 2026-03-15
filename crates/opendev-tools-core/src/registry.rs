@@ -274,9 +274,22 @@ impl ToolRegistry {
 
         // Validate parameters against schema
         let schema = tool.parameter_schema();
-        if let Err(validation_err) = validation::validate_args(&normalized, &schema) {
-            warn!(tool = %tool_name, error = %validation_err, "Parameter validation failed");
-            return ToolResult::fail(format!("Validation error: {validation_err}"));
+        let validation_errors = validation::validate_args_detailed(&normalized, &schema);
+        if !validation_errors.is_empty() {
+            // Try tool-specific formatter first, then fall back to generic message
+            let error_msg = tool
+                .format_validation_error(&validation_errors)
+                .unwrap_or_else(|| {
+                    let details: Vec<String> =
+                        validation_errors.iter().map(|e| e.to_string()).collect();
+                    format!(
+                        "The {} tool was called with invalid arguments:\n  - {}\nPlease fix the arguments and try again.",
+                        tool_name,
+                        details.join("\n  - ")
+                    )
+                });
+            warn!(tool = %tool_name, error = %error_msg, "Parameter validation failed");
+            return ToolResult::fail(error_msg);
         }
 
         // Clone middleware Arcs out of the lock so we can call async methods
@@ -635,8 +648,9 @@ mod tests {
         let ctx = ToolContext::new("/tmp/test");
         let result = reg.execute("echo", args, &ctx).await;
         assert!(!result.success);
-        assert!(result.error.as_ref().unwrap().contains("Validation error"));
-        assert!(result.error.as_ref().unwrap().contains("message"));
+        let err = result.error.as_ref().unwrap();
+        assert!(err.contains("invalid arguments") || err.contains("Validation error"));
+        assert!(err.contains("message"));
     }
 
     #[tokio::test]
@@ -649,7 +663,57 @@ mod tests {
         let ctx = ToolContext::new("/tmp/test");
         let result = reg.execute("echo", args, &ctx).await;
         assert!(!result.success);
-        assert!(result.error.as_ref().unwrap().contains("Validation error"));
+        let err = result.error.as_ref().unwrap();
+        assert!(err.contains("invalid arguments") || err.contains("Validation error"));
+    }
+
+    #[tokio::test]
+    async fn test_validation_uses_custom_formatter() {
+        /// A tool with a custom validation error formatter.
+        #[derive(Debug)]
+        struct CustomValidTool;
+
+        #[async_trait::async_trait]
+        impl BaseTool for CustomValidTool {
+            fn name(&self) -> &str {
+                "custom_valid"
+            }
+            fn description(&self) -> &str {
+                "Test"
+            }
+            fn parameter_schema(&self) -> serde_json::Value {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"}
+                    },
+                    "required": ["path"]
+                })
+            }
+            async fn execute(
+                &self,
+                _args: HashMap<String, serde_json::Value>,
+                _ctx: &ToolContext,
+            ) -> ToolResult {
+                ToolResult::ok("ok")
+            }
+            fn format_validation_error(
+                &self,
+                errors: &[crate::traits::ValidationError],
+            ) -> Option<String> {
+                Some(format!("CUSTOM: {} issues found", errors.len()))
+            }
+        }
+
+        let reg = ToolRegistry::new();
+        reg.register(Arc::new(CustomValidTool));
+
+        let args = HashMap::new(); // missing "path"
+        let ctx = ToolContext::new("/tmp/test");
+        let result = reg.execute("custom_valid", args, &ctx).await;
+        assert!(!result.success);
+        let err = result.error.unwrap();
+        assert!(err.starts_with("CUSTOM: 1 issues found"));
     }
 
     // --- Per-tool timeout tests ---

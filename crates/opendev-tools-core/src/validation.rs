@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use crate::traits::ValidationError;
+
 /// Validate tool arguments against a JSON Schema.
 ///
 /// Performs basic validation:
@@ -17,13 +19,34 @@ pub fn validate_args(
     args: &HashMap<String, serde_json::Value>,
     schema: &serde_json::Value,
 ) -> Result<(), String> {
+    let errors = validate_args_detailed(args, schema);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors[0].to_string())
+    }
+}
+
+/// Validate tool arguments and return all validation errors (not just the first).
+///
+/// Returns a `Vec<ValidationError>` with structured path+message pairs.
+/// An empty Vec means validation passed.
+pub fn validate_args_detailed(
+    args: &HashMap<String, serde_json::Value>,
+    schema: &serde_json::Value,
+) -> Vec<ValidationError> {
+    let mut errors = Vec::new();
+
     // Check required fields
     if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
         for req in required {
             if let Some(field_name) = req.as_str()
                 && !args.contains_key(field_name)
             {
-                return Err(format!("Missing required parameter: '{field_name}'"));
+                errors.push(ValidationError {
+                    path: field_name.to_string(),
+                    message: format!("Missing required parameter: '{field_name}'"),
+                });
             }
         }
     }
@@ -31,14 +54,18 @@ pub fn validate_args(
     // Check property types
     if let Some(properties) = schema.get("properties").and_then(|p| p.as_object()) {
         for (key, value) in args {
-            if let Some(prop_schema) = properties.get(key) {
-                validate_value_type(key, value, prop_schema)?;
+            if let Some(prop_schema) = properties.get(key)
+                && let Err(msg) = validate_value_type(key, value, prop_schema)
+            {
+                errors.push(ValidationError {
+                    path: key.clone(),
+                    message: msg,
+                });
             }
-            // Extra properties not in schema are allowed (no additionalProperties check)
         }
     }
 
-    Ok(())
+    errors
 }
 
 /// Validate a single value against its property schema.
@@ -271,5 +298,61 @@ mod tests {
         let result = validate_args(&args, &schema);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("age"));
+    }
+
+    // --- validate_args_detailed tests ---
+
+    #[test]
+    fn test_detailed_returns_all_errors() {
+        let schema = make_schema(
+            json!({
+                "name": {"type": "string"},
+                "age": {"type": "integer"},
+                "email": {"type": "string"}
+            }),
+            vec!["name", "age", "email"],
+        );
+        let args = HashMap::new(); // all three missing
+        let errors = super::validate_args_detailed(&args, &schema);
+        assert_eq!(errors.len(), 3);
+        let paths: Vec<&str> = errors.iter().map(|e| e.path.as_str()).collect();
+        assert!(paths.contains(&"name"));
+        assert!(paths.contains(&"age"));
+        assert!(paths.contains(&"email"));
+    }
+
+    #[test]
+    fn test_detailed_mixed_missing_and_wrong_type() {
+        let schema = make_schema(
+            json!({
+                "name": {"type": "string"},
+                "count": {"type": "integer"}
+            }),
+            vec!["name"],
+        );
+        let mut args = HashMap::new();
+        // missing "name" (required) + wrong type for "count"
+        args.insert("count".into(), json!("not_a_number"));
+        let errors = super::validate_args_detailed(&args, &schema);
+        assert_eq!(errors.len(), 2);
+    }
+
+    #[test]
+    fn test_detailed_empty_on_valid() {
+        let schema = make_schema(json!({"name": {"type": "string"}}), vec!["name"]);
+        let mut args = HashMap::new();
+        args.insert("name".into(), json!("Alice"));
+        let errors = super::validate_args_detailed(&args, &schema);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_detailed_error_has_path_and_message() {
+        let schema = make_schema(json!({"file": {"type": "string"}}), vec!["file"]);
+        let args = HashMap::new();
+        let errors = super::validate_args_detailed(&args, &schema);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].path, "file");
+        assert!(errors[0].message.contains("Missing required"));
     }
 }

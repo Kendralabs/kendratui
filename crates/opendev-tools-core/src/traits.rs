@@ -9,6 +9,28 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
+/// A structured validation error with field path and message.
+///
+/// Used by `BaseTool::format_validation_error` to provide context about
+/// each validation failure.
+#[derive(Debug, Clone)]
+pub struct ValidationError {
+    /// Dot-separated path to the invalid field (e.g. `"tool_calls.0.tool"`).
+    pub path: String,
+    /// Human-readable description of what went wrong.
+    pub message: String,
+}
+
+impl std::fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.path.is_empty() || self.path == "root" {
+            write!(f, "{}", self.message)
+        } else {
+            write!(f, "{}: {}", self.path, self.message)
+        }
+    }
+}
+
 /// Errors that can occur during tool execution.
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
@@ -235,6 +257,20 @@ pub trait BaseTool: Send + Sync + std::fmt::Debug {
         args: HashMap<String, serde_json::Value>,
         ctx: &ToolContext,
     ) -> ToolResult;
+
+    /// Format a validation error into a tool-specific, LLM-friendly message.
+    ///
+    /// When validation fails, the registry calls this method to produce a
+    /// structured error that helps the LLM understand exactly what went wrong
+    /// and how to fix the call. Tools that don't override this get the default
+    /// generic validation error message.
+    ///
+    /// The `errors` slice contains `(field_path, message)` pairs extracted
+    /// from the JSON Schema validation.
+    fn format_validation_error(&self, errors: &[ValidationError]) -> Option<String> {
+        let _ = errors;
+        None
+    }
 }
 
 #[cfg(test)]
@@ -360,5 +396,49 @@ mod tests {
     fn test_tool_context_default_no_timeout_config() {
         let ctx = ToolContext::default();
         assert!(ctx.timeout_config.is_none());
+    }
+
+    // --- ValidationError tests ---
+
+    #[test]
+    fn test_validation_error_display_with_path() {
+        let err = ValidationError {
+            path: "file_path".to_string(),
+            message: "Missing required parameter: 'file_path'".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "file_path: Missing required parameter: 'file_path'"
+        );
+    }
+
+    #[test]
+    fn test_validation_error_display_root_path() {
+        let err = ValidationError {
+            path: "root".to_string(),
+            message: "Invalid object".to_string(),
+        };
+        assert_eq!(err.to_string(), "Invalid object");
+    }
+
+    #[test]
+    fn test_validation_error_display_empty_path() {
+        let err = ValidationError {
+            path: String::new(),
+            message: "Something is wrong".to_string(),
+        };
+        assert_eq!(err.to_string(), "Something is wrong");
+    }
+
+    #[test]
+    fn test_validation_error_display_nested_path() {
+        let err = ValidationError {
+            path: "invocations.0.tool".to_string(),
+            message: "expected type 'string', got number".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "invocations.0.tool: expected type 'string', got number"
+        );
     }
 }
