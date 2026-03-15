@@ -240,14 +240,45 @@ impl AgentRuntime {
         }
 
         // Register invoke_skill tool with project-local and user-global skill dirs.
-        // Priority order (first = highest): .claude/skills > .opendev/skills at each level,
+        // Priority order (first = highest): .claude/skills > .agents/skills > .opendev/skills
+        // at each level from working_dir up to git root, then global dirs,
         // then config-specified skill_paths (lowest priority among custom dirs).
         let mut skill_dirs = Vec::new();
-        skill_dirs.push(working_dir.join(".claude").join("skills"));
-        skill_dirs.push(working_dir.join(".opendev").join("skills"));
+
+        // Walk from working_dir up to git root, scanning for skill directories
+        // at each level. This supports monorepos where subdirectories can have
+        // their own skill overrides.
+        let git_root = std::process::Command::new("git")
+            .args(["rev-parse", "--show-toplevel"])
+            .current_dir(working_dir)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| {
+                String::from_utf8(o.stdout)
+                    .ok()
+                    .map(|s| PathBuf::from(s.trim()))
+            });
+        let stop_dir = git_root.as_deref().unwrap_or(working_dir);
+
+        {
+            let mut current = working_dir.to_path_buf();
+            loop {
+                for subdir in &[".claude", ".agents", ".opendev"] {
+                    let skills_dir = current.join(subdir).join("skills");
+                    skill_dirs.push(skills_dir);
+                }
+                if current == stop_dir || !current.pop() {
+                    break;
+                }
+            }
+        }
+
+        // Global (home) skill directories
         if let Some(home) = dirs_next::home_dir() {
-            skill_dirs.push(home.join(".claude").join("skills"));
-            skill_dirs.push(home.join(".opendev").join("skills"));
+            for subdir in &[".claude", ".agents", ".opendev"] {
+                skill_dirs.push(home.join(subdir).join("skills"));
+            }
         }
         // Append config-specified skill paths (resolved relative to working_dir, ~/expanded)
         for path in &config.skill_paths {
@@ -757,6 +788,110 @@ impl AgentRuntime {
         );
 
         Ok(result)
+    }
+
+    /// Run manual compaction on the current session's messages.
+    ///
+    /// Forces LLM-powered compaction regardless of context usage level.
+    /// Updates the session messages in-place with the compacted result.
+    pub async fn run_compaction(&mut self) -> Result<String, String> {
+        use opendev_agents::prompts::embedded::SYSTEM_COMPACTION;
+
+        // Load current session messages as API values
+        let session_messages = self
+            .session_manager
+            .current_session()
+            .map(|s| opendev_history::message_convert::chatmessages_to_api_values(&s.messages))
+            .unwrap_or_default();
+
+        if session_messages.len() < 5 {
+            return Err("Not enough messages to compact (need at least 5).".to_string());
+        }
+
+        let api_msgs: Vec<serde_json::Map<String, serde_json::Value>> = session_messages
+            .iter()
+            .filter_map(|v| v.as_object().cloned())
+            .collect();
+
+        let compact_model = &self.llm_caller.config.model;
+        let original_count = api_msgs.len();
+
+        // Try LLM-powered compaction
+        let build_result = if let Ok(comp) = self.compactor.lock() {
+            comp.build_compaction_payload(&api_msgs, SYSTEM_COMPACTION, compact_model)
+        } else {
+            None
+        };
+
+        let compacted = if let Some((payload, _middle_count, keep_recent)) = build_result {
+            // Call LLM for summarization
+            let summary_text: Option<String> = match self.http_client.post_json(&payload, None).await
+            {
+                Ok(result) => result
+                    .body
+                    .as_ref()
+                    .and_then(|body| body.pointer("/choices/0/message/content"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                Err(e) => {
+                    warn!("LLM compaction request failed: {e}, using fallback");
+                    None
+                }
+            };
+
+            let summary = match summary_text {
+                Some(text) if !text.is_empty() => {
+                    info!(
+                        model = compact_model,
+                        summary_len = text.len(),
+                        "Manual LLM compaction succeeded"
+                    );
+                    text
+                }
+                _ => {
+                    warn!("LLM compaction returned empty, using fallback");
+                    ContextCompactor::fallback_summary(
+                        &api_msgs[1..api_msgs.len().saturating_sub(keep_recent)],
+                    )
+                }
+            };
+
+            if let Ok(mut comp) = self.compactor.lock() {
+                comp.apply_llm_compaction(api_msgs, &summary, keep_recent)
+            } else {
+                return Err("Failed to acquire compactor lock".to_string());
+            }
+        } else {
+            // Fallback to basic compaction
+            if let Ok(mut comp) = self.compactor.lock() {
+                comp.compact(api_msgs, "")
+            } else {
+                return Err("Failed to acquire compactor lock".to_string());
+            }
+        };
+
+        let compacted_count = compacted.len();
+
+        // Convert compacted API messages back to ChatMessages and replace session
+        let compacted_values: Vec<serde_json::Value> = compacted
+            .into_iter()
+            .map(serde_json::Value::Object)
+            .collect();
+        let new_chat_messages =
+            opendev_history::message_convert::api_values_to_chatmessages(&compacted_values);
+
+        if let Some(session) = self.session_manager.current_session_mut() {
+            session.messages = new_chat_messages;
+        }
+
+        // Save the compacted session
+        if let Err(e) = self.session_manager.save_current() {
+            warn!("Failed to save compacted session: {e}");
+        }
+
+        Ok(format!(
+            "Conversation compacted: {original_count} messages \u{2192} {compacted_count} messages."
+        ))
     }
 }
 

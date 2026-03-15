@@ -646,11 +646,13 @@ fn pull_url_skills(base_url: &str) -> Result<Vec<PathBuf>, String> {
 
 fn detect_source(skill_dir: &Path) -> SkillSource {
     if let Some(home) = dirs::home_dir() {
-        // Check if the path is under the user home directory's .opendev/skills or .claude/skills.
-        let global_opendev = home.join(".opendev").join("skills");
-        let global_claude = home.join(".claude").join("skills");
-        if skill_dir.starts_with(&global_opendev) || skill_dir.starts_with(&global_claude) {
-            return SkillSource::UserGlobal;
+        // Check if the path is under the user home directory's .opendev/skills, .claude/skills,
+        // or .agents/skills.
+        for subdir in &[".opendev", ".claude", ".agents"] {
+            let global_dir = home.join(subdir).join("skills");
+            if skill_dir.starts_with(&global_dir) {
+                return SkillSource::UserGlobal;
+            }
         }
     }
     SkillSource::Project
@@ -1359,6 +1361,58 @@ mod tests {
 
         let myskill = skills.iter().find(|s| s.name == "myskill").unwrap();
         assert_eq!(myskill.description, "From .claude (high prio)");
+    }
+
+    #[test]
+    fn test_agents_skills_directory_discovered() {
+        let tmp = TempDir::new().unwrap();
+
+        let agents_skills = tmp.path().join(".agents").join("skills");
+        fs::create_dir_all(&agents_skills).unwrap();
+
+        fs::write(
+            agents_skills.join("deploy.md"),
+            "---\nname: deploy\ndescription: Deploy helper from .agents\n---\n\n# Deploy\nDeploy instructions.\n",
+        )
+        .unwrap();
+
+        let mut loader = SkillLoader::new(vec![agents_skills]);
+        let skills = loader.discover_skills();
+
+        let deploy = skills.iter().find(|s| s.name == "deploy").unwrap();
+        assert_eq!(deploy.description, "Deploy helper from .agents");
+    }
+
+    #[test]
+    fn test_skill_priority_claude_over_agents_over_opendev() {
+        let tmp = TempDir::new().unwrap();
+
+        let claude_skills = tmp.path().join(".claude").join("skills");
+        let agents_skills = tmp.path().join(".agents").join("skills");
+        let opendev_skills = tmp.path().join(".opendev").join("skills");
+        fs::create_dir_all(&claude_skills).unwrap();
+        fs::create_dir_all(&agents_skills).unwrap();
+        fs::create_dir_all(&opendev_skills).unwrap();
+
+        fs::write(
+            agents_skills.join("shared.md"),
+            "---\nname: shared\ndescription: From .agents\n---\n\nAgents content.\n",
+        )
+        .unwrap();
+
+        fs::write(
+            opendev_skills.join("shared.md"),
+            "---\nname: shared\ndescription: From .opendev\n---\n\nOpenDev content.\n",
+        )
+        .unwrap();
+
+        // Priority: .claude > .agents > .opendev
+        let mut loader = SkillLoader::new(vec![claude_skills, agents_skills, opendev_skills]);
+        let skills = loader.discover_skills();
+
+        let shared = skills.iter().find(|s| s.name == "shared").unwrap();
+        // .agents has higher priority than .opendev
+        assert_eq!(shared.description, "From .agents");
     }
 
     #[test]
