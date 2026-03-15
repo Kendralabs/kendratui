@@ -27,7 +27,7 @@ use opendev_repl::HandlerRegistry;
 use opendev_repl::query_enhancer::QueryEnhancer;
 use opendev_runtime::CostTracker;
 use opendev_mcp::McpManager;
-use opendev_tools_core::{ToolContext, ToolRegistry};
+use opendev_tools_core::{BaseTool, ToolContext, ToolRegistry};
 use opendev_tools_impl::*;
 
 /// Central orchestrator that owns all agent services.
@@ -230,6 +230,14 @@ impl AgentRuntime {
 
         // BatchTool needs Arc<ToolRegistry> for dispatching calls.
         tool_registry.register(Arc::new(BatchTool::new(Arc::clone(&tool_registry))));
+
+        // Register custom tools from .opendev/tools/ and .opencode/tool/ directories.
+        let custom_tools =
+            opendev_tools_impl::custom_tool::discover_custom_tools(working_dir);
+        for tool in custom_tools {
+            info!(name = tool.name(), "Registered custom tool");
+            tool_registry.register(Arc::new(tool));
+        }
 
         // Register invoke_skill tool with project-local and user-global skill dirs.
         // Priority order (first = highest): .claude/skills > .opendev/skills at each level,
