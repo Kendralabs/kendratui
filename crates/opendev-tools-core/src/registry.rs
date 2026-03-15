@@ -228,10 +228,74 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Suggest similar tool names for a mistyped name (edit distance or substring match).
+    fn suggest_tool_names(&self, name: &str) -> Vec<String> {
+        let tools = self.tools.read().expect("ToolRegistry lock poisoned");
+        let lower = name.to_lowercase();
+        let mut suggestions: Vec<String> = Vec::new();
+        for registered in tools.keys() {
+            let reg_lower = registered.to_lowercase();
+            // Substring match or short edit distance
+            if reg_lower.contains(&lower)
+                || lower.contains(&reg_lower)
+                || edit_distance(&lower, &reg_lower) <= 3
+            {
+                suggestions.push(registered.clone());
+            }
+        }
+        suggestions.sort();
+        suggestions.truncate(5);
+        suggestions
+    }
+
+    /// Try to find a tool by name with fuzzy matching fallback.
+    ///
+    /// If exact match fails, tries:
+    /// 1. Case-insensitive match
+    /// 2. Common name transformations (e.g., `ReadFile` -> `read_file`)
+    ///
+    /// Returns `(tool, resolved_name)` or `None`.
+    fn resolve_tool(&self, name: &str) -> Option<(Arc<dyn BaseTool>, String)> {
+        let tools = self.tools.read().expect("ToolRegistry lock poisoned");
+
+        // Exact match (fast path)
+        if let Some(t) = tools.get(name) {
+            return Some((Arc::clone(t), name.to_string()));
+        }
+
+        // Case-insensitive match
+        let lower = name.to_lowercase();
+        for (registered_name, tool) in tools.iter() {
+            if registered_name.to_lowercase() == lower {
+                info!(
+                    requested = %name,
+                    resolved = %registered_name,
+                    "Fuzzy tool name match (case-insensitive)"
+                );
+                return Some((Arc::clone(tool), registered_name.clone()));
+            }
+        }
+
+        // CamelCase/PascalCase -> snake_case transformation
+        let snake = camel_to_snake_name(name);
+        if snake != name
+            && let Some(t) = tools.get(&snake)
+        {
+            info!(
+                requested = %name,
+                resolved = %snake,
+                "Fuzzy tool name match (camelCase -> snake_case)"
+            );
+            return Some((Arc::clone(t), snake));
+        }
+
+        None
+    }
+
     /// Execute a tool by name with parameter normalization.
     ///
     /// Pipeline:
-    /// 1. Look up tool
+    /// 1. Look up tool (with fuzzy name matching)
     /// 2. Normalize parameters (camelCase -> snake_case, path resolution)
     /// 3. Check dedup cache — return cached result if identical call in same turn
     /// 4. Validate parameters against the tool's JSON Schema
@@ -248,16 +312,21 @@ impl ToolRegistry {
         ctx: &ToolContext,
     ) -> ToolResult {
         // Clone Arc out of the read lock so we don't hold it during execution
-        let tool = {
-            let tools = self.tools.read().expect("ToolRegistry lock poisoned");
-            match tools.get(tool_name) {
-                Some(t) => Arc::clone(t),
-                None => {
-                    warn!(tool = %tool_name, "Unknown tool");
-                    return ToolResult::fail(format!("Unknown tool: {tool_name}"));
-                }
+        let (tool, resolved_name) = match self.resolve_tool(tool_name) {
+            Some((t, name)) => (t, name),
+            None => {
+                // Build suggestion list for "did you mean?"
+                let suggestions = self.suggest_tool_names(tool_name);
+                let hint = if suggestions.is_empty() {
+                    String::new()
+                } else {
+                    format!(". Did you mean: {}?", suggestions.join(", "))
+                };
+                warn!(tool = %tool_name, "Unknown tool");
+                return ToolResult::fail(format!("Unknown tool: {tool_name}{hint}"));
             }
         };
+        let tool_name = &resolved_name;
 
         // Normalize parameters
         let working_dir = ctx.working_dir.to_string_lossy().to_string();
@@ -353,6 +422,50 @@ impl ToolRegistry {
 
         result
     }
+}
+
+/// Simple Levenshtein edit distance between two strings.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let m = a_chars.len();
+    let n = b_chars.len();
+
+    let mut dp = vec![vec![0usize; n + 1]; m + 1];
+    for (i, row) in dp.iter_mut().enumerate().take(m + 1) {
+        row[0] = i;
+    }
+    #[allow(clippy::needless_range_loop)]
+    for j in 0..=n {
+        dp[0][j] = j;
+    }
+    for i in 1..=m {
+        for j in 1..=n {
+            let cost = usize::from(a_chars[i - 1] != b_chars[j - 1]);
+            dp[i][j] = (dp[i - 1][j] + 1)
+                .min(dp[i][j - 1] + 1)
+                .min(dp[i - 1][j - 1] + cost);
+        }
+    }
+    dp[m][n]
+}
+
+/// Convert a camelCase or PascalCase tool name to snake_case.
+///
+/// Examples: `ReadFile` -> `read_file`, `webFetch` -> `web_fetch`
+fn camel_to_snake_name(name: &str) -> String {
+    let mut result = String::with_capacity(name.len() + 4);
+    for (i, ch) in name.chars().enumerate() {
+        if ch.is_uppercase() {
+            if i > 0 {
+                result.push('_');
+            }
+            result.push(ch.to_lowercase().next().unwrap_or(ch));
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }
 
 /// Create a dedup cache key from tool name and normalized args.
@@ -955,5 +1068,69 @@ mod tests {
         let reg = ToolRegistry::new();
         let debug = format!("{reg:?}");
         assert!(debug.contains("ToolRegistry"));
+    }
+
+    // --- Fuzzy tool name resolution tests ---
+
+    #[tokio::test]
+    async fn test_execute_case_insensitive_match() {
+        let reg = ToolRegistry::new();
+        reg.register(Arc::new(EchoTool));
+
+        let mut args = HashMap::new();
+        args.insert("message".into(), serde_json::json!("hello"));
+
+        let ctx = ToolContext::new("/tmp/test");
+        // "Echo" should match "echo" case-insensitively
+        let result = reg.execute("Echo", args, &ctx).await;
+        assert!(result.success, "Case-insensitive match should work: {:?}", result.error);
+        assert_eq!(result.output.as_deref(), Some("Echo: hello"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_camel_case_to_snake() {
+        let reg = ToolRegistry::new();
+        reg.register(Arc::new(EchoTool));
+
+        // "echo" is already snake_case, let's test with a PascalCase-registered tool
+        // We'll register with snake_case name and call with PascalCase
+        // Since EchoTool returns "echo", "Echo" -> case insensitive match covers this.
+        // Instead test camel_to_snake_name directly
+        assert_eq!(camel_to_snake_name("ReadFile"), "read_file");
+        assert_eq!(camel_to_snake_name("webFetch"), "web_fetch");
+        assert_eq!(camel_to_snake_name("echo"), "echo");
+        assert_eq!(camel_to_snake_name("SpawnSubagent"), "spawn_subagent");
+    }
+
+    #[tokio::test]
+    async fn test_execute_unknown_suggests_similar() {
+        let reg = ToolRegistry::new();
+        reg.register(Arc::new(EchoTool));
+
+        let ctx = ToolContext::new("/tmp/test");
+        let result = reg.execute("ech", HashMap::new(), &ctx).await;
+        assert!(!result.success);
+        let err = result.error.unwrap();
+        assert!(err.contains("Unknown tool: ech"), "Error should mention unknown tool");
+        assert!(err.contains("echo"), "Error should suggest 'echo': {}", err);
+    }
+
+    #[test]
+    fn test_edit_distance() {
+        assert_eq!(edit_distance("echo", "echo"), 0);
+        assert_eq!(edit_distance("echo", "ech"), 1);
+        assert_eq!(edit_distance("echo", "Echo"), 1);
+        assert_eq!(edit_distance("read", "write"), 4);
+        assert_eq!(edit_distance("", "abc"), 3);
+        assert_eq!(edit_distance("abc", ""), 3);
+    }
+
+    #[test]
+    fn test_camel_to_snake_name() {
+        assert_eq!(camel_to_snake_name("readFile"), "read_file");
+        assert_eq!(camel_to_snake_name("ReadFile"), "read_file");
+        assert_eq!(camel_to_snake_name("read_file"), "read_file");
+        assert_eq!(camel_to_snake_name("webFetch"), "web_fetch");
+        assert_eq!(camel_to_snake_name("HTMLParser"), "h_t_m_l_parser");
     }
 }
