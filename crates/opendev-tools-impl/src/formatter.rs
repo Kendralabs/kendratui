@@ -78,6 +78,110 @@ const FORMATTERS: &[FormatterDef] = &[
         args: &["--quiet", "{file}"],
         extensions: &[".py"],
     },
+    FormatterDef {
+        name: "ruff",
+        command: "ruff",
+        args: &["format", "{file}"],
+        extensions: &[".py", ".pyi"],
+    },
+    FormatterDef {
+        name: "biome",
+        command: "biome",
+        args: &["check", "--write", "{file}"],
+        extensions: &[
+            ".js", ".jsx", ".ts", ".tsx", ".css", ".scss", ".json", ".jsonc",
+        ],
+    },
+    FormatterDef {
+        name: "mix",
+        command: "mix",
+        args: &["format", "{file}"],
+        extensions: &[".ex", ".exs", ".eex", ".heex", ".leex"],
+    },
+    FormatterDef {
+        name: "zig",
+        command: "zig",
+        args: &["fmt", "{file}"],
+        extensions: &[".zig", ".zon"],
+    },
+    FormatterDef {
+        name: "dart",
+        command: "dart",
+        args: &["format", "{file}"],
+        extensions: &[".dart"],
+    },
+    FormatterDef {
+        name: "ktlint",
+        command: "ktlint",
+        args: &["-F", "{file}"],
+        extensions: &[".kt", ".kts"],
+    },
+    FormatterDef {
+        name: "ocamlformat",
+        command: "ocamlformat",
+        args: &["-i", "{file}"],
+        extensions: &[".ml", ".mli"],
+    },
+    FormatterDef {
+        name: "terraform",
+        command: "terraform",
+        args: &["fmt", "{file}"],
+        extensions: &[".tf", ".tfvars"],
+    },
+    FormatterDef {
+        name: "gleam",
+        command: "gleam",
+        args: &["format", "{file}"],
+        extensions: &[".gleam"],
+    },
+    FormatterDef {
+        name: "nixfmt",
+        command: "nixfmt",
+        args: &["{file}"],
+        extensions: &[".nix"],
+    },
+    FormatterDef {
+        name: "rubocop",
+        command: "rubocop",
+        args: &["--autocorrect", "{file}"],
+        extensions: &[".rb", ".rake", ".gemspec"],
+    },
+    FormatterDef {
+        name: "ormolu",
+        command: "ormolu",
+        args: &["-i", "{file}"],
+        extensions: &[".hs"],
+    },
+    FormatterDef {
+        name: "latexindent",
+        command: "latexindent",
+        args: &["-w", "-s", "{file}"],
+        extensions: &[".tex"],
+    },
+    FormatterDef {
+        name: "dfmt",
+        command: "dfmt",
+        args: &["-i", "{file}"],
+        extensions: &[".d"],
+    },
+    FormatterDef {
+        name: "cljfmt",
+        command: "cljfmt",
+        args: &["fix", "--quiet", "{file}"],
+        extensions: &[".clj", ".cljs", ".cljc", ".edn"],
+    },
+    FormatterDef {
+        name: "swift-format",
+        command: "swift-format",
+        args: &["--in-place", "{file}"],
+        extensions: &[".swift"],
+    },
+    FormatterDef {
+        name: "xmllint",
+        command: "xmllint",
+        args: &["--format", "--output", "{file}", "{file}"],
+        extensions: &[".xml", ".xsl", ".xslt"],
+    },
 ];
 
 /// Global formatter manager state.
@@ -137,6 +241,101 @@ pub fn detect_formatters() -> Vec<FormatterInfo> {
 
     state.initialized = true;
     state.detected.clone()
+}
+
+/// Apply formatter config overrides from `AppConfig.formatter`.
+///
+/// Disables formatters marked as `disabled: true`, and registers custom
+/// formatters with their specified command and extensions.
+pub fn apply_config(config: &opendev_models::config::FormatterConfig) {
+    if config.is_disabled() {
+        // Disable all formatters
+        let mut state = STATE.lock().unwrap();
+        let names: Vec<String> = state.detected.iter().map(|f| f.name.to_string()).collect();
+        for name in names {
+            state.disabled.insert(name);
+        }
+        debug!("All formatters disabled via config");
+        return;
+    }
+
+    let overrides = config.overrides();
+    let mut state = STATE.lock().unwrap();
+    for (name, override_cfg) in overrides {
+        if override_cfg.disabled {
+            state.disabled.insert(name.clone());
+            debug!(name = %name, "Formatter disabled via config");
+        }
+        // Custom formatter commands are handled at format_file time via config lookup
+    }
+}
+
+/// Format a file using a custom formatter from config (if available).
+///
+/// Returns `Some(true)` if a custom formatter ran successfully,
+/// `Some(false)` if it ran but failed,
+/// `None` if no custom formatter matched.
+pub fn format_file_with_config(
+    file_path: &str,
+    working_dir: &Path,
+    config: &opendev_models::config::FormatterConfig,
+) -> Option<bool> {
+    if config.is_disabled() {
+        return Some(false);
+    }
+
+    let ext = Path::new(file_path)
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy().to_lowercase()))?;
+
+    // Check custom formatters from config
+    for (name, override_cfg) in config.overrides() {
+        if override_cfg.disabled || override_cfg.command.is_empty() {
+            continue;
+        }
+        if !override_cfg.extensions.is_empty() && !override_cfg.extensions.contains(&ext) {
+            continue;
+        }
+
+        let args: Vec<String> = override_cfg
+            .command
+            .iter()
+            .map(|a| a.replace("$FILE", file_path).replace("{file}", file_path))
+            .collect();
+
+        if args.is_empty() {
+            continue;
+        }
+
+        let mut cmd = Command::new(&args[0]);
+        cmd.args(&args[1..]).current_dir(working_dir);
+        for (k, v) in &override_cfg.environment {
+            cmd.env(k, v);
+        }
+
+        match cmd.output() {
+            Ok(output) if output.status.success() => {
+                debug!("Formatted {} with custom formatter {}", file_path, name);
+                return Some(true);
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                debug!(
+                    "Custom formatter {} failed on {}: {}",
+                    name,
+                    file_path,
+                    &stderr[..stderr.len().min(200)]
+                );
+                return Some(false);
+            }
+            Err(e) => {
+                debug!("Failed to run custom formatter {}: {}", name, e);
+                return Some(false);
+            }
+        }
+    }
+
+    None // No custom formatter matched
 }
 
 /// Get the best formatter for a given file path.
@@ -227,6 +426,7 @@ pub fn get_status() -> Vec<FormatterInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_detect_formatters_returns_all() {
@@ -318,6 +518,71 @@ mod tests {
         assert!(all_exts.contains(&".css"));
         assert!(all_exts.contains(&".html"));
         assert!(all_exts.contains(&".json"));
+        // New formatters
+        assert!(all_exts.contains(&".zig"));
+        assert!(all_exts.contains(&".dart"));
+        assert!(all_exts.contains(&".kt"));
+        assert!(all_exts.contains(&".ml"));
+        assert!(all_exts.contains(&".tf"));
+        assert!(all_exts.contains(&".gleam"));
+        assert!(all_exts.contains(&".nix"));
+        assert!(all_exts.contains(&".rb"));
+        assert!(all_exts.contains(&".hs"));
+        assert!(all_exts.contains(&".tex"));
+        assert!(all_exts.contains(&".d"));
+        assert!(all_exts.contains(&".clj"));
+        assert!(all_exts.contains(&".swift"));
+        assert!(all_exts.contains(&".xml"));
+        assert!(all_exts.contains(&".ex"));
+    }
+
+    #[test]
+    fn test_formatter_count() {
+        // We should have 24 built-in formatters
+        assert_eq!(FORMATTERS.len(), 24);
+    }
+
+    #[test]
+    fn test_no_duplicate_formatter_names() {
+        let names: Vec<&str> = FORMATTERS.iter().map(|f| f.name).collect();
+        let unique: HashSet<&str> = names.iter().copied().collect();
+        assert_eq!(names.len(), unique.len(), "Duplicate formatter names found");
+    }
+
+    #[test]
+    fn test_config_disable_all_formatters() {
+        use opendev_models::config::FormatterConfig;
+        let config = FormatterConfig::Disabled(false);
+        assert!(config.is_disabled());
+        assert!(config.overrides().is_empty());
+    }
+
+    #[test]
+    fn test_config_custom_formatter() {
+        use opendev_models::config::{FormatterConfig, FormatterOverride, FormatterOverrides};
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            "my-fmt".to_string(),
+            FormatterOverride {
+                disabled: false,
+                command: vec!["my-fmt".to_string(), "--write".to_string(), "$FILE".to_string()],
+                extensions: vec![".xyz".to_string()],
+                environment: HashMap::new(),
+            },
+        );
+        let config = FormatterConfig::Custom(FormatterOverrides { overrides });
+        assert!(!config.is_disabled());
+        assert!(!config.is_default());
+        assert_eq!(config.overrides().len(), 1);
+        assert!(config.overrides().contains_key("my-fmt"));
+    }
+
+    #[test]
+    fn test_config_default_is_empty() {
+        use opendev_models::config::FormatterConfig;
+        let config = FormatterConfig::default();
+        assert!(config.is_default());
+        assert!(!config.is_disabled());
     }
 
     #[test]
@@ -326,6 +591,9 @@ mod tests {
         if !command_exists("rustfmt") {
             return; // Skip if rustfmt not available
         }
+
+        // Ensure rustfmt is enabled (may be disabled by other tests sharing static state)
+        enable_formatter("rustfmt");
 
         let tmp = tempfile::TempDir::new().unwrap();
         let file_path = tmp.path().join("test.rs");

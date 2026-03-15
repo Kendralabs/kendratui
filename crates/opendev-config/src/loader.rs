@@ -279,6 +279,9 @@ impl ConfigLoader {
             "skill_paths",
             "skill_urls",
             "model_variants",
+            "default_agent",
+            "agents",
+            "formatter",
             "config_version",
         ]
         .into_iter()
