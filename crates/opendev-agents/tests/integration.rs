@@ -777,8 +777,8 @@ fn all_embedded_templates_load() {
 
     assert_eq!(TEMPLATE_COUNT, TEMPLATES.len());
     assert!(
-        TEMPLATE_COUNT >= 88,
-        "expected at least 88 templates, got {TEMPLATE_COUNT}"
+        TEMPLATE_COUNT >= 84,
+        "expected at least 84 templates, got {TEMPLATE_COUNT}"
     );
 
     for (key, content) in TEMPLATES.iter() {

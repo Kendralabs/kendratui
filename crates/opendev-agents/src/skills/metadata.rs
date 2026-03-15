@@ -1,6 +1,7 @@
 //! Skill metadata and loaded skill types.
 
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 /// Where a skill was loaded from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +91,9 @@ pub struct LoadedSkill {
     pub content: String,
     /// Companion files found alongside the skill (for directory-style skills).
     pub companion_files: Vec<CompanionFile>,
+    /// File modification time when the skill was cached.
+    /// Used for cache invalidation: if the file's mtime is newer, reload.
+    pub cached_mtime: Option<SystemTime>,
 }
 
 impl LoadedSkill {
@@ -198,6 +202,7 @@ mod tests {
             metadata: make_metadata("commit", "default", SkillSource::Builtin),
             content: "a".repeat(200),
             companion_files: vec![],
+            cached_mtime: None,
         };
         assert_eq!(skill.estimate_tokens(), 50);
     }
@@ -208,6 +213,7 @@ mod tests {
             metadata: make_metadata("empty", "default", SkillSource::Builtin),
             content: String::new(),
             companion_files: vec![],
+            cached_mtime: None,
         };
         assert_eq!(skill.estimate_tokens(), 0);
     }
@@ -218,6 +224,7 @@ mod tests {
             metadata: make_metadata("small", "default", SkillSource::Builtin),
             content: "hi".to_string(), // 2 chars → 0 tokens (integer division)
             companion_files: vec![],
+            cached_mtime: None,
         };
         assert_eq!(skill.estimate_tokens(), 0);
     }

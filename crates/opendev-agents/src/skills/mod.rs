@@ -218,10 +218,17 @@ impl SkillLoader {
     ///
     /// `name` can be a plain name (e.g. `"commit"`) or namespaced
     /// (e.g. `"git:commit"`). Returns `None` if not found.
+    ///
+    /// If the skill file has been modified since last cache, the cache
+    /// is automatically invalidated and the skill is reloaded.
     pub fn load_skill(&mut self, name: &str) -> Option<LoadedSkill> {
-        // Check cache.
+        // Check cache, with mtime-based invalidation for file-based skills.
         if let Some(cached) = self.cache.get(name) {
-            return Some(cached.clone());
+            if !is_cache_stale(cached) {
+                return Some(cached.clone());
+            }
+            debug!(skill = name, "skill file modified on disk — reloading");
+            self.cache.remove(name);
         }
 
         // Ensure metadata is loaded.
@@ -280,10 +287,18 @@ impl SkillLoader {
             None => vec![],
         };
 
+        // Record the file's modification time for cache invalidation.
+        let cached_mtime = metadata
+            .path
+            .as_ref()
+            .and_then(|p| std::fs::metadata(p).ok())
+            .and_then(|m| m.modified().ok());
+
         let skill = LoadedSkill {
             metadata: metadata.clone(),
             content,
             companion_files,
+            cached_mtime,
         };
 
         self.cache.insert(name.to_string(), skill.clone());
@@ -365,6 +380,31 @@ impl SkillLoader {
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/// Check if a cached skill's file has been modified since it was cached.
+///
+/// Returns `true` if the file's current mtime is newer than the cached mtime,
+/// indicating the cache should be invalidated. Builtin skills (no path) are
+/// never stale.
+fn is_cache_stale(skill: &LoadedSkill) -> bool {
+    let path = match &skill.metadata.path {
+        Some(p) => p,
+        None => return false, // Builtins never stale
+    };
+
+    let cached_mtime = match skill.cached_mtime {
+        Some(t) => t,
+        None => return false, // No mtime recorded — can't check
+    };
+
+    match std::fs::metadata(path) {
+        Ok(meta) => meta
+            .modified()
+            .map(|current| current > cached_mtime)
+            .unwrap_or(false),
+        Err(_) => false, // File gone — keep cache, let load fail if re-invoked
+    }
+}
 
 /// Maximum number of companion files to discover per skill.
 const MAX_COMPANION_FILES: usize = 10;
@@ -1438,5 +1478,157 @@ mod tests {
     fn test_skill_source_url_display() {
         let source = SkillSource::Url("https://example.com/skills".to_string());
         assert_eq!(source.to_string(), "url:https://example.com/skills");
+    }
+
+    // --- Cache invalidation via mtime ---
+
+    #[test]
+    fn test_is_cache_stale_builtin_never_stale() {
+        let skill = LoadedSkill {
+            metadata: SkillMetadata {
+                name: "commit".to_string(),
+                description: "Builtin commit".to_string(),
+                namespace: "default".to_string(),
+                path: None,
+                source: SkillSource::Builtin,
+                model: None,
+                agent: None,
+            },
+            content: "content".to_string(),
+            companion_files: vec![],
+            cached_mtime: None,
+        };
+        assert!(!is_cache_stale(&skill));
+    }
+
+    #[test]
+    fn test_is_cache_stale_no_mtime_not_stale() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("skill.md");
+        std::fs::write(&file, "---\nname: test\ndescription: t\n---\ncontent").unwrap();
+
+        let skill = LoadedSkill {
+            metadata: SkillMetadata {
+                name: "test".to_string(),
+                description: "t".to_string(),
+                namespace: "default".to_string(),
+                path: Some(file),
+                source: SkillSource::Project,
+                model: None,
+                agent: None,
+            },
+            content: "content".to_string(),
+            companion_files: vec![],
+            cached_mtime: None, // No mtime recorded
+        };
+        assert!(!is_cache_stale(&skill));
+    }
+
+    #[test]
+    fn test_is_cache_stale_unmodified_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("skill.md");
+        std::fs::write(&file, "---\nname: test\ndescription: t\n---\ncontent").unwrap();
+
+        let mtime = std::fs::metadata(&file).unwrap().modified().unwrap();
+
+        let skill = LoadedSkill {
+            metadata: SkillMetadata {
+                name: "test".to_string(),
+                description: "t".to_string(),
+                namespace: "default".to_string(),
+                path: Some(file),
+                source: SkillSource::Project,
+                model: None,
+                agent: None,
+            },
+            content: "content".to_string(),
+            companion_files: vec![],
+            cached_mtime: Some(mtime),
+        };
+        assert!(!is_cache_stale(&skill));
+    }
+
+    #[test]
+    fn test_is_cache_stale_modified_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("skill.md");
+        std::fs::write(&file, "---\nname: test\ndescription: t\n---\noriginal").unwrap();
+
+        // Record an old mtime (1 second in the past).
+        let old_mtime = std::time::SystemTime::now() - std::time::Duration::from_secs(2);
+
+        let skill = LoadedSkill {
+            metadata: SkillMetadata {
+                name: "test".to_string(),
+                description: "t".to_string(),
+                namespace: "default".to_string(),
+                path: Some(file.clone()),
+                source: SkillSource::Project,
+                model: None,
+                agent: None,
+            },
+            content: "original".to_string(),
+            companion_files: vec![],
+            cached_mtime: Some(old_mtime),
+        };
+
+        // File was written "now", cached mtime is 2s in the past → stale.
+        assert!(is_cache_stale(&skill));
+    }
+
+    #[test]
+    fn test_is_cache_stale_deleted_file() {
+        let skill = LoadedSkill {
+            metadata: SkillMetadata {
+                name: "gone".to_string(),
+                description: "t".to_string(),
+                namespace: "default".to_string(),
+                path: Some(PathBuf::from("/nonexistent/skill.md")),
+                source: SkillSource::Project,
+                model: None,
+                agent: None,
+            },
+            content: "content".to_string(),
+            companion_files: vec![],
+            cached_mtime: Some(std::time::SystemTime::now()),
+        };
+        // File doesn't exist → not stale (keep cache).
+        assert!(!is_cache_stale(&skill));
+    }
+
+    #[test]
+    fn test_load_skill_reloads_after_file_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let skills_dir = dir.path().join("skills");
+        std::fs::create_dir(&skills_dir).unwrap();
+        let file = skills_dir.join("hot-reload.md");
+        std::fs::write(
+            &file,
+            "---\nname: hot-reload\ndescription: Hot reload test\n---\n\nVersion 1",
+        )
+        .unwrap();
+
+        let mut loader = SkillLoader::new(vec![skills_dir.clone()]);
+
+        // First load.
+        let skill1 = loader.load_skill("hot-reload").unwrap();
+        assert!(skill1.content.contains("Version 1"));
+
+        // Modify the file (with a brief sleep to ensure mtime changes).
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(
+            &file,
+            "---\nname: hot-reload\ndescription: Hot reload test\n---\n\nVersion 2",
+        )
+        .unwrap();
+
+        // Second load should pick up the change.
+        let skill2 = loader.load_skill("hot-reload").unwrap();
+        assert!(
+            skill2.content.contains("Version 2"),
+            "Expected reloaded content with 'Version 2', got: {}",
+            skill2.content
+        );
     }
 }
