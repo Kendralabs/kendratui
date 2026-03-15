@@ -317,6 +317,39 @@ impl SubagentManager {
         self.specs.remove(name)
     }
 
+    /// Resolve the default agent name for new sessions.
+    ///
+    /// If `configured_default` is `Some`, validates that the agent exists,
+    /// is not hidden, and can be used as a primary agent. Falls back to
+    /// the first non-hidden primary-capable agent, or `None` if no suitable
+    /// agent is found.
+    pub fn resolve_default_agent(&self, configured_default: Option<&str>) -> Option<&str> {
+        if let Some(name) = configured_default {
+            if let Some(spec) = self.specs.get(name) {
+                if spec.disable {
+                    tracing::warn!(agent = name, "default_agent is disabled, falling back");
+                } else if spec.hidden {
+                    tracing::warn!(agent = name, "default_agent is hidden, falling back");
+                } else if !spec.mode.can_be_primary() {
+                    tracing::warn!(
+                        agent = name,
+                        "default_agent is subagent-only, falling back"
+                    );
+                } else {
+                    return Some(&spec.name);
+                }
+            } else {
+                tracing::warn!(agent = name, "default_agent not found, falling back");
+            }
+        }
+
+        // Fallback: first non-hidden, non-disabled, primary-capable agent
+        self.specs
+            .values()
+            .find(|s| !s.hidden && !s.disable && s.mode.can_be_primary())
+            .map(|s| s.name.as_str())
+    }
+
     /// Build tool schemas description listing available subagents.
     ///
     /// Used to populate the `subagent_type` enum in the `spawn_subagent` tool schema.
@@ -841,5 +874,344 @@ mod tests {
             all.contains(&"disabled-agent"),
             "all_names() should include disabled agents"
         );
+    }
+
+    // ---- apply_config_overrides tests ----
+
+    #[test]
+    fn test_config_override_model() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build agent", "Build things."));
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                model: Some("gpt-4o-mini".to_string()),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("build").unwrap();
+        assert_eq!(spec.model.as_deref(), Some("gpt-4o-mini"));
+    }
+
+    #[test]
+    fn test_config_override_temperature_and_top_p() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("test", "Test", "prompt"));
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "test".to_string(),
+            opendev_models::AgentConfigInline {
+                temperature: Some(0.7),
+                top_p: Some(0.9),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("test").unwrap();
+        assert!((spec.temperature.unwrap() - 0.7).abs() < 0.01);
+        assert!((spec.top_p.unwrap() - 0.9).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_config_override_disable_removes_agent() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build agent", "prompt"));
+        assert!(mgr.get("build").is_some());
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                disable: Some(true),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        assert!(mgr.get("build").is_none(), "Disabled agent should be removed");
+    }
+
+    #[test]
+    fn test_config_override_creates_new_agent() {
+        let mut mgr = SubagentManager::new();
+        assert!(mgr.get("custom-agent").is_none());
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "custom-agent".to_string(),
+            opendev_models::AgentConfigInline {
+                description: Some("My custom agent".to_string()),
+                prompt: Some("Be creative.".to_string()),
+                model: Some("claude-opus-4-5".to_string()),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("custom-agent").unwrap();
+        assert_eq!(spec.description, "My custom agent");
+        assert_eq!(spec.system_prompt, "Be creative.");
+        assert_eq!(spec.model.as_deref(), Some("claude-opus-4-5"));
+    }
+
+    #[test]
+    fn test_config_override_prompt_and_description() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Old desc", "Old prompt"));
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                description: Some("New description".to_string()),
+                prompt: Some("New system prompt".to_string()),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("build").unwrap();
+        assert_eq!(spec.description, "New description");
+        assert_eq!(spec.system_prompt, "New system prompt");
+    }
+
+    #[test]
+    fn test_config_override_max_steps_and_color() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build", "prompt"));
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                max_steps: Some(50),
+                color: Some("#FF6600".to_string()),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("build").unwrap();
+        assert_eq!(spec.max_steps, Some(50));
+        assert_eq!(spec.color.as_deref(), Some("#FF6600"));
+    }
+
+    #[test]
+    fn test_config_override_hidden() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build", "prompt"));
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                hidden: Some(true),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("build").unwrap();
+        assert!(spec.hidden);
+        assert!(!mgr.names().contains(&"build"));
+    }
+
+    #[test]
+    fn test_config_override_mode() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build", "prompt"));
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                mode: Some("primary".to_string()),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("build").unwrap();
+        assert!(spec.mode.can_be_primary());
+    }
+
+    #[test]
+    fn test_config_override_permission_rules() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build", "prompt"));
+
+        let mut perms = std::collections::HashMap::new();
+        perms.insert("bash".to_string(), "deny".to_string());
+        perms.insert("edit".to_string(), "allow".to_string());
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                permission: perms,
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("build").unwrap();
+        // Check bash is denied
+        let bash_action = spec.evaluate_permission("bash", "");
+        assert_eq!(bash_action, Some(crate::subagents::PermissionAction::Deny));
+        // Check edit is allowed
+        let edit_action = spec.evaluate_permission("edit", "");
+        assert_eq!(edit_action, Some(crate::subagents::PermissionAction::Allow));
+    }
+
+    #[test]
+    fn test_config_override_invalid_permission_action_skipped() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build", "prompt"));
+
+        let mut perms = std::collections::HashMap::new();
+        perms.insert("bash".to_string(), "invalid_action".to_string());
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                permission: perms,
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        let spec = mgr.get("build").unwrap();
+        // Invalid action should be skipped, so no permission rule for bash
+        assert_eq!(spec.evaluate_permission("bash", ""), None);
+    }
+
+    #[test]
+    fn test_config_override_multiple_agents() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("build", "Build", "prompt1"));
+        mgr.register(SubAgentSpec::new("explore", "Explore", "prompt2"));
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(
+            "build".to_string(),
+            opendev_models::AgentConfigInline {
+                model: Some("gpt-4o".to_string()),
+                ..Default::default()
+            },
+        );
+        overrides.insert(
+            "explore".to_string(),
+            opendev_models::AgentConfigInline {
+                temperature: Some(0.2),
+                ..Default::default()
+            },
+        );
+        mgr.apply_config_overrides(&overrides);
+
+        assert_eq!(mgr.get("build").unwrap().model.as_deref(), Some("gpt-4o"));
+        assert!((mgr.get("explore").unwrap().temperature.unwrap() - 0.2).abs() < 0.01);
+    }
+
+    // ---- resolve_default_agent tests ----
+
+    #[test]
+    fn test_resolve_default_agent_configured() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(
+            SubAgentSpec::new("build", "Build", "prompt")
+                .with_mode(crate::subagents::AgentMode::All),
+        );
+
+        let result = mgr.resolve_default_agent(Some("build"));
+        assert_eq!(result, Some("build"));
+    }
+
+    #[test]
+    fn test_resolve_default_agent_not_found_falls_back() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(
+            SubAgentSpec::new("build", "Build", "prompt")
+                .with_mode(crate::subagents::AgentMode::All),
+        );
+
+        let result = mgr.resolve_default_agent(Some("nonexistent"));
+        assert_eq!(result, Some("build"), "Should fall back to first primary-capable agent");
+    }
+
+    #[test]
+    fn test_resolve_default_agent_disabled_falls_back() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(
+            SubAgentSpec::new("build", "Build", "prompt")
+                .with_mode(crate::subagents::AgentMode::All)
+                .with_disable(true),
+        );
+        mgr.register(
+            SubAgentSpec::new("general", "General", "prompt")
+                .with_mode(crate::subagents::AgentMode::Primary),
+        );
+
+        let result = mgr.resolve_default_agent(Some("build"));
+        assert_eq!(result, Some("general"), "Should skip disabled and fall back");
+    }
+
+    #[test]
+    fn test_resolve_default_agent_hidden_falls_back() {
+        let mut mgr = SubagentManager::new();
+        let mut hidden = SubAgentSpec::new("hidden-agent", "Hidden", "prompt");
+        hidden.hidden = true;
+        hidden.mode = crate::subagents::AgentMode::All;
+        mgr.register(hidden);
+        mgr.register(
+            SubAgentSpec::new("visible", "Visible", "prompt")
+                .with_mode(crate::subagents::AgentMode::Primary),
+        );
+
+        let result = mgr.resolve_default_agent(Some("hidden-agent"));
+        assert_eq!(result, Some("visible"), "Should skip hidden and fall back");
+    }
+
+    #[test]
+    fn test_resolve_default_agent_subagent_only_falls_back() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(SubAgentSpec::new("helper", "Helper", "prompt"));
+        // Default mode is Subagent, which can't be primary
+        mgr.register(
+            SubAgentSpec::new("primary", "Primary", "prompt")
+                .with_mode(crate::subagents::AgentMode::Primary),
+        );
+
+        let result = mgr.resolve_default_agent(Some("helper"));
+        assert_eq!(result, Some("primary"), "Should skip subagent-only and fall back");
+    }
+
+    #[test]
+    fn test_resolve_default_agent_none_configured() {
+        let mut mgr = SubagentManager::new();
+        mgr.register(
+            SubAgentSpec::new("build", "Build", "prompt")
+                .with_mode(crate::subagents::AgentMode::All),
+        );
+
+        let result = mgr.resolve_default_agent(None);
+        assert_eq!(result, Some("build"), "Should return first primary-capable agent");
+    }
+
+    #[test]
+    fn test_resolve_default_agent_no_primary_capable() {
+        let mut mgr = SubagentManager::new();
+        // Only subagent-mode agents
+        mgr.register(SubAgentSpec::new("helper1", "Helper 1", "prompt"));
+        mgr.register(SubAgentSpec::new("helper2", "Helper 2", "prompt"));
+
+        let result = mgr.resolve_default_agent(None);
+        assert_eq!(result, None, "No primary-capable agents → None");
     }
 }
