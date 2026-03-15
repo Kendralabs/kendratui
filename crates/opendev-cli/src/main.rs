@@ -403,7 +403,13 @@ async fn main() {
 
             // Interactive or non-interactive mode
             if let Some(prompt) = cli.prompt {
-                run_non_interactive(&working_dir, &prompt).await;
+                run_non_interactive(
+                    &working_dir,
+                    &prompt,
+                    cli.continue_session,
+                    cli.resume.as_ref().and_then(|r| r.as_deref()),
+                )
+                .await;
             } else {
                 run_interactive(
                     &working_dir,
@@ -781,8 +787,13 @@ async fn handle_run(action: RunAction, working_dir: &std::path::Path) {
 }
 
 /// Run non-interactive mode: execute a single prompt and exit.
-async fn run_non_interactive(working_dir: &std::path::Path, prompt: &str) {
-    use opendev_history::SessionManager;
+async fn run_non_interactive(
+    working_dir: &std::path::Path,
+    prompt: &str,
+    continue_session: bool,
+    resume_id: Option<&str>,
+) {
+    use opendev_history::{SessionListing, SessionManager};
 
     info!(prompt = %prompt, "Non-interactive mode");
 
@@ -807,7 +818,7 @@ async fn run_non_interactive(working_dir: &std::path::Path, prompt: &str) {
     // Build system prompt before config is moved
     let system_prompt = runtime::build_system_prompt(working_dir, &config);
 
-    let mut session_manager = match SessionManager::new(session_dir) {
+    let mut session_manager = match SessionManager::new(session_dir.clone()) {
         Ok(sm) => sm,
         Err(e) => {
             eprintln!("Failed to initialize session manager: {e}");
@@ -815,8 +826,30 @@ async fn run_non_interactive(working_dir: &std::path::Path, prompt: &str) {
         }
     };
 
-    // Create a fresh session for this one-shot query
-    session_manager.create_session();
+    // Handle session resume: --continue or --resume ID work in non-interactive mode too
+    if continue_session {
+        let listing = SessionListing::new(session_dir);
+        match listing.find_latest_session() {
+            Some(meta) => {
+                info!(session_id = %meta.id, "Resuming most recent session (non-interactive)");
+                if let Err(e) = session_manager.resume_session(&meta.id) {
+                    eprintln!("Warning: failed to resume session {}: {e}", meta.id);
+                    session_manager.create_session();
+                }
+            }
+            None => {
+                session_manager.create_session();
+            }
+        }
+    } else if let Some(id) = resume_id {
+        info!(session_id = %id, "Resuming session (non-interactive)");
+        if let Err(e) = session_manager.resume_session(id) {
+            eprintln!("Error: failed to resume session '{id}': {e}");
+            std::process::exit(1);
+        }
+    } else {
+        session_manager.create_session();
+    }
 
     let mut agent_runtime = match runtime::AgentRuntime::new(config, working_dir, session_manager) {
         Ok(rt) => rt,

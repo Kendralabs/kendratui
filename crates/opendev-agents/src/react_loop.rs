@@ -680,6 +680,10 @@ impl ReactLoop {
             )
         };
 
+        // Skill-driven model override: when a skill specifies model: in its
+        // frontmatter, use that model for subsequent iterations until reset.
+        let mut skill_model_override: Option<String> = None;
+
         // Nudge/reminder state tracking
         let mut todo_nudge_count: usize = 0;
         let mut all_todos_complete_nudged = false;
@@ -837,8 +841,13 @@ impl ReactLoop {
                 }
             }
 
-            // Build payload and send via HttpClient
-            let payload = caller.build_action_payload(messages, tool_schemas);
+            // Build payload and send via HttpClient.
+            // Apply skill model override if set (from invoke_skill metadata).
+            let mut payload = caller.build_action_payload(messages, tool_schemas);
+            if let Some(ref override_model) = skill_model_override {
+                payload["model"] = serde_json::json!(override_model);
+                debug!(iteration, model = %override_model, "Using skill model override");
+            }
             debug!(iteration, model = %payload["model"], "ReAct iteration");
 
             let llm_start = Instant::now();
@@ -1442,6 +1451,20 @@ impl ReactLoop {
                             "name": tool_name,
                             "content": formatted,
                         }));
+
+                        // Capture skill model/agent overrides from invoke_skill.
+                        // When a skill specifies model: in its frontmatter,
+                        // switch to that model for subsequent LLM calls.
+                        if tool_name == "invoke_skill"
+                            && tool_result.success
+                            && let Some(model) = tool_result
+                                .metadata
+                                .get("skill_model")
+                                .and_then(|v| v.as_str())
+                        {
+                            info!(model, "Skill model override activated");
+                            skill_model_override = Some(model.to_string());
+                        }
 
                         // Lazy per-subdirectory instruction injection.
                         // When the agent reads/edits a file, check if there are
