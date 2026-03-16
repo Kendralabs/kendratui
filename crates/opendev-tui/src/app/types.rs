@@ -1,0 +1,153 @@
+//! Display types for the TUI conversation view.
+
+/// A message prepared for display in the conversation widget.
+#[derive(Debug, Clone)]
+pub struct DisplayMessage {
+    pub role: DisplayRole,
+    pub content: String,
+    /// Optional tool call info for assistant messages.
+    pub tool_call: Option<DisplayToolCall>,
+    /// Whether this message is collapsed (used for Thinking role).
+    pub collapsed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DisplayRole {
+    User,
+    Assistant,
+    System,
+    Thinking,
+    /// Interrupted feedback — rendered with ⎿ in red.
+    Interrupt,
+}
+
+/// Rendering configuration for simple (non-markdown, non-collapsible) roles.
+pub struct RoleStyle {
+    /// Prefix string for the first line (e.g. "> ", "! ", "  ⎿  ")
+    pub icon: String,
+    /// Style for the icon span
+    pub icon_style: ratatui::style::Style,
+    /// Color for the content text
+    pub text_color: ratatui::style::Color,
+    /// Continuation prefix for wrapped lines (must match icon visual width)
+    pub continuation: &'static str,
+    /// Whether to suppress the blank line before this message
+    pub attach_to_previous: bool,
+}
+
+impl DisplayRole {
+    /// Returns a `RoleStyle` for roles that use the standard icon+text pattern.
+    /// Returns `None` for Assistant and Thinking (they have custom rendering).
+    pub fn style(&self) -> Option<RoleStyle> {
+        use crate::formatters::style_tokens::{self, Indent};
+        use crate::widgets::spinner::CONTINUATION_CHAR;
+        use ratatui::style::{Modifier, Style};
+
+        match self {
+            Self::User => Some(RoleStyle {
+                icon: "> ".to_string(),
+                icon_style: Style::default()
+                    .fg(style_tokens::ACCENT)
+                    .add_modifier(Modifier::BOLD),
+                text_color: style_tokens::PRIMARY,
+                continuation: Indent::CONT,
+                attach_to_previous: false,
+            }),
+            Self::System => Some(RoleStyle {
+                icon: "! ".to_string(),
+                icon_style: Style::default()
+                    .fg(style_tokens::WARNING)
+                    .add_modifier(Modifier::ITALIC),
+                text_color: style_tokens::SUBTLE,
+                continuation: Indent::CONT,
+                attach_to_previous: false,
+            }),
+            Self::Interrupt => Some(RoleStyle {
+                icon: format!("  {CONTINUATION_CHAR}  "),
+                icon_style: Style::default()
+                    .fg(style_tokens::ERROR)
+                    .add_modifier(Modifier::BOLD),
+                text_color: style_tokens::ERROR,
+                continuation: Indent::RESULT_CONT,
+                attach_to_previous: true,
+            }),
+            Self::Assistant | Self::Thinking => None,
+        }
+    }
+}
+
+/// Tool call display info.
+#[derive(Debug, Clone)]
+pub struct DisplayToolCall {
+    pub name: String,
+    pub arguments: std::collections::HashMap<String, serde_json::Value>,
+    pub summary: Option<String>,
+    pub success: bool,
+    /// Whether this tool result is collapsed (user can toggle).
+    pub collapsed: bool,
+    /// Result lines for expanded view.
+    pub result_lines: Vec<String>,
+    /// Nested tool calls (from subagent execution).
+    pub nested_calls: Vec<DisplayToolCall>,
+}
+
+/// State of a tool execution lifecycle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolState {
+    /// Tool is queued but not yet executing.
+    Pending,
+    /// Tool is currently executing.
+    Running,
+    /// Tool finished successfully.
+    Completed,
+    /// Tool finished with an error.
+    Error,
+    /// Tool was cancelled before completion.
+    Cancelled,
+}
+
+impl ToolState {
+    /// Returns true if the tool is in a terminal state (Completed, Error, or Cancelled).
+    pub fn is_finished(&self) -> bool {
+        matches!(self, Self::Completed | Self::Error | Self::Cancelled)
+    }
+
+    /// Returns true if the tool completed successfully.
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Completed)
+    }
+}
+
+/// Active tool execution being displayed.
+#[derive(Debug, Clone)]
+pub struct ToolExecution {
+    pub id: String,
+    pub name: String,
+    pub output_lines: Vec<String>,
+    /// Current state of the tool execution.
+    pub state: ToolState,
+    /// Elapsed seconds since tool started.
+    pub elapsed_secs: u64,
+    /// Start timestamp for elapsed time calculation.
+    pub started_at: std::time::Instant,
+    /// Animation frame counter — incremented every tick for smooth spinner.
+    pub tick_count: usize,
+    /// Parent tool ID for nested tool calls.
+    pub parent_id: Option<String>,
+    /// Nesting depth (0 = top-level).
+    pub depth: usize,
+    /// Tool arguments for display.
+    pub args: std::collections::HashMap<String, serde_json::Value>,
+}
+
+impl ToolExecution {
+    /// Whether the tool execution has finished (terminal state).
+    pub fn is_finished(&self) -> bool {
+        self.state.is_finished()
+    }
+
+    /// Whether the tool execution was successful.
+    pub fn is_success(&self) -> bool {
+        self.state.is_success()
+    }
+}
