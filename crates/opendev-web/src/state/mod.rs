@@ -5,6 +5,9 @@
 //! notification so that waiting agent tasks are woken immediately on resolution
 //! (no polling).
 
+mod approvals;
+mod bridge;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock, broadcast, mpsc, oneshot};
@@ -29,51 +32,51 @@ pub struct AppState {
     inner: Arc<AppStateInner>,
 }
 
-struct AppStateInner {
+pub(super) struct AppStateInner {
     /// Session manager for persistence.
-    session_manager: RwLock<SessionManager>,
+    pub(super) session_manager: RwLock<SessionManager>,
     /// Application configuration.
-    config: RwLock<AppConfig>,
+    pub(super) config: RwLock<AppConfig>,
     /// Working directory for the current project.
-    working_dir: String,
+    pub(super) working_dir: String,
     /// Broadcast channel for WebSocket messages.
-    ws_tx: broadcast::Sender<WsBroadcast>,
+    pub(super) ws_tx: broadcast::Sender<WsBroadcast>,
     /// Pending approval requests: approval_id -> (metadata, oneshot sender).
-    pending_approvals: Mutex<HashMap<String, PendingApprovalSlot>>,
+    pub(super) pending_approvals: Mutex<HashMap<String, PendingApprovalSlot>>,
     /// Pending ask-user requests: request_id -> (metadata, oneshot sender).
-    pending_ask_users: Mutex<HashMap<String, PendingAskUserSlot>>,
+    pub(super) pending_ask_users: Mutex<HashMap<String, PendingAskUserSlot>>,
     /// Pending plan approval requests: request_id -> (metadata, oneshot sender).
-    pending_plan_approvals: Mutex<HashMap<String, PendingPlanApprovalSlot>>,
+    pub(super) pending_plan_approvals: Mutex<HashMap<String, PendingPlanApprovalSlot>>,
     /// Current operation mode (normal/plan).
-    mode: RwLock<OperationMode>,
+    pub(super) mode: RwLock<OperationMode>,
     /// Autonomy level.
-    autonomy_level: RwLock<String>,
+    pub(super) autonomy_level: RwLock<String>,
     /// Thinking level.
-    thinking_level: RwLock<String>,
+    pub(super) thinking_level: RwLock<String>,
     /// Interrupt flag.
-    interrupt_requested: Mutex<bool>,
+    pub(super) interrupt_requested: Mutex<bool>,
     /// Running sessions: session_id -> status.
-    running_sessions: Mutex<HashMap<String, String>>,
+    pub(super) running_sessions: Mutex<HashMap<String, String>>,
     /// Live message injection queues: session_id -> bounded mpsc sender.
-    injection_queues: Mutex<HashMap<String, mpsc::Sender<String>>>,
+    pub(super) injection_queues: Mutex<HashMap<String, mpsc::Sender<String>>>,
     /// Agent executor (trait-object, set once on first query).
-    agent_executor: Mutex<Option<Arc<dyn AgentExecutor>>>,
+    pub(super) agent_executor: Mutex<Option<Arc<dyn AgentExecutor>>>,
     /// User store for authentication.
-    user_store: Arc<UserStore>,
+    pub(super) user_store: Arc<UserStore>,
     /// Model/provider registry from models.dev cache.
-    model_registry: RwLock<ModelRegistry>,
+    pub(super) model_registry: RwLock<ModelRegistry>,
     /// Bridge mode state.
-    bridge: RwLock<BridgeState>,
+    pub(super) bridge: RwLock<BridgeState>,
 }
 
 /// Bridge mode state: when the TUI owns agent execution and
 /// the Web UI mirrors it.
 #[derive(Debug, Default)]
-struct BridgeState {
+pub(super) struct BridgeState {
     /// Session ID currently owned by the TUI bridge.
-    session_id: Option<String>,
+    pub(super) session_id: Option<String>,
     /// Whether bridge mode is active.
-    active: bool,
+    pub(super) active: bool,
 }
 
 /// Operation mode for the agent.
@@ -102,7 +105,7 @@ pub struct PendingApproval {
 }
 
 /// Internal slot holding approval metadata and the oneshot sender.
-struct PendingApprovalSlot {
+pub(super) struct PendingApprovalSlot {
     pub meta: PendingApproval,
     pub tx: Option<oneshot::Sender<ApprovalResult>>,
 }
@@ -122,7 +125,7 @@ pub struct PendingAskUser {
 }
 
 /// Internal slot holding ask-user metadata and the oneshot sender.
-struct PendingAskUserSlot {
+pub(super) struct PendingAskUserSlot {
     pub meta: PendingAskUser,
     pub tx: Option<oneshot::Sender<AskUserResult>>,
 }
@@ -142,7 +145,7 @@ pub struct PendingPlanApproval {
 }
 
 /// Internal slot holding plan-approval metadata and the oneshot sender.
-struct PendingPlanApprovalSlot {
+pub(super) struct PendingPlanApprovalSlot {
     pub meta: PendingPlanApproval,
     pub tx: Option<oneshot::Sender<PlanApprovalResult>>,
 }
@@ -202,32 +205,34 @@ impl AppState {
         }
     }
 
-    // --- Session management ---
+    // --- Accessors ---
 
-    /// Get read access to the session manager.
+    /// Get a read guard for the session manager.
     pub async fn session_manager(&self) -> tokio::sync::RwLockReadGuard<'_, SessionManager> {
         self.inner.session_manager.read().await
     }
 
-    /// Get write access to the session manager.
+    /// Get a write guard for the session manager.
     pub async fn session_manager_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, SessionManager> {
         self.inner.session_manager.write().await
     }
 
-    /// Get the current session ID.
+    /// Get the current session ID (if a session is loaded).
     pub async fn current_session_id(&self) -> Option<String> {
-        let mgr = self.inner.session_manager.read().await;
-        mgr.current_session().map(|s| s.id.clone())
+        self.inner
+            .session_manager
+            .read()
+            .await
+            .current_session()
+            .map(|s| s.id.clone())
     }
 
-    // --- Config ---
-
-    /// Get read access to the configuration.
+    /// Get a read guard for the app config.
     pub async fn config(&self) -> tokio::sync::RwLockReadGuard<'_, AppConfig> {
         self.inner.config.read().await
     }
 
-    /// Get write access to the configuration.
+    /// Get a write guard for the app config.
     pub async fn config_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, AppConfig> {
         self.inner.config.write().await
     }
@@ -246,19 +251,19 @@ impl AppState {
 
     // --- Model registry ---
 
-    /// Get read access to the model registry.
+    /// Get a read guard for the model registry.
     pub async fn model_registry(&self) -> tokio::sync::RwLockReadGuard<'_, ModelRegistry> {
         self.inner.model_registry.read().await
     }
 
-    /// Get write access to the model registry (e.g. for refreshing).
+    /// Get a write guard for the model registry.
     pub async fn model_registry_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, ModelRegistry> {
         self.inner.model_registry.write().await
     }
 
-    // --- WebSocket broadcasting ---
+    // --- WebSocket ---
 
-    /// Get a broadcast sender for WebSocket messages.
+    /// Get a clone of the broadcast sender.
     pub fn ws_sender(&self) -> broadcast::Sender<WsBroadcast> {
         self.inner.ws_tx.clone()
     }
@@ -268,13 +273,13 @@ impl AppState {
         self.inner.ws_tx.subscribe()
     }
 
-    /// Broadcast a message to all WebSocket clients.
+    /// Broadcast a message to all WebSocket subscribers.
     pub fn broadcast(&self, msg: WsBroadcast) {
-        // Ignore send errors (no subscribers).
+        // Ignore send errors (no subscribers is fine).
         let _ = self.inner.ws_tx.send(msg);
     }
 
-    // --- Mode ---
+    // --- Mode / settings ---
 
     /// Get the current operation mode.
     pub async fn mode(&self) -> OperationMode {
@@ -312,7 +317,7 @@ impl AppState {
 
     // --- Interrupt ---
 
-    /// Request interruption of ongoing task.
+    /// Request an interrupt.
     ///
     /// Also denies all pending approvals, ask-user, and plan-approval requests
     /// by sending rejection through their oneshot channels so blocked tasks wake up.
@@ -395,309 +400,6 @@ impl AppState {
             .lock()
             .await
             .contains_key(session_id)
-    }
-
-    // --- Approvals (oneshot-based) ---
-
-    /// Add a pending approval request.
-    ///
-    /// Returns a `oneshot::Receiver` that the caller can `.await` to block
-    /// until the approval is resolved (or the state is torn down / interrupted).
-    pub async fn add_pending_approval(
-        &self,
-        id: String,
-        approval: PendingApproval,
-    ) -> oneshot::Receiver<ApprovalResult> {
-        let (tx, rx) = oneshot::channel();
-        self.inner.pending_approvals.lock().await.insert(
-            id,
-            PendingApprovalSlot {
-                meta: approval,
-                tx: Some(tx),
-            },
-        );
-        rx
-    }
-
-    /// Resolve a pending approval by sending through the oneshot channel.
-    ///
-    /// Returns the approval metadata if found, `None` if not found or already resolved.
-    pub async fn resolve_approval(
-        &self,
-        id: &str,
-        approved: bool,
-        auto_approve: bool,
-    ) -> Option<PendingApproval> {
-        let mut approvals = self.inner.pending_approvals.lock().await;
-        if let Some(mut slot) = approvals.remove(id) {
-            if let Some(tx) = slot.tx.take() {
-                let _ = tx.send(ApprovalResult {
-                    approved,
-                    auto_approve,
-                });
-            }
-            Some(slot.meta)
-        } else {
-            None
-        }
-    }
-
-    /// Get metadata for a pending approval (without resolving it).
-    pub async fn get_pending_approval(&self, id: &str) -> Option<PendingApproval> {
-        self.inner
-            .pending_approvals
-            .lock()
-            .await
-            .get(id)
-            .map(|slot| slot.meta.clone())
-    }
-
-    /// Clear all pending approvals for a session (e.g. when session ends).
-    ///
-    /// Sends rejection through the oneshot channels so any blocked agent
-    /// tasks wake up rather than hanging forever.
-    pub async fn clear_session_approvals(&self, session_id: &str) {
-        let mut approvals = self.inner.pending_approvals.lock().await;
-        let to_remove: Vec<String> = approvals
-            .iter()
-            .filter(|(_, slot)| slot.meta.session_id.as_deref() == Some(session_id))
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for id in to_remove {
-            if let Some(mut slot) = approvals.remove(&id)
-                && let Some(tx) = slot.tx.take()
-            {
-                let _ = tx.send(ApprovalResult {
-                    approved: false,
-                    auto_approve: false,
-                });
-            }
-        }
-    }
-
-    // --- Ask-user (oneshot-based) ---
-
-    /// Add a pending ask-user request.
-    ///
-    /// Returns a `oneshot::Receiver` that the agent can `.await`.
-    pub async fn add_pending_ask_user(
-        &self,
-        id: String,
-        ask_user: PendingAskUser,
-    ) -> oneshot::Receiver<AskUserResult> {
-        let (tx, rx) = oneshot::channel();
-        self.inner.pending_ask_users.lock().await.insert(
-            id,
-            PendingAskUserSlot {
-                meta: ask_user,
-                tx: Some(tx),
-            },
-        );
-        rx
-    }
-
-    /// Resolve a pending ask-user request.
-    pub async fn resolve_ask_user(
-        &self,
-        id: &str,
-        answers: Option<serde_json::Value>,
-        cancelled: bool,
-    ) -> Option<PendingAskUser> {
-        let mut ask_users = self.inner.pending_ask_users.lock().await;
-        if let Some(mut slot) = ask_users.remove(id) {
-            if let Some(tx) = slot.tx.take() {
-                let _ = tx.send(AskUserResult { answers, cancelled });
-            }
-            Some(slot.meta)
-        } else {
-            None
-        }
-    }
-
-    /// Get metadata for a pending ask-user request.
-    pub async fn get_pending_ask_user(&self, id: &str) -> Option<PendingAskUser> {
-        self.inner
-            .pending_ask_users
-            .lock()
-            .await
-            .get(id)
-            .map(|slot| slot.meta.clone())
-    }
-
-    // --- Plan approval (oneshot-based) ---
-
-    /// Add a pending plan approval request.
-    ///
-    /// Returns a `oneshot::Receiver` that the agent can `.await` to block
-    /// until the plan is approved, rejected, or revised.
-    pub async fn add_pending_plan_approval(
-        &self,
-        id: String,
-        plan_approval: PendingPlanApproval,
-    ) -> oneshot::Receiver<PlanApprovalResult> {
-        let (tx, rx) = oneshot::channel();
-        self.inner.pending_plan_approvals.lock().await.insert(
-            id,
-            PendingPlanApprovalSlot {
-                meta: plan_approval,
-                tx: Some(tx),
-            },
-        );
-        rx
-    }
-
-    /// Resolve a pending plan approval.
-    ///
-    /// `action` is typically "approve", "reject", or "revise".
-    /// `feedback` is optional textual feedback from the user.
-    ///
-    /// Returns the plan-approval metadata if found, `None` if already resolved.
-    pub async fn resolve_plan_approval(
-        &self,
-        id: &str,
-        action: String,
-        feedback: String,
-    ) -> Option<PendingPlanApproval> {
-        let mut plan_approvals = self.inner.pending_plan_approvals.lock().await;
-        if let Some(mut slot) = plan_approvals.remove(id) {
-            if let Some(tx) = slot.tx.take() {
-                let _ = tx.send(PlanApprovalResult { action, feedback });
-            }
-            Some(slot.meta)
-        } else {
-            None
-        }
-    }
-
-    /// Get metadata for a pending plan approval.
-    pub async fn get_pending_plan_approval(&self, id: &str) -> Option<PendingPlanApproval> {
-        self.inner
-            .pending_plan_approvals
-            .lock()
-            .await
-            .get(id)
-            .map(|slot| slot.meta.clone())
-    }
-
-    /// Clear all pending plan approvals for a session.
-    pub async fn clear_session_plan_approvals(&self, session_id: &str) {
-        let mut plan_approvals = self.inner.pending_plan_approvals.lock().await;
-        let to_remove: Vec<String> = plan_approvals
-            .iter()
-            .filter(|(_, slot)| slot.meta.session_id.as_deref() == Some(session_id))
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for id in to_remove {
-            if let Some(mut slot) = plan_approvals.remove(&id)
-                && let Some(tx) = slot.tx.take()
-            {
-                let _ = tx.send(PlanApprovalResult {
-                    action: "reject".to_string(),
-                    feedback: "Session ended".to_string(),
-                });
-            }
-        }
-    }
-
-    // --- Bridge mode ---
-
-    /// Check if bridge mode is active (TUI owns execution, Web UI mirrors).
-    pub async fn is_bridge_mode(&self) -> bool {
-        self.inner.bridge.read().await.active
-    }
-
-    /// Get the bridge session ID, if bridge mode is active.
-    pub async fn bridge_session_id(&self) -> Option<String> {
-        let bridge = self.inner.bridge.read().await;
-        if bridge.active {
-            bridge.session_id.clone()
-        } else {
-            None
-        }
-    }
-
-    /// Activate bridge mode for a given session.
-    ///
-    /// While active, the Web UI should not start its own agent execution
-    /// for this session; instead it should route messages to the TUI injector.
-    pub async fn set_bridge_session(&self, session_id: String) {
-        let mut bridge = self.inner.bridge.write().await;
-        bridge.active = true;
-        bridge.session_id = Some(session_id);
-    }
-
-    /// Deactivate bridge mode.
-    pub async fn clear_bridge_session(&self) {
-        let mut bridge = self.inner.bridge.write().await;
-        bridge.active = false;
-        bridge.session_id = None;
-    }
-
-    /// Check whether a mutation on a session should be blocked because
-    /// the TUI owns it in bridge mode.
-    ///
-    /// Returns `true` if the session is bridge-owned and should not be
-    /// mutated by the web server's own agent executor.
-    pub async fn is_bridge_guarded(&self, session_id: &str) -> bool {
-        let bridge = self.inner.bridge.read().await;
-        bridge.active && bridge.session_id.as_deref() == Some(session_id)
-    }
-
-    // --- Injection queues ---
-
-    /// Get or create the injection queue sender for a session.
-    ///
-    /// Returns `(sender, Option<receiver>)`. The receiver is `Some` only when the
-    /// queue was first created -- the caller that creates the session's agent loop
-    /// should take the receiver. Subsequent callers get `None` for the receiver.
-    pub async fn get_or_create_injection_queue(
-        &self,
-        session_id: &str,
-    ) -> (mpsc::Sender<String>, Option<mpsc::Receiver<String>>) {
-        let mut queues = self.inner.injection_queues.lock().await;
-        if let Some(tx) = queues.get(session_id) {
-            (tx.clone(), None)
-        } else {
-            let (tx, rx) = mpsc::channel(INJECTION_QUEUE_CAPACITY);
-            queues.insert(session_id.to_string(), tx.clone());
-            (tx, Some(rx))
-        }
-    }
-
-    /// Try to inject a message into a running session's queue.
-    ///
-    /// Returns `Ok(())` on success, `Err(message)` if queue is full or not found.
-    pub async fn try_inject_message(
-        &self,
-        session_id: &str,
-        message: String,
-    ) -> Result<(), String> {
-        let queues = self.inner.injection_queues.lock().await;
-        if let Some(tx) = queues.get(session_id) {
-            tx.try_send(message)
-                .map_err(|e| format!("Injection queue full or closed: {}", e))
-        } else {
-            Err("No injection queue for session".to_string())
-        }
-    }
-
-    /// Remove the injection queue for a session.
-    pub async fn clear_injection_queue(&self, session_id: &str) {
-        self.inner.injection_queues.lock().await.remove(session_id);
-    }
-
-    // --- Agent executor ---
-
-    /// Set the agent executor implementation.
-    pub async fn set_agent_executor(&self, executor: Arc<dyn AgentExecutor>) {
-        *self.inner.agent_executor.lock().await = Some(executor);
-    }
-
-    /// Get the agent executor (if set).
-    pub async fn agent_executor(&self) -> Option<Arc<dyn AgentExecutor>> {
-        self.inner.agent_executor.lock().await.clone()
     }
 
     // --- Git branch ---
