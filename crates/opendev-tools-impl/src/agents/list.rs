@@ -18,7 +18,7 @@ pub struct AgentsTool;
 fn default_agent_types() -> Vec<AgentType> {
     vec![
         AgentType {
-            name: "code_explorer".into(),
+            name: "explore".into(),
             description: "Read-only agent for exploring and understanding codebases. \
                            Has access to file reading, search, and listing tools."
                 .into(),
@@ -138,7 +138,7 @@ mod tests {
         assert!(result.success);
         let output = result.output.unwrap();
         assert!(output.contains("Available agents"));
-        assert!(output.contains("code_explorer"));
+        assert!(output.contains("explore"));
         assert!(output.contains("planner"));
     }
 
@@ -187,7 +187,7 @@ mod tests {
         assert!(agents.len() >= 3);
 
         let names: Vec<&str> = agents.iter().map(|a| a.name.as_str()).collect();
-        assert!(names.contains(&"code_explorer"));
+        assert!(names.contains(&"explore"));
         assert!(names.contains(&"planner"));
         assert!(names.contains(&"ask_user"));
     }

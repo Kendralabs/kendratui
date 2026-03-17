@@ -228,9 +228,25 @@ pub struct ToolContext {
 
 impl ToolContext {
     /// Create a new tool context with a working directory.
+    ///
+    /// Relative paths (including `.`) are resolved to absolute paths using
+    /// `std::env::current_dir()` and then canonicalized. Absolute paths
+    /// are stored as-is to avoid changing paths in tests.
     pub fn new(working_dir: impl Into<PathBuf>) -> Self {
+        let raw: PathBuf = working_dir.into();
+        let resolved = if raw.is_relative() {
+            // Resolve relative paths (including ".") to absolute
+            if let Ok(cwd) = std::env::current_dir() {
+                let joined = cwd.join(&raw);
+                joined.canonicalize().unwrap_or(joined)
+            } else {
+                raw.canonicalize().unwrap_or(raw)
+            }
+        } else {
+            raw
+        };
         Self {
-            working_dir: working_dir.into(),
+            working_dir: resolved,
             is_subagent: false,
             session_id: None,
             values: HashMap::new(),

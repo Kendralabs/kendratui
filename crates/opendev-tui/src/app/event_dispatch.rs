@@ -647,6 +647,63 @@ impl App {
                 self.state.dirty = true;
             }
 
+            // Background agent events
+            AppEvent::AgentBackgrounded {
+                task_id,
+                query_summary,
+            } => {
+                self.state.backgrounding_pending = false;
+                self.push_system_message(format!(
+                    "Agent moved to background [{task_id}]: {query_summary}"
+                ));
+                self.state.dirty = true;
+            }
+            AppEvent::BackgroundAgentCompleted {
+                task_id,
+                success,
+                result_summary,
+                cost_usd,
+                tool_call_count,
+            } => {
+                self.state.bg_agent_manager.mark_completed(
+                    &task_id,
+                    success,
+                    result_summary.clone(),
+                    tool_call_count,
+                    cost_usd,
+                );
+                let status = if success { "completed" } else { "failed" };
+                self.push_system_message(format!(
+                    "Background agent [{task_id}] {status}: {result_summary} ({tool_call_count} tools, ${cost_usd:.4})"
+                ));
+                self.state.dirty = true;
+            }
+            AppEvent::BackgroundAgentProgress {
+                task_id,
+                tool_name,
+                tool_count,
+            } => {
+                self.state
+                    .bg_agent_manager
+                    .update_progress(&task_id, tool_name, tool_count);
+                self.state.dirty = true;
+            }
+            AppEvent::BackgroundAgentKilled { task_id } => {
+                self.push_system_message(format!("Background agent [{task_id}] killed."));
+                self.state.dirty = true;
+            }
+            AppEvent::SetBackgroundAgentToken {
+                task_id,
+                query,
+                session_id,
+                interrupt_token,
+            } => {
+                self.state
+                    .bg_agent_manager
+                    .add_task(task_id, query, session_id, interrupt_token);
+                self.state.dirty = true;
+            }
+
             AppEvent::Quit => {
                 self.state.running = false;
                 self.state.dirty = true;

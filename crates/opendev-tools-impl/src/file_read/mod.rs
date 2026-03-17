@@ -488,6 +488,33 @@ mod tests {
         assert!(!err.contains("other.txt"));
     }
 
+    #[tokio::test]
+    async fn test_file_not_found_missing_parent_shows_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let tmp_path = tmp.path().canonicalize().unwrap();
+        fs::create_dir_all(tmp_path.join("crates")).unwrap();
+        fs::create_dir_all(tmp_path.join("docs")).unwrap();
+
+        let tool = FileReadTool;
+        let ctx = ToolContext::new(&tmp_path);
+        // Try to read a file in a non-existent "src/" directory
+        let wrong_path = tmp_path.join("src/main.rs");
+        let args = make_args(&[("file_path", serde_json::json!(wrong_path.to_str().unwrap()))]);
+        let result = tool.execute(args, &ctx).await;
+
+        assert!(!result.success);
+        let err = result.error.unwrap();
+        assert!(err.contains("not found"), "got: {err}");
+        assert!(
+            err.contains("does not exist"),
+            "should note parent dir doesn't exist, got: {err}"
+        );
+        assert!(
+            err.contains("crates/"),
+            "should suggest crates/, got: {err}"
+        );
+    }
+
     // ---- Next offset hint ----
 
     #[tokio::test]

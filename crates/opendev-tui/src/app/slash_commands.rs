@@ -236,6 +236,86 @@ impl App {
                     }
                 }
             }
+            "bg" => {
+                match args {
+                    None => {
+                        // List all background agent tasks
+                        let tasks = self.state.bg_agent_manager.all_tasks();
+                        if tasks.is_empty() {
+                            self.push_system_message("No background agents.".to_string());
+                        } else {
+                            let mut lines = vec![format!(
+                                "Background agents ({} total, {} running):",
+                                tasks.len(),
+                                self.state.bg_agent_manager.running_count()
+                            )];
+                            for task in &tasks {
+                                let elapsed = task.runtime_seconds();
+                                let elapsed_str = if elapsed >= 60.0 {
+                                    format!("{}m {:.0}s", elapsed as u64 / 60, elapsed % 60.0)
+                                } else {
+                                    format!("{elapsed:.1}s")
+                                };
+                                let tool_info = if let Some(ref tool) = task.current_tool {
+                                    format!(" ({})", tool)
+                                } else {
+                                    String::new()
+                                };
+                                let query_preview: String = task.query.chars().take(50).collect();
+                                lines.push(format!(
+                                    "  [{id}] [{state}] {query}{tool_info} — {elapsed_str}, {tools} tools",
+                                    id = task.task_id,
+                                    state = task.state,
+                                    query = query_preview,
+                                    tools = task.tool_call_count,
+                                ));
+                            }
+                            self.push_system_message(lines.join("\n"));
+                        }
+                    }
+                    Some(sub) if sub.starts_with("kill ") => {
+                        let id = sub.strip_prefix("kill ").unwrap().trim();
+                        if self.state.bg_agent_manager.kill_task(id) {
+                            let _ = self.event_tx.send(AppEvent::BackgroundAgentKilled {
+                                task_id: id.to_string(),
+                            });
+                        } else {
+                            self.push_system_message(format!(
+                                "Background agent '{id}' not found or not running."
+                            ));
+                        }
+                    }
+                    Some(sub) if sub.starts_with("merge ") => {
+                        let id = sub.strip_prefix("merge ").unwrap().trim();
+                        if let Some(task) = self.state.bg_agent_manager.get_task(id) {
+                            if let Some(ref summary) = task.result_summary {
+                                let content = format!("[Background agent {id} result]\n{summary}");
+                                self.push_system_message(content);
+                            } else {
+                                self.push_system_message(format!(
+                                    "Background agent '{id}' has no result yet."
+                                ));
+                            }
+                        } else {
+                            self.push_system_message(format!("Background agent '{id}' not found."));
+                        }
+                    }
+                    Some(id) => {
+                        // Show details for a specific task
+                        if let Some(task) = self.state.bg_agent_manager.get_task(id) {
+                            let elapsed = task.runtime_seconds();
+                            let summary =
+                                task.result_summary.as_deref().unwrap_or("(still running)");
+                            self.push_system_message(format!(
+                                "Background agent [{id}]:\n  Query: {}\n  State: {}\n  Tools: {}\n  Cost: ${:.4}\n  Elapsed: {:.1}s\n  Result: {summary}",
+                                task.query, task.state, task.tool_call_count, task.cost_usd, elapsed
+                            ));
+                        } else {
+                            self.push_system_message(format!("Background agent '{id}' not found."));
+                        }
+                    }
+                }
+            }
             "help" => {
                 self.push_system_message(
                     [
@@ -257,10 +337,15 @@ impl App {
                         "  /plugins [list|install|remove] — Manage plugins",
                         "  /sound             — Play test notification sound",
                         "  /compact           — Compact conversation context",
+                        "  /bg                — List background agents",
+                        "  /bg <id>           — Show background agent details",
+                        "  /bg merge <id>     — Inject background agent result into conversation",
+                        "  /bg kill <id>      — Kill a background agent",
                         "  /exit              — Quit OpenDev",
                         "",
                         "Keyboard shortcuts:",
                         "  Ctrl+C      — Clear input / interrupt / quit",
+                        "  Ctrl+B      — Background running agent / toggle panel",
                         "  Escape      — Interrupt agent",
                         "  Shift+Tab   — Toggle mode",
                         "  PageUp/Down — Scroll conversation",

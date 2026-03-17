@@ -3,7 +3,7 @@
 //! Defines a trait for react loop strategies so each subagent type
 //! can have its own loop. `StandardReactRunner` wraps the existing
 //! `ReactLoop` for General/Planner/Build agents, while `SimpleReactRunner`
-//! provides a stripped-down loop for Code-Explorer.
+//! provides a stripped-down loop for Explore.
 
 mod simple;
 mod standard;

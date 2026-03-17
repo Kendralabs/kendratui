@@ -387,9 +387,23 @@ impl App {
                     self.state.dirty = true;
                 }
             }
-            // Ctrl+B — toggle background task panel overlay
+            // Ctrl+B — background running agent or toggle panel
             (KeyModifiers::CONTROL, KeyCode::Char('b')) => {
-                self.state.background_panel_open = !self.state.background_panel_open;
+                if self.state.agent_active && !self.state.backgrounding_pending {
+                    // Background the running agent
+                    if !self.state.bg_agent_manager.can_accept() {
+                        self.push_system_message(format!(
+                            "Maximum background agents reached ({}).",
+                            self.state.bg_agent_manager.max_concurrent
+                        ));
+                    } else if let Some(ref token) = self.interrupt_token {
+                        token.request_background();
+                        self.state.backgrounding_pending = true;
+                    }
+                } else {
+                    // Toggle background panel (existing behavior)
+                    self.state.background_panel_open = !self.state.background_panel_open;
+                }
                 self.state.dirty = true;
             }
             // Regular character input

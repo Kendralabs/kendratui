@@ -12,7 +12,7 @@ When considering delegation to a subagent, reason through these questions:
 ## Which subagent matches the task?
 
 - **ask-user**: Need clarification on ambiguous requirements or user preferences? (e.g., which auth method, database choice)
-- **Code-Explorer**: Need to understand LOCAL codebase structure, find implementations, or trace patterns?
+- **Explore**: Need to understand LOCAL codebase structure, find implementations, or trace patterns?
 - **Planner**: Need to create a detailed implementation plan? Spawn a Planner subagent.
 
 ## Is a subagent appropriate?
@@ -34,7 +34,7 @@ When considering delegation to a subagent, reason through these questions:
 ## Anti-patterns — do NOT spawn a subagent when:
 - The task is creative/design work with no existing codebase to explore (game design, brainstorming, writing specs from scratch) — handle directly
 - The task doesn't match ANY subagent's purpose — don't force-fit the closest option
-- Code-Explorer is ONLY for LOCAL files that already exist — never use it for greenfield design or external knowledge tasks
+- Explore is ONLY for LOCAL files that already exist — never use it for greenfield design or external knowledge tasks
 
 ## Common patterns to recognize:
 
@@ -49,12 +49,12 @@ When considering delegation to a subagent, reason through these questions:
 - "Create a utils file" -> `write_file` with content
 
 ### Subagent Delegation (Spawn subagent):
-- "How does authentication work in this codebase?" -> **Code-Explorer** (multi-file trace)
-- "Understand the database schema" -> **Code-Explorer** (models + migrations)
-- "What caching strategy is used?" -> **Code-Explorer** (find all cache uses)
+- "How does authentication work in this codebase?" -> **Explore** (multi-file trace)
+- "Understand the database schema" -> **Explore** (models + migrations)
+- "What caching strategy is used?" -> **Explore** (find all cache uses)
 - "Plan adding real-time features" -> **Planner** subagent (design approach)
 - "Which library should we use for X?" -> **ask-user** (user preference)
 - "Implement user registration system" -> **Planner** subagent first for design, then implement
-- "Explain the error handling strategy" -> **Code-Explorer** (multi-file analysis)
+- "Explain the error handling strategy" -> **Explore** (multi-file analysis)
 
 **Remember**: Subagent results aren't shown to the user - you must summarize their findings in your reasoning and response.

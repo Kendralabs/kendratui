@@ -3,6 +3,7 @@
 //! Mirrors `opendev/core/base/abstract/base_agent.py`.
 
 use async_trait::async_trait;
+use opendev_runtime::InterruptToken;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -40,6 +41,8 @@ pub struct AgentResult {
     pub success: bool,
     /// Whether the run was interrupted by the user.
     pub interrupted: bool,
+    /// Whether the run was soft-yielded for backgrounding.
+    pub backgrounded: bool,
     /// Completion status from task_complete tool (if used).
     pub completion_status: Option<String>,
     /// The full message history after the run.
@@ -55,6 +58,7 @@ impl AgentResult {
             content: content.into(),
             success: true,
             interrupted: false,
+            backgrounded: false,
             completion_status: None,
             messages,
             partial_result: None,
@@ -67,6 +71,7 @@ impl AgentResult {
             content: content.into(),
             success: false,
             interrupted: false,
+            backgrounded: false,
             completion_status: None,
             messages,
             partial_result: None,
@@ -79,6 +84,20 @@ impl AgentResult {
             content: "Task interrupted by user".to_string(),
             success: false,
             interrupted: true,
+            backgrounded: false,
+            completion_status: None,
+            messages,
+            partial_result: None,
+        }
+    }
+
+    /// Create a backgrounded result (soft yield — task continues in background).
+    pub fn backgrounded(messages: Vec<Value>) -> Self {
+        Self {
+            content: "Task moved to background".to_string(),
+            success: false,
+            interrupted: false,
+            backgrounded: true,
             completion_status: None,
             messages,
             partial_result: None,
@@ -194,6 +213,11 @@ pub trait TaskMonitor: Send + Sync {
     /// Check if the user has requested an interrupt.
     fn should_interrupt(&self) -> bool;
 
+    /// Check if the user has requested backgrounding (soft yield).
+    fn is_background_requested(&self) -> bool {
+        false
+    }
+
     /// Update token usage counter.
     fn update_tokens(&self, _total_tokens: u64) {}
 }
@@ -263,6 +287,10 @@ impl TaskMonitor for opendev_runtime::InterruptToken {
     fn should_interrupt(&self) -> bool {
         self.is_requested()
     }
+
+    fn is_background_requested(&self) -> bool {
+        InterruptToken::is_background_requested(self)
+    }
 }
 
 #[cfg(test)]
@@ -274,6 +302,7 @@ mod tests {
         let result = AgentResult::ok("done", vec![]);
         assert!(result.success);
         assert!(!result.interrupted);
+        assert!(!result.backgrounded);
         assert_eq!(result.content, "done");
     }
 
@@ -282,6 +311,7 @@ mod tests {
         let result = AgentResult::fail("error", vec![]);
         assert!(!result.success);
         assert!(!result.interrupted);
+        assert!(!result.backgrounded);
         assert_eq!(result.content, "error");
     }
 
@@ -290,6 +320,15 @@ mod tests {
         let result = AgentResult::interrupted(vec![]);
         assert!(!result.success);
         assert!(result.interrupted);
+        assert!(!result.backgrounded);
+    }
+
+    #[test]
+    fn test_agent_result_backgrounded() {
+        let result = AgentResult::backgrounded(vec![]);
+        assert!(!result.success);
+        assert!(!result.interrupted);
+        assert!(result.backgrounded);
     }
 
     #[test]
@@ -319,6 +358,30 @@ mod tests {
     fn test_agent_deps_builder() {
         let deps = AgentDeps::new().with_context("key", serde_json::json!("value"));
         assert_eq!(deps.context.get("key"), Some(&serde_json::json!("value")));
+    }
+
+    #[test]
+    fn test_task_monitor_background_default() {
+        struct DummyMonitor;
+        impl TaskMonitor for DummyMonitor {
+            fn should_interrupt(&self) -> bool {
+                false
+            }
+        }
+        let m = DummyMonitor;
+        // Default implementation returns false
+        assert!(!m.is_background_requested());
+    }
+
+    #[test]
+    fn test_interrupt_token_as_task_monitor_background() {
+        let token = InterruptToken::new();
+        let monitor: &dyn TaskMonitor = &token;
+        assert!(!monitor.is_background_requested());
+        token.request_background();
+        assert!(monitor.is_background_requested());
+        // Background should NOT trigger should_interrupt
+        assert!(!monitor.should_interrupt());
     }
 
     #[test]

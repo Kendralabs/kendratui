@@ -46,7 +46,7 @@ impl<'a> ConversationWidget<'a> {
                 let frame_idx = tool.tick_count % SPINNER_FRAMES.len();
                 let spinner = SPINNER_FRAMES[frame_idx];
 
-                // For spawn_subagent, use Python-style nested display
+                // For spawn_subagent, use nested display
                 if tool.name == "spawn_subagent" {
                     // Match by task text: each subagent has a unique task string.
                     // Don't filter by !finished — we need to show subagents in the gap
@@ -71,13 +71,6 @@ impl<'a> ConversationWidget<'a> {
                         task_desc
                     };
 
-                    // Check if multiple parallel subagents are active
-                    let spawn_count = active_unfinished
-                        .iter()
-                        .filter(|t| t.name == "spawn_subagent")
-                        .count();
-                    let is_parallel = spawn_count > 1;
-
                     // Header: ⠋ AgentName(task description)
                     lines.push(Line::from(vec![
                         Span::styled(
@@ -97,38 +90,11 @@ impl<'a> ConversationWidget<'a> {
                     ]));
 
                     if let Some(sa) = subagent {
-                        if is_parallel {
-                            self.build_parallel_subagent_line(sa, &mut lines);
-                        } else if sa.finished {
-                            // Single subagent finished but tool not yet — show Done summary
-                            let tool_count = sa.tool_call_count;
-                            let count_str = if tool_count > 0 {
-                                format!(" ({tool_count} tool uses)")
-                            } else {
-                                String::new()
-                            };
-                            lines.push(Line::from(vec![
-                                Span::styled(
-                                    format!("  {CONTINUATION_CHAR}  "),
-                                    Style::default().fg(style_tokens::GREY),
-                                ),
-                                Span::styled(
-                                    format!("{COMPLETED_CHAR} "),
-                                    Style::default().fg(style_tokens::GREEN_BRIGHT),
-                                ),
-                                Span::styled("Done", Style::default().fg(style_tokens::SUBTLE)),
-                                Span::styled(
-                                    count_str,
-                                    Style::default()
-                                        .fg(style_tokens::GREY)
-                                        .add_modifier(Modifier::ITALIC),
-                                ),
-                            ]));
-                        } else {
-                            // Single subagent: show full nested tool calls
-                            self.build_single_subagent_lines(sa, &mut lines);
-                        }
+                        self.build_subagent_spinner_lines(sa, &mut lines);
                     }
+
+                    // Blank line between subagent blocks
+                    lines.push(Line::from(""));
                 } else {
                     // Normal tool: ⠋ verb(arg) (Xs)
                     let (verb, arg) = format_tool_call_parts_with_wd(
@@ -179,8 +145,8 @@ impl<'a> ConversationWidget<'a> {
         lines
     }
 
-    /// Build status line for a parallel subagent (finished/running/initializing).
-    fn build_parallel_subagent_line(
+    /// Build status lines for a subagent (unified for single and parallel).
+    fn build_subagent_spinner_lines(
         &self,
         sa: &crate::widgets::nested_tool::SubagentDisplayState,
         lines: &mut Vec<Line<'a>>,
@@ -210,87 +176,11 @@ impl<'a> ConversationWidget<'a> {
                         .add_modifier(Modifier::ITALIC),
                 ),
             ]));
-        } else if let Some(at) = sa.active_tools.values().next() {
-            let at_idx = at.tick % SPINNER_FRAMES.len();
-            let at_ch = SPINNER_FRAMES[at_idx];
-            let (verb, arg) =
-                format_tool_call_parts_with_wd(&at.tool_name, &at.args, Some(self.working_dir));
-            let count_str = if sa.completed_tools.is_empty() {
-                String::new()
-            } else {
-                format!(" +{} more", sa.completed_tools.len())
-            };
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("  {CONTINUATION_CHAR}  "),
-                    Style::default().fg(style_tokens::GREY),
-                ),
-                Span::styled(
-                    format!("{at_ch} "),
-                    Style::default().fg(style_tokens::BLUE_BRIGHT),
-                ),
-                Span::styled(verb, Style::default().fg(style_tokens::SUBTLE)),
-                Span::styled(format!("({arg})"), Style::default().fg(style_tokens::GREY)),
-                Span::styled(
-                    count_str,
-                    Style::default()
-                        .fg(style_tokens::GREY)
-                        .add_modifier(Modifier::ITALIC),
-                ),
-            ]));
-        } else if let Some(ct) = sa.completed_tools.last() {
-            let (icon, color) = if ct.success {
-                (COMPLETED_CHAR, style_tokens::GREEN_BRIGHT)
-            } else {
-                ('\u{2717}', style_tokens::ERROR)
-            };
-            let (verb, arg) =
-                format_tool_call_parts_with_wd(&ct.tool_name, &ct.args, Some(self.working_dir));
-            let hidden = sa.completed_tools.len().saturating_sub(1);
-            let count_str = if hidden > 0 {
-                format!(" +{hidden} more")
-            } else {
-                String::new()
-            };
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("  {CONTINUATION_CHAR}  "),
-                    Style::default().fg(style_tokens::GREY),
-                ),
-                Span::styled(format!("{icon} "), Style::default().fg(color)),
-                Span::styled(verb, Style::default().fg(style_tokens::SUBTLE)),
-                Span::styled(format!("({arg})"), Style::default().fg(style_tokens::GREY)),
-                Span::styled(
-                    count_str,
-                    Style::default()
-                        .fg(style_tokens::GREY)
-                        .add_modifier(Modifier::ITALIC),
-                ),
-            ]));
-        } else {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("  {CONTINUATION_CHAR}  "),
-                    Style::default().fg(style_tokens::GREY),
-                ),
-                Span::styled(
-                    "Initializing\u{2026}",
-                    Style::default()
-                        .fg(style_tokens::SUBTLE)
-                        .add_modifier(Modifier::ITALIC),
-                ),
-            ]));
+            return;
         }
-    }
 
-    /// Build status lines for a single (non-parallel) subagent showing nested tool calls.
-    fn build_single_subagent_lines(
-        &self,
-        sa: &crate::widgets::nested_tool::SubagentDisplayState,
-        lines: &mut Vec<Line<'a>>,
-    ) {
-        let start = sa.completed_tools.len().saturating_sub(3);
-        for ct in &sa.completed_tools[start..] {
+        // Show last completed tool
+        if let Some(ct) = sa.completed_tools.last() {
             let (icon, color) = if ct.success {
                 (COMPLETED_CHAR, style_tokens::GREEN_BRIGHT)
             } else {
@@ -309,6 +199,7 @@ impl<'a> ConversationWidget<'a> {
             ]));
         }
 
+        // Show active tools with spinner
         for at in sa.active_tools.values() {
             let at_idx = at.tick % SPINNER_FRAMES.len();
             let at_ch = SPINNER_FRAMES[at_idx];
@@ -328,6 +219,7 @@ impl<'a> ConversationWidget<'a> {
             ]));
         }
 
+        // Initializing if no tools yet
         if sa.active_tools.is_empty() && sa.completed_tools.is_empty() {
             lines.push(Line::from(vec![
                 Span::styled(
@@ -343,7 +235,8 @@ impl<'a> ConversationWidget<'a> {
             ]));
         }
 
-        let hidden = sa.completed_tools.len().saturating_sub(3);
+        // "+N more tool uses" if hidden completed > 0
+        let hidden = sa.completed_tools.len().saturating_sub(1);
         if hidden > 0 {
             lines.push(Line::from(Span::styled(
                 format!("      +{hidden} more tool uses"),

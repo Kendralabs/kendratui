@@ -235,6 +235,39 @@ impl RecordedEvent {
             AppEvent::AgentInterrupted => ("AgentInterrupted".to_string(), serde_json::Value::Null),
             AppEvent::ModeChanged(m) => ("ModeChanged".to_string(), serde_json::json!({"mode": m})),
             AppEvent::KillTask(id) => ("KillTask".to_string(), serde_json::json!({"task_id": id})),
+            AppEvent::AgentBackgrounded {
+                task_id,
+                query_summary,
+            } => (
+                "AgentBackgrounded".to_string(),
+                serde_json::json!({"task_id": task_id, "query_summary": query_summary}),
+            ),
+            AppEvent::BackgroundAgentCompleted {
+                task_id,
+                success,
+                result_summary,
+                cost_usd,
+                tool_call_count,
+            } => (
+                "BackgroundAgentCompleted".to_string(),
+                serde_json::json!({"task_id": task_id, "success": success, "result_summary": result_summary, "cost_usd": cost_usd, "tool_call_count": tool_call_count}),
+            ),
+            AppEvent::BackgroundAgentProgress {
+                task_id,
+                tool_name,
+                tool_count,
+            } => (
+                "BackgroundAgentProgress".to_string(),
+                serde_json::json!({"task_id": task_id, "tool_name": tool_name, "tool_count": tool_count}),
+            ),
+            AppEvent::BackgroundAgentKilled { task_id } => (
+                "BackgroundAgentKilled".to_string(),
+                serde_json::json!({"task_id": task_id}),
+            ),
+            AppEvent::SetBackgroundAgentToken { task_id, .. } => (
+                "SetBackgroundAgentToken".to_string(),
+                serde_json::json!({"task_id": task_id}),
+            ),
             AppEvent::Quit => ("Quit".to_string(), serde_json::Value::Null),
         };
 

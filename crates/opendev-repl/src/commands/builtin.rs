@@ -269,7 +269,7 @@ impl BuiltinCommands {
         match subcommand {
             "list" | "" => {
                 println!("Available agents:");
-                println!("  - Code-Explorer    Explore and understand codebase structure");
+                println!("  - Explore          Explore and understand codebase structure");
                 println!("  - Planner          Create and refine implementation plans");
                 println!("  - Ask-User         Request clarification from the user");
             }

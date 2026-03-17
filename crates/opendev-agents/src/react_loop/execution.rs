@@ -162,6 +162,14 @@ impl ReactLoop {
                 return Ok(AgentResult::interrupted(messages.clone()));
             }
 
+            // Check for background yield (soft — current iteration already complete)
+            if let Some(monitor) = task_monitor
+                && monitor.is_background_requested()
+            {
+                info!(iteration, "Background requested — yielding to foreground");
+                return Ok(AgentResult::backgrounded(messages.clone()));
+            }
+
             // Auto-compaction: check context usage and apply staged optimization
             if let Some(comp) = compactor {
                 let needs_llm = apply_staged_compaction(comp, messages);

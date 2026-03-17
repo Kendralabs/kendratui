@@ -34,6 +34,7 @@ pub mod complete_todo;
 pub mod custom_tool;
 pub mod diagnostics_helper;
 pub mod diff_preview;
+pub(crate) mod dir_hints;
 pub mod edit_replacers;
 pub mod file_edit;
 pub mod file_list;

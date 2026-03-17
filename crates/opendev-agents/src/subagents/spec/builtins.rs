@@ -1,6 +1,6 @@
 use super::types::SubAgentSpec;
 
-/// Tools available to the Code Explorer subagent.
+/// Tools available to the Explore subagent.
 pub const CODE_EXPLORER_TOOLS: &[&str] = &["read_file", "search", "list_files", "run_command"];
 
 /// Tools available to the Planner subagent.
@@ -12,10 +12,10 @@ pub const PLANNER_TOOLS: &[&str] = &[
     "edit_file",
 ];
 
-/// Create the Code Explorer subagent spec.
+/// Create the Explore subagent spec.
 pub fn code_explorer(system_prompt: &str) -> SubAgentSpec {
     SubAgentSpec::new(
-        "Code-Explorer",
+        "Explore",
         "Deep LOCAL codebase exploration and research. Systematically searches and \
          analyzes code to answer questions. USE FOR: Understanding code architecture, \
          finding patterns, researching implementation details in LOCAL files. \
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn test_code_explorer_builtin() {
         let spec = code_explorer("You explore code.");
-        assert_eq!(spec.name, "Code-Explorer");
+        assert_eq!(spec.name, "Explore");
         assert!(spec.has_tool_restriction());
         assert!(spec.tools.contains(&"read_file".to_string()));
         assert!(spec.tools.contains(&"search".to_string()));

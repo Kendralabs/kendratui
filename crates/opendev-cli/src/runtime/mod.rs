@@ -3,6 +3,7 @@
 //! Owns all services and coordinates the full pipeline:
 //! CLI → REPL → QueryEnhancer → ReactLoop → ToolExecutor → display
 
+pub mod background;
 mod query;
 mod tools;
 

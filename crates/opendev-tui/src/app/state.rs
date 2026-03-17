@@ -66,11 +66,6 @@ pub struct AppState {
     pub background_panel_open: bool,
     /// Active subagent executions for nested display.
     pub active_subagents: Vec<crate::widgets::nested_tool::SubagentDisplayState>,
-    /// Buffered subagent results waiting for all parallel subagents to finish.
-    /// Each entry: (task_short, tool_count, token_count, elapsed, success).
-    pub pending_subagent_results: Vec<(String, usize, u64, std::time::Duration, bool)>,
-    /// Number of parallel spawn_subagent tools in the current batch.
-    pub parallel_subagent_count: usize,
     /// Shared todo manager for syncing panel state with tool results.
     pub todo_manager: Option<Arc<Mutex<opendev_runtime::TodoManager>>>,
     /// Todo items from the current plan (for the todo progress panel).
@@ -128,6 +123,10 @@ pub struct AppState {
     pub pending_plan_request: bool,
     /// Plan content to display in the conversation (consumed after first render).
     pub plan_content_display: Option<String>,
+    /// Whether we're waiting for the current tool to finish before backgrounding.
+    pub backgrounding_pending: bool,
+    /// Background agent task manager.
+    pub bg_agent_manager: crate::managers::BackgroundAgentManager,
 }
 
 impl Default for AppState {
@@ -162,8 +161,6 @@ impl Default for AppState {
             background_task_count: 0,
             background_panel_open: false,
             active_subagents: Vec::new(),
-            pending_subagent_results: Vec::new(),
-            parallel_subagent_count: 0,
             todo_manager: None,
             todo_items: Vec::new(),
             todo_expanded: true,
@@ -192,6 +189,8 @@ impl Default for AppState {
             compaction_active: false,
             pending_plan_request: false,
             plan_content_display: None,
+            backgrounding_pending: false,
+            bg_agent_manager: crate::managers::BackgroundAgentManager::new(),
         }
     }
 }

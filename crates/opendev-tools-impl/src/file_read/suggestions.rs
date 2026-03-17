@@ -2,6 +2,7 @@
 
 /// Build an error message for a missing file, with up to 5 suggestions from the
 /// parent directory using both substring matching and Levenshtein edit distance.
+/// When the parent directory itself doesn't exist, lists available top-level directories.
 pub(super) fn file_not_found_message(display_path: &str, resolved: &std::path::Path) -> String {
     let mut msg = format!("File not found: {display_path}");
 
@@ -13,6 +14,28 @@ pub(super) fn file_not_found_message(display_path: &str, resolved: &std::path::P
 
     let parent = match resolved.parent() {
         Some(p) if p.is_dir() => p,
+        Some(p) => {
+            // Parent directory doesn't exist — find the nearest ancestor that does
+            // and show available directories from there.
+            let mut ancestor = p;
+            while let Some(a) = ancestor.parent() {
+                if a.is_dir() {
+                    let available = crate::dir_hints::list_available_dirs(a);
+                    if !available.is_empty() {
+                        msg.push_str(&format!(
+                            "\n\nNote: directory '{}' does not exist.\n\
+                             Available directories in {}:\n{}",
+                            p.display(),
+                            a.display(),
+                            available
+                        ));
+                    }
+                    break;
+                }
+                ancestor = a;
+            }
+            return msg;
+        }
         _ => return msg,
     };
 

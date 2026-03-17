@@ -190,9 +190,8 @@ mod tests {
 
     #[test]
     fn test_subagent_display_state_new() {
-        let state =
-            SubagentDisplayState::new("id-1".into(), "Code-Explorer".into(), "Find TODOs".into());
-        assert_eq!(state.name, "Code-Explorer");
+        let state = SubagentDisplayState::new("id-1".into(), "Explore".into(), "Find TODOs".into());
+        assert_eq!(state.name, "Explore");
         assert!(!state.finished);
         assert_eq!(state.tool_call_count, 0);
     }

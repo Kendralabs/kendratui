@@ -124,6 +124,7 @@ impl BaseTool for InvokeSkillTool {
                 SkillLookup::ListOnly(loader.get_skill_names())
             } else {
                 let subagent_types = [
+                    "explore",
                     "code-explorer",
                     "code_explorer",
                     "planner",
@@ -384,7 +385,13 @@ mod tests {
         let loader = create_test_loader(None);
         let tool = InvokeSkillTool::new(loader);
         let ctx = ToolContext::new("/tmp/test");
-        for name in &["code-explorer", "code_explorer", "planner", "ask_user"] {
+        for name in &[
+            "explore",
+            "code-explorer",
+            "code_explorer",
+            "planner",
+            "ask_user",
+        ] {
             let mut args = HashMap::new();
             args.insert("skill_name".to_string(), serde_json::json!(name));
             let result = tool.execute(args, &ctx).await;

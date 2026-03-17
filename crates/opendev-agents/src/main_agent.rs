@@ -413,7 +413,10 @@ impl BaseAgent for MainAgent {
         );
 
         // Build tool context from deps and config
-        let working_dir = self.config.working_dir.as_deref().unwrap_or(".");
+        let cwd_fallback = std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string());
+        let working_dir = self.config.working_dir.as_deref().unwrap_or(&cwd_fallback);
         let tool_context = ToolContext::new(working_dir);
 
         // Run the full ReAct loop

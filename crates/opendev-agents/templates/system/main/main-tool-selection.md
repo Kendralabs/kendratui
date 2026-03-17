@@ -25,9 +25,9 @@ When choosing tools, prefer the more specific option:
 - "Run the tests" → `run_command` (single command)
 
 **Use subagents when exploration or specialization is needed** (5+ tool calls or multiple files):
-- "How does authentication work?" → **Code-Explorer** (requires multi-file exploration)
-- "What's the architecture of module X?" → **Code-Explorer** (needs comprehensive analysis)
-- "Explain the error handling strategy" → **Code-Explorer** (multi-file trace)
+- "How does authentication work?" → **Explore** (requires multi-file exploration)
+- "What's the architecture of module X?" → **Explore** (needs comprehensive analysis)
+- "Explain the error handling strategy" → **Explore** (multi-file trace)
 - "Should I use Redis or Memcached?" → **ask-user** (user preference needed)
 
 **Use the Planner subagent for planning and design tasks**:

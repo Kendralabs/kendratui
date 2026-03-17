@@ -126,14 +126,14 @@ mod tests {
     fn test_subagent_event_variants() {
         let started = SubagentEvent::Started {
             subagent_id: "id-1".into(),
-            subagent_name: "Code-Explorer".into(),
+            subagent_name: "Explore".into(),
             task: "Find all TODO comments".into(),
         };
         assert!(matches!(started, SubagentEvent::Started { .. }));
 
         let finished = SubagentEvent::Finished {
             subagent_id: "id-1".into(),
-            subagent_name: "Code-Explorer".into(),
+            subagent_name: "Explore".into(),
             success: true,
             result_summary: "Found 5 TODOs".into(),
             tool_call_count: 3,

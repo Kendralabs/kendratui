@@ -1113,7 +1113,7 @@ mod tests {
                 args.insert("task".into(), serde_json::Value::String(task.to_string()));
                 args.insert(
                     "agent_type".into(),
-                    serde_json::Value::String("code-explorer".into()),
+                    serde_json::Value::String("explore".into()),
                 );
                 ToolExecution {
                     id: format!("t{i}"),
@@ -1135,11 +1135,8 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(i, task)| {
-                let mut sa = SubagentDisplayState::new(
-                    format!("sa{i}"),
-                    "code-explorer".into(),
-                    task.to_string(),
-                );
+                let mut sa =
+                    SubagentDisplayState::new(format!("sa{i}"), "explore".into(), task.to_string());
                 sa.finished = true;
                 sa.success = true;
                 sa.tool_call_count = 3 + i;
@@ -1201,7 +1198,7 @@ mod tests {
                 args.insert("task".into(), serde_json::Value::String(task.to_string()));
                 args.insert(
                     "agent_type".into(),
-                    serde_json::Value::String("code-explorer".into()),
+                    serde_json::Value::String("explore".into()),
                 );
                 ToolExecution {
                     id: format!("t{i}"),
@@ -1223,11 +1220,8 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(i, task)| {
-                let mut sa = SubagentDisplayState::new(
-                    format!("sa{i}"),
-                    "code-explorer".into(),
-                    task.to_string(),
-                );
+                let mut sa =
+                    SubagentDisplayState::new(format!("sa{i}"), "explore".into(), task.to_string());
                 sa.active_tools.insert(
                     format!("nested_t{i}"),
                     NestedToolCallState {

@@ -1,4 +1,4 @@
-//! SimpleReactRunner — stripped-down loop for Code-Explorer subagents.
+//! SimpleReactRunner — stripped-down loop for Explore subagents.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -316,6 +316,7 @@ impl SubagentRunner for SimpleReactRunner {
                     content: "Interrupted.".to_string(),
                     success: true,
                     interrupted: true,
+                    backgrounded: false,
                     completion_status: None,
                     messages: messages.clone(),
                     partial_result: None,
@@ -410,6 +411,7 @@ impl SubagentRunner for SimpleReactRunner {
                         content: "Exploration failed: no tool calls were made. The subagent could not find any files to explore in the working directory.".to_string(),
                         success: false,
                         interrupted: false,
+                        backgrounded: false,
                         completion_status: None,
                         messages: messages.clone(),
                         partial_result: None,
@@ -428,6 +430,7 @@ impl SubagentRunner for SimpleReactRunner {
                     content,
                     success: true,
                     interrupted: false,
+                    backgrounded: false,
                     completion_status: None,
                     messages: messages.clone(),
                     partial_result: None,
@@ -602,6 +605,7 @@ impl SubagentRunner for SimpleReactRunner {
             content: last_content,
             success: true,
             interrupted: false,
+            backgrounded: false,
             completion_status: None,
             messages: messages.clone(),
             partial_result: None,

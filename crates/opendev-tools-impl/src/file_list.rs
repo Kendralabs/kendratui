@@ -7,6 +7,7 @@ use crate::path_utils::{resolve_dir_path, validate_path_access};
 
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
+use crate::dir_hints::list_available_dirs;
 use crate::file_search::{DEFAULT_SEARCH_EXCLUDE_GLOBS, DEFAULT_SEARCH_EXCLUDES};
 
 /// Check if a path should be excluded based on default exclusion patterns.
@@ -114,7 +115,13 @@ impl BaseTool for FileListTool {
         }
 
         if !base_dir.exists() {
-            return ToolResult::fail(format!("Directory not found: {}", base_dir.display()));
+            let available = list_available_dirs(&ctx.working_dir);
+            return ToolResult::fail(format!(
+                "Directory not found: {}\n\nAvailable directories in working dir ({}):\n{}",
+                base_dir.display(),
+                ctx.working_dir.display(),
+                available
+            ));
         }
 
         // Build full glob pattern
@@ -195,6 +202,19 @@ impl BaseTool for FileListTool {
         let files = &files[..total.min(Self::MAX_RESULTS)];
 
         if files.is_empty() {
+            // Check if pattern references a non-existent directory
+            let first_component = pattern.split('/').next().unwrap_or("");
+            let candidate = base_dir.join(first_component);
+            if !first_component.is_empty() && !first_component.contains('*') && !candidate.exists()
+            {
+                let available = list_available_dirs(&base_dir);
+                return ToolResult::ok(format!(
+                    "No files found matching '{pattern}' in {}\n\
+                     Note: directory '{first_component}/' does not exist.\n\
+                     Available directories:\n{available}",
+                    base_dir.display()
+                ));
+            }
             return ToolResult::ok(format!(
                 "No files found matching '{pattern}' in {}",
                 base_dir.display()
@@ -444,5 +464,54 @@ mod tests {
         let result = tool.execute(args, &ctx).await;
         assert!(result.success);
         assert!(result.output.unwrap().contains("No files found"));
+    }
+
+    #[tokio::test]
+    async fn test_list_files_missing_dir_shows_available() {
+        let tmp = TempDir::new().unwrap();
+        let tmp_path = tmp.path().canonicalize().unwrap();
+        fs::create_dir_all(tmp_path.join("crates")).unwrap();
+        fs::create_dir_all(tmp_path.join("docs")).unwrap();
+
+        let tool = FileListTool;
+        let ctx = ToolContext::new(&tmp_path);
+        let args = make_args(&[
+            ("pattern", serde_json::json!("**/*.rs")),
+            (
+                "path",
+                serde_json::json!(tmp_path.join("src").to_str().unwrap()),
+            ),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(!result.success);
+        let err = result.error.unwrap();
+        assert!(err.contains("Directory not found"), "got: {err}");
+        assert!(err.contains("crates/"), "should list crates/, got: {err}");
+        assert!(err.contains("docs/"), "should list docs/, got: {err}");
+    }
+
+    #[tokio::test]
+    async fn test_list_files_nonexistent_pattern_dir_shows_hint() {
+        let tmp = TempDir::new().unwrap();
+        let tmp_path = tmp.path().canonicalize().unwrap();
+        fs::create_dir_all(tmp_path.join("crates")).unwrap();
+        fs::write(tmp_path.join("crates/lib.rs"), "").unwrap();
+
+        let tool = FileListTool;
+        let ctx = ToolContext::new(&tmp_path);
+        let args = make_args(&[("pattern", serde_json::json!("src/**/*.rs"))]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap();
+        assert!(
+            output.contains("does not exist"),
+            "should note src/ doesn't exist, got: {output}"
+        );
+        assert!(
+            output.contains("crates/"),
+            "should suggest crates/, got: {output}"
+        );
     }
 }

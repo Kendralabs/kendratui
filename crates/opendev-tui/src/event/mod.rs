@@ -184,6 +184,37 @@ pub enum AppEvent {
     ModeChanged(String),
     /// Kill a background task by ID.
     KillTask(String),
+
+    // -- Background agent events --
+    /// An agent was moved to the background via Ctrl+B.
+    AgentBackgrounded {
+        task_id: String,
+        query_summary: String,
+    },
+    /// A background agent completed its work.
+    BackgroundAgentCompleted {
+        task_id: String,
+        success: bool,
+        result_summary: String,
+        cost_usd: f64,
+        tool_call_count: usize,
+    },
+    /// Progress update from a background agent.
+    BackgroundAgentProgress {
+        task_id: String,
+        tool_name: String,
+        tool_count: usize,
+    },
+    /// A background agent was killed.
+    BackgroundAgentKilled { task_id: String },
+    /// Register a background agent task with its interrupt token (sent from tui_runner).
+    SetBackgroundAgentToken {
+        task_id: String,
+        query: String,
+        session_id: String,
+        interrupt_token: InterruptToken,
+    },
+
     /// Quit the application.
     Quit,
 }

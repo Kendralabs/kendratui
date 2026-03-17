@@ -12,7 +12,7 @@ Subagents are specialized agents with focused capabilities. Each has a specific 
 **Purpose**: Gather clarifying information through structured multiple-choice questions.
 **When to use**: Need to clarify ambiguous requirements, gather user preferences, or confirm critical decisions before implementation.
 
-## Code-Explorer
+## Explore
 **Purpose**: Answer specific questions about LOCAL codebase with minimal context and maximum accuracy.
 **When to use**: Understanding code architecture, finding specific implementations, tracing code patterns, or researching implementation details in LOCAL files.
 
@@ -48,7 +48,7 @@ Subagents are specialized agents with focused capabilities. Each has a specific 
 - Creative or greenfield tasks with no existing codebase (game design, brainstorming, writing specs from scratch) — handle directly
 - When the task doesn't match any subagent's purpose — don't force-fit
 
-**Anti-pattern**: Do NOT spawn Code-Explorer to read/analyze a file whose path you already know. That wastes an entire LLM call on subagent setup when a direct `read_file` gives the same result instantly.
+**Anti-pattern**: Do NOT spawn Explore to read/analyze a file whose path you already know. That wastes an entire LLM call on subagent setup when a direct `read_file` gives the same result instantly.
 
 **IMPORTANT**: Subagent results aren't visible to the user — you must always present their findings in your response.
 

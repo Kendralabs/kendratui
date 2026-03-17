@@ -162,26 +162,41 @@ impl BaseTool for SpawnSubagentTool {
             "spawn_subagent called"
         );
 
-        // Use explicit working_dir arg if provided, then context working_dir, then configured one
-        let explicit_wd = args
-            .get("working_dir")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let working_dir = ctx.working_dir.to_string_lossy().to_string();
-        let wd = if let Some(ref ewd) = explicit_wd {
-            // Validate the explicit working dir exists
-            let p = std::path::Path::new(ewd);
-            if !p.is_dir() {
-                return ToolResult::fail(format!(
-                    "working_dir '{}' does not exist or is not a directory",
-                    ewd
-                ));
+        // Pick raw path: explicit arg > context working_dir > configured default
+        let wd = {
+            let raw = if let Some(ewd) = args.get("working_dir").and_then(|v| v.as_str()) {
+                std::path::PathBuf::from(ewd)
+            } else if !ctx.working_dir.as_os_str().is_empty()
+                && ctx.working_dir != std::path::Path::new(".")
+            {
+                ctx.working_dir.clone()
+            } else {
+                std::path::PathBuf::from(&self.working_dir)
+            };
+
+            // Resolve relative paths against configured default working directory
+            let resolved = if raw.is_relative() {
+                std::path::PathBuf::from(&self.working_dir).join(&raw)
+            } else {
+                raw
+            };
+
+            // Canonicalize to resolve symlinks and .. components
+            match resolved.canonicalize() {
+                Ok(p) if p.is_dir() => p.to_string_lossy().to_string(),
+                Ok(p) => {
+                    return ToolResult::fail(format!(
+                        "working_dir '{}' is not a directory",
+                        p.display()
+                    ));
+                }
+                Err(_) => {
+                    return ToolResult::fail(format!(
+                        "working_dir '{}' does not exist or cannot be resolved",
+                        resolved.display()
+                    ));
+                }
             }
-            ewd
-        } else if working_dir.is_empty() || working_dir == "." {
-            &self.working_dir
-        } else {
-            &working_dir
         };
 
         // Generate child session ID (reuse task_id for resume, new UUID otherwise)
@@ -212,7 +227,7 @@ impl BaseTool for SpawnSubagentTool {
                 &self.parent_model,
                 Arc::clone(&self.tool_registry),
                 Arc::clone(&self.http_client),
-                wd,
+                &wd,
                 progress,
                 None,
                 self.tool_approval_tx.as_ref(),

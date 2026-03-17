@@ -202,22 +202,6 @@ static TOOL_REGISTRY: &[ToolDisplayEntry] = &[
         result_format: ResultFormat::Generic,
     },
     ToolDisplayEntry {
-        names: &["spawn_subagent_group"],
-        category: ToolCategory::Agent,
-        verb: "Explore",
-        label: "agents finished",
-        primary_arg_keys: &["count"],
-        result_format: ResultFormat::Generic,
-    },
-    ToolDisplayEntry {
-        names: &["spawn_subagent_child"],
-        category: ToolCategory::Agent,
-        verb: "Explore",
-        label: "subagent",
-        primary_arg_keys: &["task"],
-        result_format: ResultFormat::Generic,
-    },
-    ToolDisplayEntry {
         names: &["get_subagent_output"],
         category: ToolCategory::Agent,
         verb: "Get Output",
@@ -526,9 +510,9 @@ pub fn format_tool_call_parts_with_wd(
             .get("agent_type")
             .and_then(|v| v.as_str())
             .map(|s| {
-                // Prettify: "Code-Explorer" → "Explorer", "Planner" → "Plan", etc.
+                // Prettify agent_type names for display
                 match s {
-                    "Code-Explorer" | "code_explorer" => "Explore".to_string(),
+                    "Explore" | "Code-Explorer" | "code_explorer" => "Explore".to_string(),
                     "Planner" | "planner" => "Plan".to_string(),
                     "ask-user" | "ask_user" => "AskUser".to_string(),
                     other => other.to_string(),

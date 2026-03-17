@@ -1,0 +1,316 @@
+//! Background agent task manager for tracking agent runs moved to background via Ctrl+B.
+
+use std::collections::HashMap;
+use std::time::Instant;
+
+use opendev_runtime::InterruptToken;
+
+/// State of a background agent task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundAgentState {
+    Running,
+    Completed,
+    Failed,
+    Killed,
+}
+
+impl std::fmt::Display for BackgroundAgentState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Running => write!(f, "running"),
+            Self::Completed => write!(f, "completed"),
+            Self::Failed => write!(f, "failed"),
+            Self::Killed => write!(f, "killed"),
+        }
+    }
+}
+
+/// A single background agent task.
+#[derive(Debug)]
+pub struct BackgroundAgentTask {
+    /// Short hex task ID.
+    pub task_id: String,
+    /// Original user query.
+    pub query: String,
+    /// Forked session ID.
+    pub session_id: String,
+    /// When the task was started.
+    pub started_at: Instant,
+    /// Current state.
+    pub state: BackgroundAgentState,
+    /// Interrupt token for killing (request() cancels inner CancellationToken too).
+    pub interrupt_token: InterruptToken,
+    /// Result summary (set on completion).
+    pub result_summary: Option<String>,
+    /// Number of tool calls made.
+    pub tool_call_count: usize,
+    /// Total cost in USD.
+    pub cost_usd: f64,
+    /// Current tool being executed (for progress display).
+    pub current_tool: Option<String>,
+}
+
+impl BackgroundAgentTask {
+    /// Runtime in seconds.
+    pub fn runtime_seconds(&self) -> f64 {
+        self.started_at.elapsed().as_secs_f64()
+    }
+
+    /// Whether the task is still running.
+    pub fn is_running(&self) -> bool {
+        self.state == BackgroundAgentState::Running
+    }
+}
+
+/// Manages background agent tasks.
+#[derive(Debug)]
+pub struct BackgroundAgentManager {
+    tasks: HashMap<String, BackgroundAgentTask>,
+    /// Maximum concurrent background agent tasks.
+    pub max_concurrent: usize,
+}
+
+impl BackgroundAgentManager {
+    /// Create a new manager with the default concurrency limit.
+    pub fn new() -> Self {
+        Self {
+            tasks: HashMap::new(),
+            max_concurrent: 3,
+        }
+    }
+
+    /// Add a new background agent task.
+    pub fn add_task(
+        &mut self,
+        task_id: String,
+        query: String,
+        session_id: String,
+        interrupt_token: InterruptToken,
+    ) {
+        self.tasks.insert(
+            task_id.clone(),
+            BackgroundAgentTask {
+                task_id,
+                query,
+                session_id,
+                started_at: Instant::now(),
+                state: BackgroundAgentState::Running,
+                interrupt_token,
+                result_summary: None,
+                tool_call_count: 0,
+                cost_usd: 0.0,
+                current_tool: None,
+            },
+        );
+    }
+
+    /// Mark a task as completed.
+    pub fn mark_completed(
+        &mut self,
+        task_id: &str,
+        success: bool,
+        result_summary: String,
+        tool_call_count: usize,
+        cost_usd: f64,
+    ) {
+        if let Some(task) = self.tasks.get_mut(task_id) {
+            task.state = if success {
+                BackgroundAgentState::Completed
+            } else {
+                BackgroundAgentState::Failed
+            };
+            task.result_summary = Some(result_summary);
+            task.tool_call_count = tool_call_count;
+            task.cost_usd = cost_usd;
+        }
+    }
+
+    /// Update progress for a running task.
+    pub fn update_progress(&mut self, task_id: &str, tool_name: String, tool_count: usize) {
+        if let Some(task) = self.tasks.get_mut(task_id) {
+            task.current_tool = Some(tool_name);
+            task.tool_call_count = tool_count;
+        }
+    }
+
+    /// Kill a running task.
+    pub fn kill_task(&mut self, task_id: &str) -> bool {
+        if let Some(task) = self.tasks.get_mut(task_id)
+            && task.is_running()
+        {
+            task.interrupt_token.request();
+            task.state = BackgroundAgentState::Killed;
+            return true;
+        }
+        false
+    }
+
+    /// Get a task by ID.
+    pub fn get_task(&self, task_id: &str) -> Option<&BackgroundAgentTask> {
+        self.tasks.get(task_id)
+    }
+
+    /// Get all tasks sorted by start time (newest first).
+    pub fn all_tasks(&self) -> Vec<&BackgroundAgentTask> {
+        let mut tasks: Vec<&BackgroundAgentTask> = self.tasks.values().collect();
+        tasks.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        tasks
+    }
+
+    /// Get the number of running tasks.
+    pub fn running_count(&self) -> usize {
+        self.tasks.values().filter(|t| t.is_running()).count()
+    }
+
+    /// Whether we can accept another background task.
+    pub fn can_accept(&self) -> bool {
+        self.running_count() < self.max_concurrent
+    }
+
+    /// Total number of tracked tasks.
+    pub fn len(&self) -> usize {
+        self.tasks.len()
+    }
+
+    /// Whether there are no tracked tasks.
+    pub fn is_empty(&self) -> bool {
+        self.tasks.is_empty()
+    }
+
+    /// Remove completed/failed/killed tasks older than the given age.
+    pub fn cleanup_old(&mut self, max_age_secs: f64) {
+        self.tasks
+            .retain(|_, t| t.is_running() || t.runtime_seconds() < max_age_secs);
+    }
+}
+
+impl Default for BackgroundAgentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_mgr() -> BackgroundAgentManager {
+        BackgroundAgentManager::new()
+    }
+
+    #[test]
+    fn test_new_empty() {
+        let mgr = make_mgr();
+        assert!(mgr.is_empty());
+        assert_eq!(mgr.len(), 0);
+        assert_eq!(mgr.running_count(), 0);
+        assert!(mgr.can_accept());
+    }
+
+    #[test]
+    fn test_add_and_get() {
+        let mut mgr = make_mgr();
+        mgr.add_task(
+            "abc1234".into(),
+            "fix the bug".into(),
+            "session-1".into(),
+            InterruptToken::new(),
+        );
+        assert_eq!(mgr.len(), 1);
+        let task = mgr.get_task("abc1234").unwrap();
+        assert_eq!(task.query, "fix the bug");
+        assert!(task.is_running());
+    }
+
+    #[test]
+    fn test_mark_completed() {
+        let mut mgr = make_mgr();
+        mgr.add_task(
+            "t1".into(),
+            "query".into(),
+            "s1".into(),
+            InterruptToken::new(),
+        );
+        mgr.mark_completed("t1", true, "Done successfully".into(), 5, 0.01);
+        let task = mgr.get_task("t1").unwrap();
+        assert_eq!(task.state, BackgroundAgentState::Completed);
+        assert_eq!(task.tool_call_count, 5);
+        assert!(!task.is_running());
+    }
+
+    #[test]
+    fn test_kill_task() {
+        let mut mgr = make_mgr();
+        let token = InterruptToken::new();
+        let token_clone = token.clone();
+        mgr.add_task("t1".into(), "query".into(), "s1".into(), token);
+        assert!(mgr.kill_task("t1"));
+        assert_eq!(
+            mgr.get_task("t1").unwrap().state,
+            BackgroundAgentState::Killed
+        );
+        assert!(token_clone.is_requested());
+    }
+
+    #[test]
+    fn test_kill_nonexistent() {
+        let mut mgr = make_mgr();
+        assert!(!mgr.kill_task("nope"));
+    }
+
+    #[test]
+    fn test_max_concurrent() {
+        let mut mgr = make_mgr();
+        mgr.max_concurrent = 2;
+        for i in 0..2 {
+            mgr.add_task(
+                format!("t{i}"),
+                "q".into(),
+                "s".into(),
+                InterruptToken::new(),
+            );
+        }
+        assert!(!mgr.can_accept());
+        mgr.mark_completed("t0", true, "done".into(), 0, 0.0);
+        assert!(mgr.can_accept());
+    }
+
+    #[test]
+    fn test_all_tasks_sorted() {
+        let mut mgr = make_mgr();
+        mgr.add_task(
+            "t1".into(),
+            "first".into(),
+            "s".into(),
+            InterruptToken::new(),
+        );
+        mgr.add_task(
+            "t2".into(),
+            "second".into(),
+            "s".into(),
+            InterruptToken::new(),
+        );
+        let tasks = mgr.all_tasks();
+        assert_eq!(tasks.len(), 2);
+        // Most recent first
+        assert_eq!(tasks[0].task_id, "t2");
+    }
+
+    #[test]
+    fn test_update_progress() {
+        let mut mgr = make_mgr();
+        mgr.add_task("t1".into(), "q".into(), "s".into(), InterruptToken::new());
+        mgr.update_progress("t1", "bash".into(), 3);
+        let task = mgr.get_task("t1").unwrap();
+        assert_eq!(task.current_tool.as_deref(), Some("bash"));
+        assert_eq!(task.tool_call_count, 3);
+    }
+
+    #[test]
+    fn test_state_display() {
+        assert_eq!(BackgroundAgentState::Running.to_string(), "running");
+        assert_eq!(BackgroundAgentState::Completed.to_string(), "completed");
+        assert_eq!(BackgroundAgentState::Failed.to_string(), "failed");
+        assert_eq!(BackgroundAgentState::Killed.to_string(), "killed");
+    }
+}

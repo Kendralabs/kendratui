@@ -38,6 +38,8 @@ pub struct InterruptToken {
 struct InterruptInner {
     /// Synchronous flag for polling-based checks.
     flag: AtomicBool,
+    /// Soft yield flag for backgrounding — does NOT cancel the CancellationToken.
+    background: AtomicBool,
     /// Tokio cancellation token for async `.cancelled()` futures.
     cancel: CancellationToken,
 }
@@ -48,6 +50,7 @@ impl InterruptToken {
         Self {
             inner: Arc::new(InterruptInner {
                 flag: AtomicBool::new(false),
+                background: AtomicBool::new(false),
                 cancel: CancellationToken::new(),
             }),
         }
@@ -68,6 +71,19 @@ impl InterruptToken {
     /// injecting async exceptions into threads (which is a CPython-specific trick).
     pub fn force_interrupt(&self) {
         self.request();
+    }
+
+    /// Request that the current operation be moved to the background.
+    ///
+    /// Unlike `request()`, this does NOT cancel the `CancellationToken` —
+    /// it signals a soft yield so the current tool can finish normally.
+    pub fn request_background(&self) {
+        self.inner.background.store(true, Ordering::Release);
+    }
+
+    /// Check whether backgrounding has been requested.
+    pub fn is_background_requested(&self) -> bool {
+        self.inner.background.load(Ordering::Acquire)
     }
 
     /// Check whether cancellation has been requested.
@@ -203,6 +219,32 @@ mod tests {
         assert!(token.is_requested());
         token.reset();
         assert!(!token.is_requested());
+    }
+
+    #[test]
+    fn test_request_background_sets_flag() {
+        let token = InterruptToken::new();
+        assert!(!token.is_background_requested());
+        token.request_background();
+        assert!(token.is_background_requested());
+    }
+
+    #[test]
+    fn test_request_background_does_not_cancel() {
+        let token = InterruptToken::new();
+        token.request_background();
+        assert!(token.is_background_requested());
+        // Should NOT set the hard interrupt flag or cancel the CancellationToken
+        assert!(!token.is_requested());
+        assert!(!token.cancellation_token().is_cancelled());
+    }
+
+    #[test]
+    fn test_background_clone_shares_state() {
+        let token = InterruptToken::new();
+        let clone = token.clone();
+        token.request_background();
+        assert!(clone.is_background_requested());
     }
 
     #[test]

@@ -35,7 +35,7 @@ impl SubagentManager {
 
     /// Create a manager pre-loaded with core built-in subagent specs.
     ///
-    /// Registers only the essential subagents (Code-Explorer, Planner, project_init).
+    /// Registers only the essential subagents (Explore, Planner, project_init).
     /// Additional subagents can be loaded as custom agents from `~/.opendev/agents/*.md`.
     pub fn with_builtins() -> Self {
         use super::spec::builtins;
@@ -305,16 +305,16 @@ mod tests {
     #[test]
     fn test_register_and_get() {
         let mut mgr = SubagentManager::new();
-        mgr.register(make_spec("Code-Explorer"));
+        mgr.register(make_spec("Explore"));
         assert_eq!(mgr.len(), 1);
-        assert!(mgr.get("Code-Explorer").is_some());
+        assert!(mgr.get("Explore").is_some());
         assert!(mgr.get("nonexistent").is_none());
     }
 
     #[test]
     fn test_get_by_type() {
         let mut mgr = SubagentManager::new();
-        mgr.register(make_spec("Code-Explorer"));
+        mgr.register(make_spec("Explore"));
         assert!(mgr.get_by_type(SubagentType::CodeExplorer).is_some());
         assert!(mgr.get_by_type(SubagentType::Planner).is_none());
     }
@@ -340,17 +340,17 @@ mod tests {
     #[test]
     fn test_build_enum_description() {
         let mut mgr = SubagentManager::new();
-        mgr.register(make_spec("Code-Explorer"));
+        mgr.register(make_spec("Explore"));
         let descs = mgr.build_enum_description();
         assert_eq!(descs.len(), 1);
-        assert_eq!(descs[0].0, "Code-Explorer");
+        assert_eq!(descs[0].0, "Explore");
     }
 
     #[test]
     fn test_with_builtins() {
         let mgr = SubagentManager::with_builtins();
         assert_eq!(mgr.len(), 5);
-        assert!(mgr.get("Code-Explorer").is_some());
+        assert!(mgr.get("Explore").is_some());
         assert!(mgr.get("Planner").is_some());
         assert!(mgr.get("General").is_some());
         assert!(mgr.get("Build").is_some());
@@ -488,13 +488,13 @@ mod tests {
         std::fs::create_dir_all(&agent_dir).unwrap();
         // Create a custom agent with same name as a builtin
         std::fs::write(
-            agent_dir.join("Code-Explorer.md"),
+            agent_dir.join("Explore.md"),
             "---\ndescription: Custom explorer\ntemperature: 0.1\n---\nCustom explorer prompt.",
         )
         .unwrap();
 
         let mgr = SubagentManager::with_builtins_and_custom(tmp.path());
-        let spec = mgr.get("Code-Explorer").unwrap();
+        let spec = mgr.get("Explore").unwrap();
         // Custom should override the builtin
         assert!(spec.system_prompt.contains("Custom explorer prompt"));
         assert_eq!(spec.temperature, Some(0.1));

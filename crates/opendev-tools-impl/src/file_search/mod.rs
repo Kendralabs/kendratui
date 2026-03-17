@@ -11,6 +11,7 @@ use std::time::Duration;
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 use tokio::process::Command;
 
+use crate::dir_hints::list_available_dirs;
 use crate::path_utils::{resolve_dir_path, validate_path_access};
 
 pub use excludes::{DEFAULT_SEARCH_EXCLUDE_GLOBS, DEFAULT_SEARCH_EXCLUDES, default_ignore_file};
@@ -235,7 +236,13 @@ impl BaseTool for FileSearchTool {
         }
 
         if !search_path.exists() {
-            return ToolResult::fail(format!("Path not found: {}", search_path.display()));
+            let available = list_available_dirs(&ctx.working_dir);
+            return ToolResult::fail(format!(
+                "Path not found: {}\n\nAvailable directories in working dir ({}):\n{}",
+                search_path.display(),
+                ctx.working_dir.display(),
+                available
+            ));
         }
 
         // Route based on search type
@@ -767,6 +774,37 @@ mod tests {
         let result = tool.execute(args, &ctx).await;
         assert!(!result.success);
         assert!(result.error.unwrap().contains("Path not found"));
+    }
+
+    #[tokio::test]
+    async fn test_search_path_not_found_shows_available_dirs() {
+        let dir = TempDir::new().unwrap();
+        let dir_path = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(dir_path.join("crates")).unwrap();
+        fs::create_dir_all(dir_path.join("docs")).unwrap();
+
+        let tool = FileSearchTool;
+        let ctx = ToolContext::new(&dir_path);
+        let args = make_args(&[
+            ("pattern", serde_json::json!("x")),
+            (
+                "path",
+                serde_json::json!(dir_path.join("src").to_str().unwrap()),
+            ),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(!result.success);
+        let err = result.error.unwrap();
+        assert!(err.contains("Path not found"), "got: {err}");
+        assert!(
+            err.contains("crates/"),
+            "should list available dirs, got: {err}"
+        );
+        assert!(
+            err.contains("docs/"),
+            "should list available dirs, got: {err}"
+        );
     }
 
     #[tokio::test]

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use super::SubagentManager;
-use super::scanning::scan_project_structure;
+use super::scanning::{scan_project_structure, scan_top_level_dirs};
 use super::types::{SubagentEventBridge, SubagentRunResult, SubagentType};
 use crate::react_loop::{ReactLoop, ReactLoopConfig};
 use crate::subagents::spec::SubAgentSpec;
@@ -76,6 +76,7 @@ impl SubagentManager {
             subagent = %spec.name,
             task_len = task.len(),
             tool_count = spec.tools.len(),
+            working_dir = %working_dir,
             "Spawning subagent"
         );
 
@@ -111,13 +112,39 @@ impl SubagentManager {
         // Build the subagent's system prompt by combining the spec prompt
         // with project instruction files (AGENTS.md, CLAUDE.md, etc.) so
         // subagents follow the same project rules as the main agent.
+        // For Explore, the project structure is injected directly into
+        // the system prompt (not a user message) for stronger grounding.
         let system_prompt = {
             let wd = std::path::Path::new(working_dir);
+            let mut parts = vec![spec.system_prompt.clone()];
+
+            // Inject project structure into system prompt for Explore
+            if matches!(
+                SubagentType::from_name(&spec.name),
+                SubagentType::CodeExplorer
+            ) {
+                let structure = scan_project_structure(wd, 3);
+                if !structure.is_empty() {
+                    let top_dirs = scan_top_level_dirs(wd);
+                    parts.push(format!(
+                        "\n\n## Project Layout (auto-scanned)\n\
+                         The following is the ACTUAL project structure. Use ONLY these paths.\n\n\
+                         Top-level directories: {top_dirs}\n\n\
+                         ```\n{structure}```\n\n\
+                         CRITICAL: Paths like src/, lib/, app/ DO NOT exist unless listed above. \
+                         Do NOT guess conventional paths — use the tree above or list_files to discover paths."
+                    ));
+                } else {
+                    warn!(
+                        subagent = %spec.name,
+                        working_dir = %working_dir,
+                        "Auto-scout: project structure scan returned empty — working directory may be invalid"
+                    );
+                }
+            }
+
             let instructions = opendev_context::discover_instruction_files(wd);
-            if instructions.is_empty() {
-                spec.system_prompt.clone()
-            } else {
-                let mut parts = vec![spec.system_prompt.clone()];
+            if !instructions.is_empty() {
                 parts.push("\n\n# Project Instructions\n".to_string());
                 for instr in &instructions {
                     let filename = instr.path.file_name().unwrap_or_default().to_string_lossy();
@@ -126,8 +153,8 @@ impl SubagentManager {
                         filename, instr.scope, instr.content
                     ));
                 }
-                parts.join("\n")
             }
+            parts.join("\n")
         };
 
         // Build LlmCaller with subagent config
@@ -166,36 +193,8 @@ impl SubagentManager {
         // Prepare initial messages
         let mut messages = vec![serde_json::json!({"role": "system", "content": system_prompt})];
 
-        // Auto-scout: inject project structure for Code-Explorer so it doesn't
-        // waste tool calls discovering layout (and parallel explorers see the
-        // same tree, helping them pick different areas).
-        if matches!(
-            SubagentType::from_name(&spec.name),
-            SubagentType::CodeExplorer
-        ) {
-            let structure = scan_project_structure(std::path::Path::new(working_dir), 3);
-            if !structure.is_empty() {
-                messages.push(serde_json::json!({
-                    "role": "user",
-                    "content": format!(
-                        "Here is the project structure to help you navigate:\n\n{structure}\n\
-                        IMPORTANT: Only use paths that appear in this tree or that you discover via list_files. \
-                        Do NOT guess or hallucinate paths — if you're unsure whether a directory or file exists, \
-                        use list_files to check first."
-                    )
-                }));
-                messages.push(serde_json::json!({
-                    "role": "assistant",
-                    "content": "Thank you for the project structure. I'll only use paths from this tree or ones I discover via list_files — no guessing. Let me now address your task."
-                }));
-            } else {
-                warn!(
-                    subagent = %spec.name,
-                    working_dir = %working_dir,
-                    "Auto-scout: project structure scan returned empty — working directory may be invalid"
-                );
-            }
-        }
+        // Note: project structure for Explore is now injected directly
+        // into the system prompt above (stronger grounding than user messages).
 
         messages.push(serde_json::json!({"role": "user", "content": task}));
 

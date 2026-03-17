@@ -77,9 +77,24 @@ impl App {
         }
         // Remove subagents that finished more than 3 seconds ago
         // Use finished_at (not started_at) so long-running subagents aren't cleaned up immediately
-        self.state
-            .active_subagents
-            .retain(|s| !s.finished || s.finished_at.is_some_and(|t| t.elapsed().as_secs() < 3));
+        // Keep finished subagents if a matching spawn_subagent tool is still active —
+        // ToolResult will consume them and extract stats before cleanup
+        let active_tools = &self.state.active_tools;
+        self.state.active_subagents.retain(|s| {
+            if !s.finished {
+                return true;
+            }
+            // Keep if a matching spawn_subagent tool is still active (ToolResult will clean up)
+            let has_active_tool = active_tools.iter().any(|t| {
+                t.name == "spawn_subagent"
+                    && t.args.get("task").and_then(|v| v.as_str()) == Some(&s.task)
+            });
+            if has_active_tool {
+                return true;
+            }
+            // No matching tool — 3s grace period for display
+            s.finished_at.is_some_and(|t| t.elapsed().as_secs() < 3)
+        });
 
         // Update task progress elapsed time from wall clock
         if let Some(ref mut progress) = self.state.task_progress {

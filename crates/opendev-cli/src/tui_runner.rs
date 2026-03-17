@@ -8,9 +8,10 @@ use std::io;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{info, warn};
 
 use opendev_agents::traits::AgentEventCallback;
+use opendev_history::SessionManager;
 use opendev_runtime::InterruptToken;
 use opendev_tui::app::AppState;
 use opendev_tui::{App, AppEvent};
@@ -298,6 +299,152 @@ impl TuiRunner {
                     )
                     .await
                 {
+                    Ok(result) if result.backgrounded => {
+                        let _ = event_tx.send(AppEvent::TaskProgressFinished);
+
+                        // Generate short hex task ID
+                        let task_id = format!(
+                            "{:07x}",
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .subsec_nanos()
+                        );
+                        let query_summary: String = msg.chars().take(60).collect();
+
+                        // Fork session for background task
+                        let forked_sm = if let Some(session) =
+                            runtime.session_manager.current_session()
+                        {
+                            let session_id = session.id.clone();
+                            match runtime.session_manager.fork_session(&session_id, None) {
+                                Ok(forked_session) => {
+                                    // Create a new SessionManager for the background task
+                                    let session_dir =
+                                        runtime.session_manager.session_dir().to_path_buf();
+                                    match SessionManager::new(session_dir) {
+                                        Ok(mut sm) => {
+                                            sm.set_current_session(forked_session);
+                                            Some(sm)
+                                        }
+                                        Err(e) => {
+                                            warn!(
+                                                "Failed to create background session manager: {e}"
+                                            );
+                                            None
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("Failed to fork session for background: {e}");
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+
+                        if let Some(bg_session_manager) = forked_sm {
+                            let session_id = bg_session_manager
+                                .current_session()
+                                .map(|s| s.id.clone())
+                                .unwrap_or_default();
+
+                            // Create background runtime
+                            match runtime.create_background_runtime(bg_session_manager) {
+                                Ok(mut bg_runtime) => {
+                                    // Fresh tokens for background task
+                                    let bg_interrupt = InterruptToken::new();
+                                    let bg_interrupt_for_mgr = bg_interrupt.clone();
+
+                                    let bg_tx = event_tx.clone();
+                                    let bg_task_id = task_id.clone();
+                                    let bg_msg = msg.clone();
+                                    let bg_system_prompt = system_prompt.clone();
+
+                                    // Register in the manager via event
+                                    let _ = event_tx.send(AppEvent::AgentBackgrounded {
+                                        task_id: task_id.clone(),
+                                        query_summary: query_summary.clone(),
+                                    });
+
+                                    // Spawn background task
+                                    tokio::spawn(async move {
+                                        let bg_callback = TuiEventCallback { tx: bg_tx.clone() };
+
+                                        let result = bg_runtime
+                                            .run_query(
+                                                &bg_msg,
+                                                &bg_system_prompt,
+                                                Some(&bg_callback),
+                                                Some(&bg_interrupt),
+                                            )
+                                            .await;
+
+                                        let cost_usd = bg_runtime.total_cost_usd();
+
+                                        match result {
+                                            Ok(r) => {
+                                                let _ = bg_tx.send(
+                                                    AppEvent::BackgroundAgentCompleted {
+                                                        task_id: bg_task_id,
+                                                        success: r.success,
+                                                        result_summary: if r.content.len() > 200 {
+                                                            format!("{}...", &r.content[..200])
+                                                        } else {
+                                                            r.content
+                                                        },
+                                                        cost_usd,
+                                                        tool_call_count: 0, // approximate
+                                                    },
+                                                );
+                                            }
+                                            Err(e) => {
+                                                let _ = bg_tx.send(
+                                                    AppEvent::BackgroundAgentCompleted {
+                                                        task_id: bg_task_id,
+                                                        success: false,
+                                                        result_summary: e.to_string(),
+                                                        cost_usd,
+                                                        tool_call_count: 0,
+                                                    },
+                                                );
+                                            }
+                                        }
+                                    });
+
+                                    // Register task in bg_agent_manager via a closure
+                                    // (manager is in TUI state — we communicate via events)
+                                    // The AgentBackgrounded event handler in event_dispatch
+                                    // will display the message. We need to also register
+                                    // the task — send it through the state.
+                                    // We'll handle registration in event_dispatch.
+                                    // For now, emit the token info so event_dispatch can register.
+                                    // Actually, we need to register from TUI side.
+                                    // Let's add a dedicated registration event.
+                                    let _ = event_tx.send(AppEvent::SetBackgroundAgentToken {
+                                        task_id: task_id.clone(),
+                                        query: msg.clone(),
+                                        session_id,
+                                        interrupt_token: bg_interrupt_for_mgr,
+                                    });
+                                }
+                                Err(e) => {
+                                    warn!("Failed to create background runtime: {e}");
+                                    let _ = event_tx.send(AppEvent::AgentError(format!(
+                                        "Failed to background agent: {e}"
+                                    )));
+                                }
+                            }
+                        } else {
+                            let _ = event_tx.send(AppEvent::AgentError(
+                                "Failed to fork session for background agent.".to_string(),
+                            ));
+                        }
+
+                        // Free the foreground
+                        let _ = event_tx.send(AppEvent::AgentFinished);
+                    }
                     Ok(result) => {
                         let _ = event_tx.send(AppEvent::TaskProgressFinished);
                         if result.interrupted {

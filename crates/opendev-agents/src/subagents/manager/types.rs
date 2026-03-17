@@ -26,7 +26,7 @@ impl SubagentType {
     /// Parse a subagent type from a name string.
     pub fn from_name(name: &str) -> Self {
         match name {
-            "Code-Explorer" | "code_explorer" => Self::CodeExplorer,
+            "Explore" | "Code-Explorer" | "code_explorer" => Self::CodeExplorer,
             "Planner" | "planner" => Self::Planner,
             "General" | "general" => Self::General,
             "Build" | "build" => Self::Build,
@@ -38,7 +38,7 @@ impl SubagentType {
     /// Get the canonical name for this type.
     pub fn canonical_name(&self) -> &'static str {
         match self {
-            Self::CodeExplorer => "Code-Explorer",
+            Self::CodeExplorer => "Explore",
             Self::Planner => "Planner",
             Self::General => "General",
             Self::Build => "Build",
@@ -169,6 +169,10 @@ mod tests {
     #[test]
     fn test_subagent_type_from_name() {
         assert_eq!(
+            SubagentType::from_name("Explore"),
+            SubagentType::CodeExplorer
+        );
+        assert_eq!(
             SubagentType::from_name("Code-Explorer"),
             SubagentType::CodeExplorer
         );
@@ -183,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_subagent_type_canonical_name() {
-        assert_eq!(SubagentType::CodeExplorer.canonical_name(), "Code-Explorer");
+        assert_eq!(SubagentType::CodeExplorer.canonical_name(), "Explore");
         assert_eq!(SubagentType::General.canonical_name(), "General");
         assert_eq!(SubagentType::Build.canonical_name(), "Build");
         assert_eq!(SubagentType::AskUser.canonical_name(), "ask-user");
