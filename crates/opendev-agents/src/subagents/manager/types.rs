@@ -1,0 +1,307 @@
+//! Type definitions for the subagent manager.
+//!
+//! Contains the `SubagentType` enum, progress callback traits,
+//! the `SubagentEventBridge`, and the `SubagentRunResult`.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+use tracing::debug;
+
+use crate::traits::AgentResult;
+
+/// Well-known subagent types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SubagentType {
+    CodeExplorer,
+    Planner,
+    General,
+    Build,
+    AskUser,
+    Custom,
+}
+
+impl SubagentType {
+    /// Parse a subagent type from a name string.
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "Code-Explorer" | "code_explorer" => Self::CodeExplorer,
+            "Planner" | "planner" => Self::Planner,
+            "General" | "general" => Self::General,
+            "Build" | "build" => Self::Build,
+            "ask-user" | "ask_user" => Self::AskUser,
+            _ => Self::Custom,
+        }
+    }
+
+    /// Get the canonical name for this type.
+    pub fn canonical_name(&self) -> &'static str {
+        match self {
+            Self::CodeExplorer => "Code-Explorer",
+            Self::Planner => "Planner",
+            Self::General => "General",
+            Self::Build => "Build",
+            Self::AskUser => "ask-user",
+            Self::Custom => "custom",
+        }
+    }
+}
+
+/// Progress callback for subagent lifecycle events.
+///
+/// The parent TUI or caller can implement this to receive real-time
+/// updates about the subagent's execution progress.
+pub trait SubagentProgressCallback: Send + Sync {
+    /// Called when the subagent starts executing.
+    fn on_started(&self, subagent_name: &str, task: &str);
+
+    /// Called when the subagent invokes a tool.
+    fn on_tool_call(
+        &self,
+        subagent_name: &str,
+        tool_name: &str,
+        tool_id: &str,
+        args: &HashMap<String, serde_json::Value>,
+    );
+
+    /// Called when a subagent tool call completes.
+    fn on_tool_complete(&self, subagent_name: &str, tool_name: &str, tool_id: &str, success: bool);
+
+    /// Called when the subagent finishes (with or without error).
+    fn on_finished(&self, subagent_name: &str, success: bool, result_summary: &str);
+
+    /// Called when token usage is reported from an LLM call.
+    fn on_token_usage(&self, _subagent_name: &str, _input_tokens: u64, _output_tokens: u64) {}
+}
+
+/// A no-op progress callback for when the caller doesn't need progress updates.
+#[derive(Debug)]
+pub struct NoopProgressCallback;
+
+impl SubagentProgressCallback for NoopProgressCallback {
+    fn on_started(&self, _name: &str, _task: &str) {}
+    fn on_tool_call(
+        &self,
+        _name: &str,
+        _tool: &str,
+        _id: &str,
+        _args: &HashMap<String, serde_json::Value>,
+    ) {
+    }
+    fn on_tool_complete(&self, _name: &str, _tool: &str, _id: &str, _success: bool) {}
+    fn on_finished(&self, _name: &str, _success: bool, _summary: &str) {}
+}
+
+/// Bridge that forwards `AgentEventCallback` events from the subagent's
+/// react loop to the parent's `SubagentProgressCallback`.
+///
+/// This makes subagent tool calls visible to the TUI in real-time.
+pub struct SubagentEventBridge {
+    subagent_name: String,
+    progress: Arc<dyn SubagentProgressCallback>,
+}
+
+impl SubagentEventBridge {
+    /// Create a new bridge for a given subagent.
+    pub fn new(subagent_name: String, progress: Arc<dyn SubagentProgressCallback>) -> Self {
+        Self {
+            subagent_name,
+            progress,
+        }
+    }
+}
+
+impl crate::traits::AgentEventCallback for SubagentEventBridge {
+    fn on_tool_started(
+        &self,
+        tool_id: &str,
+        tool_name: &str,
+        args: &std::collections::HashMap<String, serde_json::Value>,
+    ) {
+        debug!(
+            subagent = %self.subagent_name,
+            tool_name = %tool_name,
+            tool_id = %tool_id,
+            "SubagentEventBridge: forwarding tool_started → on_tool_call"
+        );
+        self.progress
+            .on_tool_call(&self.subagent_name, tool_name, tool_id, args);
+    }
+
+    fn on_tool_finished(&self, tool_id: &str, success: bool) {
+        debug!(
+            subagent = %self.subagent_name,
+            tool_id = %tool_id,
+            success = %success,
+            "SubagentEventBridge: forwarding tool_finished → on_tool_complete"
+        );
+        self.progress
+            .on_tool_complete(&self.subagent_name, "", tool_id, success);
+    }
+
+    fn on_agent_chunk(&self, _text: &str) {}
+    fn on_thinking(&self, _content: &str) {}
+    fn on_critique(&self, _content: &str) {}
+    fn on_thinking_refined(&self, _content: &str) {}
+
+    fn on_token_usage(&self, input_tokens: u64, output_tokens: u64) {
+        self.progress
+            .on_token_usage(&self.subagent_name, input_tokens, output_tokens);
+    }
+}
+
+/// Result of spawning a subagent, containing the result and diagnostic info.
+#[derive(Debug, Clone)]
+pub struct SubagentRunResult {
+    /// The agent result from the subagent's ReAct loop.
+    pub agent_result: AgentResult,
+    /// Number of tool calls the subagent made.
+    pub tool_call_count: usize,
+    /// Whether the shallow subagent warning applies.
+    pub shallow_warning: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subagent_type_from_name() {
+        assert_eq!(
+            SubagentType::from_name("Code-Explorer"),
+            SubagentType::CodeExplorer
+        );
+        assert_eq!(SubagentType::from_name("Planner"), SubagentType::Planner);
+        assert_eq!(SubagentType::from_name("General"), SubagentType::General);
+        assert_eq!(SubagentType::from_name("general"), SubagentType::General);
+        assert_eq!(SubagentType::from_name("Build"), SubagentType::Build);
+        assert_eq!(SubagentType::from_name("build"), SubagentType::Build);
+        assert_eq!(SubagentType::from_name("ask-user"), SubagentType::AskUser);
+        assert_eq!(SubagentType::from_name("unknown"), SubagentType::Custom);
+    }
+
+    #[test]
+    fn test_subagent_type_canonical_name() {
+        assert_eq!(SubagentType::CodeExplorer.canonical_name(), "Code-Explorer");
+        assert_eq!(SubagentType::General.canonical_name(), "General");
+        assert_eq!(SubagentType::Build.canonical_name(), "Build");
+        assert_eq!(SubagentType::AskUser.canonical_name(), "ask-user");
+    }
+
+    // --- SubagentEventBridge tests ---
+
+    /// Mock progress callback that records events.
+    struct RecordingProgressCallback {
+        events: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl RecordingProgressCallback {
+        fn new() -> Self {
+            Self {
+                events: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+        fn events(&self) -> Vec<String> {
+            self.events.lock().unwrap().clone()
+        }
+    }
+
+    impl SubagentProgressCallback for RecordingProgressCallback {
+        fn on_started(&self, name: &str, task: &str) {
+            self.events
+                .lock()
+                .unwrap()
+                .push(format!("started:{name}:{task}"));
+        }
+        fn on_tool_call(
+            &self,
+            name: &str,
+            tool: &str,
+            id: &str,
+            _args: &HashMap<String, serde_json::Value>,
+        ) {
+            self.events
+                .lock()
+                .unwrap()
+                .push(format!("tool_call:{name}:{tool}:{id}"));
+        }
+        fn on_tool_complete(&self, name: &str, _tool: &str, id: &str, success: bool) {
+            self.events
+                .lock()
+                .unwrap()
+                .push(format!("tool_complete:{name}:{id}:{success}"));
+        }
+        fn on_finished(&self, name: &str, success: bool, _summary: &str) {
+            self.events
+                .lock()
+                .unwrap()
+                .push(format!("finished:{name}:{success}"));
+        }
+        fn on_token_usage(&self, name: &str, input: u64, output: u64) {
+            self.events
+                .lock()
+                .unwrap()
+                .push(format!("tokens:{name}:{input}:{output}"));
+        }
+    }
+
+    #[test]
+    fn test_event_bridge_forwards_tool_started() {
+        let recorder = Arc::new(RecordingProgressCallback::new());
+        let progress: Arc<dyn SubagentProgressCallback> = Arc::clone(&recorder) as _;
+        let bridge = SubagentEventBridge::new("test-agent".to_string(), progress);
+
+        use crate::traits::AgentEventCallback;
+        let args = std::collections::HashMap::new();
+        bridge.on_tool_started("tc-1", "read_file", &args);
+
+        let events = recorder.events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], "tool_call:test-agent:read_file:tc-1");
+    }
+
+    #[test]
+    fn test_event_bridge_forwards_tool_finished() {
+        let recorder = Arc::new(RecordingProgressCallback::new());
+        let progress: Arc<dyn SubagentProgressCallback> = Arc::clone(&recorder) as _;
+        let bridge = SubagentEventBridge::new("test-agent".to_string(), progress);
+
+        use crate::traits::AgentEventCallback;
+        bridge.on_tool_finished("tc-1", true);
+
+        let events = recorder.events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], "tool_complete:test-agent:tc-1:true");
+    }
+
+    #[test]
+    fn test_event_bridge_forwards_token_usage() {
+        let recorder = Arc::new(RecordingProgressCallback::new());
+        let progress: Arc<dyn SubagentProgressCallback> = Arc::clone(&recorder) as _;
+        let bridge = SubagentEventBridge::new("test-agent".to_string(), progress);
+
+        use crate::traits::AgentEventCallback;
+        bridge.on_token_usage(1000, 500);
+
+        let events = recorder.events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], "tokens:test-agent:1000:500");
+    }
+
+    #[test]
+    fn test_event_bridge_noop_methods() {
+        let recorder = Arc::new(RecordingProgressCallback::new());
+        let progress: Arc<dyn SubagentProgressCallback> = Arc::clone(&recorder) as _;
+        let bridge = SubagentEventBridge::new("test-agent".to_string(), progress);
+
+        use crate::traits::AgentEventCallback;
+        // These should not produce any events
+        bridge.on_agent_chunk("hello");
+        bridge.on_thinking("thought");
+        bridge.on_critique("critique");
+        bridge.on_thinking_refined("refined");
+
+        assert!(recorder.events().is_empty());
+    }
+}
