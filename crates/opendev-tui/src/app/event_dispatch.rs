@@ -188,6 +188,29 @@ impl App {
                 tool_name,
                 args,
             } => {
+                // For spawn_subagent, eagerly create SubagentDisplayState now.
+                // This avoids the race where SubagentStarted (forwarded by the bridge task)
+                // arrives after ToolResult (sent directly), causing stats to be lost.
+                if tool_name == "spawn_subagent" {
+                    let agent_name = args
+                        .get("agent_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Agent")
+                        .to_string();
+                    let task = args
+                        .get("task")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let mut sa = crate::widgets::nested_tool::SubagentDisplayState::new(
+                        String::new(), // subagent_id filled in by SubagentStarted later
+                        agent_name,
+                        task,
+                    );
+                    sa.parent_tool_id = Some(tool_id.clone());
+                    self.state.active_subagents.push(sa);
+                }
+
                 self.state.active_tools.push(ToolExecution {
                     id: tool_id,
                     name: tool_name,
@@ -267,14 +290,10 @@ impl App {
                         .state
                         .active_subagents
                         .iter()
-                        .position(|s| {
-                            s.parent_tool_id.as_deref() == Some(&tool_id)
-                        })
+                        .position(|s| s.parent_tool_id.as_deref() == Some(&tool_id))
                         .or_else(|| {
-                            let task_text = arguments
-                                .get("task")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
+                            let task_text =
+                                arguments.get("task").and_then(|v| v.as_str()).unwrap_or("");
                             self.state
                                 .active_subagents
                                 .iter()
@@ -432,25 +451,36 @@ impl App {
                 subagent_name,
                 task,
             } => {
-                // Link this subagent to its parent spawn_subagent tool by matching task text.
-                // This establishes a reliable tool_id link for later ToolResult matching.
-                let parent_tool_id = self
+                // SubagentDisplayState was eagerly created at ToolStarted time (same channel,
+                // guaranteed ordering). Now we just fill in the subagent_id so subsequent
+                // SubagentToolCall/Finished events (which use subagent_id) can find it.
+                if let Some(sa) = self
                     .state
-                    .active_tools
-                    .iter()
-                    .find(|t| {
-                        t.name == "spawn_subagent"
-                            && t.args.get("task").and_then(|v| v.as_str()) == Some(&task)
-                    })
-                    .map(|t| t.id.clone());
-
-                let mut sa = crate::widgets::nested_tool::SubagentDisplayState::new(
-                    subagent_id,
-                    subagent_name,
-                    task,
-                );
-                sa.parent_tool_id = parent_tool_id;
-                self.state.active_subagents.push(sa);
+                    .active_subagents
+                    .iter_mut()
+                    .find(|s| s.task == task && s.subagent_id.is_empty())
+                {
+                    sa.subagent_id = subagent_id;
+                    sa.name = subagent_name;
+                } else {
+                    // Fallback: create if not found (e.g. ToolStarted was missed)
+                    let parent_tool_id = self
+                        .state
+                        .active_tools
+                        .iter()
+                        .find(|t| {
+                            t.name == "spawn_subagent"
+                                && t.args.get("task").and_then(|v| v.as_str()) == Some(&task)
+                        })
+                        .map(|t| t.id.clone());
+                    let mut sa = crate::widgets::nested_tool::SubagentDisplayState::new(
+                        subagent_id,
+                        subagent_name,
+                        task,
+                    );
+                    sa.parent_tool_id = parent_tool_id;
+                    self.state.active_subagents.push(sa);
+                }
                 self.state.dirty = true;
             }
             AppEvent::SubagentToolCall {
