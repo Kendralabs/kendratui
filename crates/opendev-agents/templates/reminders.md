@@ -63,7 +63,15 @@ The edit old_content did not match. The file has changed since you last read it.
 You have been reading without taking action. If you have enough information, proceed with implementation. If you need clarification, ask the user.
 
 --- safety_limit_summary ---
-Please provide a summary of what you've found and what needs to be done.
+MAXIMUM STEPS REACHED — tools are now disabled.
+
+Provide a structured summary:
+1. **Goal**: What was the original task?
+2. **Accomplished**: What was completed successfully?
+3. **Remaining**: What still needs to be done?
+4. **Next steps**: What should the user do to continue?
+
+Be specific about file paths and changes made.
 
 --- thinking_on_instruction ---
 **CRITICAL REQUIREMENT - THINKING MODE IS ON:** You MUST call the `think` tool FIRST before calling ANY other tool. This is mandatory - do NOT skip this step. Do NOT call write_file, read_file, bash, or any other tool before calling `think`. In your thinking, explain step-by-step: what you understand about the task, your approach, and your planned actions. Aim for 100-300 words. Only after calling `think` may you proceed with other tools.

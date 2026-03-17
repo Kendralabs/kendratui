@@ -528,15 +528,55 @@ impl SubagentRunner for SimpleReactRunner {
             }
         }
 
-        // Max iterations reached
+        // Max iterations reached — attempt wind-down summary
         let elapsed = start_time.elapsed();
         info!(
             iterations = self.max_iterations,
             tool_calls = total_tool_calls,
             elapsed_secs = elapsed.as_secs(),
-            "SimpleReactRunner: max iterations reached"
+            "SimpleReactRunner: max iterations reached — requesting wind-down"
         );
 
+        // Inject summary prompt and make one final LLM call without tools
+        let summary_prompt = crate::prompts::reminders::get_reminder("safety_limit_summary", &[]);
+        messages.push(serde_json::json!({
+            "role": "user",
+            "content": summary_prompt,
+        }));
+
+        let mut payload = ctx.caller.build_action_payload(messages, &[]);
+        if let Some(obj) = payload.as_object_mut() {
+            obj.remove("tool_choice");
+            obj.remove("tools");
+            obj.remove("_reasoning_effort");
+        }
+
+        match ctx.http_client.post_json(&payload, ctx.cancel).await {
+            Ok(http_result) if http_result.success => {
+                if let Some(body) = http_result.body
+                    && let Some(content) = Self::parse_content(&body)
+                {
+                    let wind_down = format!(
+                        "[Max iterations ({}) reached — summary below]\n\n{}",
+                        self.max_iterations, content
+                    );
+                    return Ok(AgentResult {
+                        content: wind_down,
+                        success: true,
+                        interrupted: false,
+                        backgrounded: false,
+                        completion_status: None,
+                        messages: messages.clone(),
+                        partial_result: None,
+                    });
+                }
+            }
+            Ok(_) | Err(_) => {
+                warn!("SimpleReactRunner: wind-down LLM call failed, using last content");
+            }
+        }
+
+        // Fallback: use last assistant content
         let last_content = messages
             .iter()
             .rev()
