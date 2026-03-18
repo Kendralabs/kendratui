@@ -185,6 +185,10 @@ impl AdaptedClient {
         let mut accumulated_text = String::new();
         let mut accumulated_reasoning = String::new();
         let mut usage_data: Option<serde_json::Value> = None;
+        let mut tool_calls: Vec<serde_json::Value> = Vec::new();
+        let mut current_tool_args: std::collections::HashMap<usize, String> =
+            std::collections::HashMap::new();
+        let mut stop_reason: Option<String> = None;
         let mut line_buf = String::new();
         let mut event_type: Option<String> = None;
 
@@ -229,9 +233,61 @@ impl AdaptedClient {
                         let et = event_type.as_deref().unwrap_or_else(|| {
                             data_json.get("type").and_then(|t| t.as_str()).unwrap_or("")
                         });
+                        // Track metadata from provider-specific events
+                        match et {
+                            "message_delta" => {
+                                // Anthropic: usage and stop_reason
+                                if let Some(usage) = data_json.get("usage") {
+                                    usage_data = Some(usage.clone());
+                                }
+                                if let Some(delta) = data_json.get("delta")
+                                    && let Some(sr) = delta.get("stop_reason").and_then(|s| s.as_str())
+                                {
+                                    stop_reason = Some(sr.to_string());
+                                }
+                            }
+                            "content_block_start" => {
+                                // Anthropic: track tool_use blocks
+                                if let Some(cb) = data_json.get("content_block")
+                                    && cb.get("type").and_then(|t| t.as_str()) == Some("tool_use")
+                                {
+                                    let idx = data_json.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+                                    tool_calls.push(serde_json::json!({
+                                        "id": cb.get("id").and_then(|i| i.as_str()).unwrap_or(""),
+                                        "type": "function",
+                                        "function": {
+                                            "name": cb.get("name").and_then(|n| n.as_str()).unwrap_or(""),
+                                            "arguments": "",
+                                        }
+                                    }));
+                                    current_tool_args.insert(idx, String::new());
+                                }
+                            }
+                            "content_block_delta" => {
+                                // Anthropic: accumulate tool input
+                                if let Some(delta) = data_json.get("delta")
+                                    && delta.get("type").and_then(|t| t.as_str()) == Some("input_json_delta")
+                                {
+                                    let idx = data_json.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+                                    if let Some(partial) = delta.get("partial_json").and_then(|p| p.as_str()) {
+                                        current_tool_args.entry(idx).or_default().push_str(partial);
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
                         if let Some(stream_event) = adapter.parse_stream_event(et, &data_json) {
-                            if let StreamEvent::Done(ref body) = stream_event {
-                                final_body = Some(body.clone());
+                            match &stream_event {
+                                StreamEvent::Done(body) => {
+                                    final_body = Some(body.clone());
+                                }
+                                StreamEvent::TextDelta(text) => {
+                                    accumulated_text.push_str(text);
+                                }
+                                StreamEvent::ReasoningDelta(text) => {
+                                    accumulated_reasoning.push_str(text);
+                                }
+                                _ => {}
                             }
                             callback.on_event(&stream_event);
                         }
@@ -286,6 +342,54 @@ impl AdaptedClient {
                 let converted = adapter.convert_response(body);
                 debug!("Streaming complete, final response converted");
                 Ok(HttpResult::ok(200, converted))
+            }
+            None if !accumulated_text.is_empty()
+                || !accumulated_reasoning.is_empty()
+                || !tool_calls.is_empty() =>
+            {
+                // Build synthetic Chat Completions response from accumulated deltas.
+                // This handles providers like Anthropic that don't send a single
+                // "done" event with the full response.
+                let mut message = serde_json::json!({
+                    "role": "assistant",
+                    "content": if accumulated_text.is_empty() {
+                        serde_json::Value::Null
+                    } else {
+                        serde_json::Value::String(accumulated_text)
+                    },
+                });
+                if !accumulated_reasoning.is_empty() {
+                    message["reasoning_content"] =
+                        serde_json::Value::String(accumulated_reasoning);
+                }
+                // Finalize tool call arguments
+                if !tool_calls.is_empty() {
+                    let mut finalized = tool_calls;
+                    for (idx, args) in &current_tool_args {
+                        if let Some(tc) = finalized.get_mut(*idx)
+                            && let Some(func) = tc.get_mut("function")
+                        {
+                            func["arguments"] = serde_json::Value::String(args.clone());
+                        }
+                    }
+                    message["tool_calls"] = serde_json::Value::Array(finalized);
+                }
+                let finish = stop_reason.as_deref().unwrap_or(
+                    if message.get("tool_calls").is_some() {
+                        "tool_calls"
+                    } else {
+                        "stop"
+                    },
+                );
+                let response = serde_json::json!({
+                    "id": "stream-accumulated",
+                    "object": "chat.completion",
+                    "model": "",
+                    "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+                    "usage": usage_data.unwrap_or(serde_json::json!({})),
+                });
+                debug!("Streaming complete, built response from accumulated deltas");
+                Ok(HttpResult::ok(200, response))
             }
             None => Ok(HttpResult::fail(
                 "No complete response received from stream",

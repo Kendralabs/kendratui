@@ -21,7 +21,7 @@ mod state;
 mod tick;
 mod types;
 
-pub use enums::{AutonomyLevel, OperationMode};
+pub use enums::{AutonomyLevel, OperationMode, ReasoningLevel};
 pub use state::AppState;
 pub use types::{
     DisplayMessage, DisplayRole, DisplayToolCall, RoleStyle, ToolExecution, ToolState,

@@ -292,6 +292,9 @@ pub async fn run_interactive(
         version: env!("CARGO_PKG_VERSION").to_string(),
         theme: resolved_theme.theme(),
         theme_name: resolved_theme,
+        reasoning_level: opendev_tui::app::ReasoningLevel::from_str_loose(
+            &config.reasoning_effort,
+        ),
         ..opendev_tui::AppState::default()
     };
 

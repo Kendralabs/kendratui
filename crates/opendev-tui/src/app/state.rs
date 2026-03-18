@@ -7,7 +7,7 @@ use std::time::Instant;
 use crate::history::CommandHistory;
 use crate::widgets::{TodoDisplayItem, WelcomePanelState};
 
-use super::{AutonomyLevel, DisplayMessage, OperationMode, ToolExecution};
+use super::{AutonomyLevel, DisplayMessage, OperationMode, ReasoningLevel, ToolExecution};
 
 /// Persistent application state shared across renders.
 #[derive(Debug)]
@@ -18,6 +18,8 @@ pub struct AppState {
     pub mode: OperationMode,
     /// Autonomy level (Manual / Semi-Auto / Auto).
     pub autonomy: AutonomyLevel,
+    /// Reasoning effort level (Off / Low / Medium / High).
+    pub reasoning_level: ReasoningLevel,
     /// Active model name.
     pub model: String,
     /// Current working directory.
@@ -131,6 +133,7 @@ impl Default for AppState {
             running: true,
             mode: OperationMode::Normal,
             autonomy: AutonomyLevel::Manual,
+            reasoning_level: ReasoningLevel::Medium,
             model: String::from("claude-sonnet-4"),
             working_dir: String::from("."),
             git_branch: None,

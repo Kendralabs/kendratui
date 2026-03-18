@@ -57,6 +57,58 @@ impl AutonomyLevel {
     }
 }
 
+/// Reasoning effort level for native provider thinking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReasoningLevel {
+    Off,
+    Low,
+    Medium,
+    High,
+}
+
+impl std::fmt::Display for ReasoningLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Off => write!(f, "Off"),
+            Self::Low => write!(f, "Low"),
+            Self::Medium => write!(f, "Medium"),
+            Self::High => write!(f, "High"),
+        }
+    }
+}
+
+impl ReasoningLevel {
+    /// Parse from config string (case-insensitive).
+    pub fn from_str_loose(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "off" | "none" => Self::Off,
+            "low" => Self::Low,
+            "high" => Self::High,
+            _ => Self::Medium,
+        }
+    }
+
+    /// Convert to the config string used by LlmCallConfig.
+    pub fn to_config_string(&self) -> Option<String> {
+        match self {
+            Self::Off => None,
+            Self::Low => Some("low".to_string()),
+            Self::Medium => Some("medium".to_string()),
+            Self::High => Some("high".to_string()),
+        }
+    }
+
+    /// Cycle to the next level: Off → Low → Medium → High → Off.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Off => Self::Low,
+            Self::Low => Self::Medium,
+            Self::Medium => Self::High,
+            Self::High => Self::Off,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +147,37 @@ mod tests {
             Some(AutonomyLevel::Manual)
         );
         assert_eq!(AutonomyLevel::from_str_loose("bogus"), None);
+    }
+
+    #[test]
+    fn test_reasoning_level_cycle() {
+        assert_eq!(ReasoningLevel::Off.next(), ReasoningLevel::Low);
+        assert_eq!(ReasoningLevel::Low.next(), ReasoningLevel::Medium);
+        assert_eq!(ReasoningLevel::Medium.next(), ReasoningLevel::High);
+        assert_eq!(ReasoningLevel::High.next(), ReasoningLevel::Off);
+    }
+
+    #[test]
+    fn test_reasoning_level_from_str() {
+        assert_eq!(ReasoningLevel::from_str_loose("none"), ReasoningLevel::Off);
+        assert_eq!(ReasoningLevel::from_str_loose("low"), ReasoningLevel::Low);
+        assert_eq!(
+            ReasoningLevel::from_str_loose("medium"),
+            ReasoningLevel::Medium
+        );
+        assert_eq!(ReasoningLevel::from_str_loose("high"), ReasoningLevel::High);
+    }
+
+    #[test]
+    fn test_reasoning_level_to_config() {
+        assert_eq!(ReasoningLevel::Off.to_config_string(), None);
+        assert_eq!(
+            ReasoningLevel::Low.to_config_string(),
+            Some("low".to_string())
+        );
+        assert_eq!(
+            ReasoningLevel::Medium.to_config_string(),
+            Some("medium".to_string())
+        );
     }
 }

@@ -165,7 +165,15 @@ impl SubagentManager {
             model: model.clone(),
             temperature: Some(temperature),
             max_tokens: Some(spec.max_tokens.unwrap_or(parent_max_tokens as u32) as u64),
-            reasoning_effort: parent_reasoning_effort,
+            // Subagents use lower reasoning effort to avoid excessive thinking.
+            // Cap at "low" regardless of parent setting.
+            reasoning_effort: parent_reasoning_effort.map(|e| {
+                if e == "high" || e == "medium" {
+                    "low".to_string()
+                } else {
+                    e
+                }
+            }),
         });
 
         // Build tool schemas (filtered to allowed tools)

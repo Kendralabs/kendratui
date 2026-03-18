@@ -247,6 +247,18 @@ impl TuiRunner {
 
         tokio::spawn(async move {
             while let Some(msg) = user_rx.recv().await {
+                // Handle reasoning effort change sentinel
+                if let Some(effort) = msg.strip_prefix("\x00__REASONING_EFFORT__") {
+                    let new_effort = if effort == "none" {
+                        None
+                    } else {
+                        Some(effort.to_string())
+                    };
+                    info!(effort = ?new_effort, "Reasoning effort changed");
+                    runtime.llm_caller.config.reasoning_effort = new_effort;
+                    continue;
+                }
+
                 // Handle manual compaction sentinel
                 if msg == "\x00__COMPACT__" {
                     info!("TUI: manual compaction requested");

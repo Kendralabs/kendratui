@@ -15,7 +15,7 @@ use ratatui::{
     widgets::Widget,
 };
 
-use crate::app::{AutonomyLevel, OperationMode};
+use crate::app::{AutonomyLevel, OperationMode, ReasoningLevel};
 use crate::formatters::style_tokens;
 
 /// Bottom status bar widget.
@@ -35,6 +35,7 @@ pub struct StatusBarWidget<'a> {
     mcp_has_errors: bool,
     background_tasks: usize,
     file_changes: Option<(usize, u64, u64)>,
+    reasoning_level: Option<ReasoningLevel>,
 }
 
 impl<'a> StatusBarWidget<'a> {
@@ -60,6 +61,7 @@ impl<'a> StatusBarWidget<'a> {
             mcp_has_errors: false,
             background_tasks: 0,
             file_changes: None,
+            reasoning_level: None,
         }
     }
 
@@ -91,6 +93,11 @@ impl<'a> StatusBarWidget<'a> {
 
     pub fn file_changes(mut self, changes: Option<(usize, u64, u64)>) -> Self {
         self.file_changes = changes;
+        self
+    }
+
+    pub fn reasoning_level(mut self, level: ReasoningLevel) -> Self {
+        self.reasoning_level = Some(level);
         self
     }
 
@@ -134,6 +141,34 @@ impl Widget for StatusBarWidget<'_> {
             " (Ctrl+Shift+A)",
             Style::default().fg(style_tokens::GREY),
         ));
+
+        // Reasoning effort level
+        if let Some(level) = self.reasoning_level {
+            spans.push(Span::styled(
+                "  \u{2502}  ",
+                Style::default().fg(style_tokens::GREY),
+            ));
+            spans.push(Span::styled(
+                "Thinking: ",
+                Style::default().fg(style_tokens::GREY),
+            ));
+            let thinking_color = match level {
+                ReasoningLevel::Off => style_tokens::GREY,
+                ReasoningLevel::Low => style_tokens::CYAN,
+                ReasoningLevel::Medium => style_tokens::GREEN_BRIGHT,
+                ReasoningLevel::High => style_tokens::GOLD,
+            };
+            spans.push(Span::styled(
+                level.to_string(),
+                Style::default()
+                    .fg(thinking_color)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::styled(
+                " (Ctrl+Shift+T)",
+                Style::default().fg(style_tokens::GREY),
+            ));
+        }
 
         // Repo info (path + git branch)
         let repo_display = self.build_repo_display();

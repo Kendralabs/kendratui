@@ -288,6 +288,21 @@ impl App {
                     AutonomyLevel::Auto => AutonomyLevel::Manual,
                 };
             }
+            // Ctrl+Shift+T — cycle reasoning effort level
+            (m, KeyCode::Char('T' | 't'))
+                if m.contains(KeyModifiers::CONTROL) && m.contains(KeyModifiers::SHIFT) =>
+            {
+                self.state.reasoning_level = self.state.reasoning_level.next();
+                // Propagate to runtime via sentinel message
+                if let Some(ref tx) = self.user_message_tx {
+                    let effort = self.state.reasoning_level.to_config_string();
+                    let sentinel = match effort {
+                        Some(e) => format!("\x00__REASONING_EFFORT__{e}"),
+                        None => "\x00__REASONING_EFFORT__none".to_string(),
+                    };
+                    let _ = tx.send(sentinel);
+                }
+            }
             // Tab — accept autocomplete suggestion
             (_, KeyCode::Tab) => {
                 if let Some((insert_text, delete_count)) = self.state.autocomplete.accept() {
