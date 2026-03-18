@@ -50,13 +50,39 @@ async fn get_messages(State(state): State<AppState>) -> Result<Json<serde_json::
     let messages: Vec<serde_json::Value> = session
         .messages
         .iter()
+        .filter(|msg| {
+            // Skip system-injected messages (nudges, directives, internal)
+            if msg.metadata.contains_key("_msg_class") {
+                return false;
+            }
+            // Skip [SYSTEM] prefixed messages from older sessions
+            if msg.role == opendev_models::message::Role::User
+                && msg.content.starts_with("[SYSTEM] ")
+            {
+                return false;
+            }
+            // Skip system messages
+            if msg.role == opendev_models::message::Role::System {
+                return false;
+            }
+            true
+        })
         .map(|msg| {
-            serde_json::json!({
+            let mut val = serde_json::json!({
                 "role": msg.role,
                 "content": msg.content,
                 "timestamp": msg.timestamp,
-                "tool_calls": msg.tool_calls.len(),
-            })
+                "tool_calls": msg.tool_calls.iter()
+                    .filter(|tc| tc.name != "task_complete")
+                    .count(),
+            });
+            if let Some(ref reasoning) = msg.reasoning_content {
+                val["reasoning_content"] = serde_json::json!(reasoning);
+            }
+            if let Some(ref trace) = msg.thinking_trace {
+                val["thinking_trace"] = serde_json::json!(trace);
+            }
+            val
         })
         .collect();
 

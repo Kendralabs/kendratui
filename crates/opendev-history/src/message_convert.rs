@@ -28,10 +28,15 @@ pub fn chatmessages_to_api_values(messages: &[ChatMessage]) -> Vec<Value> {
                 if msg.metadata.contains_key("_thinking") {
                     continue;
                 }
-                result.push(json!({
+                let mut val = json!({
                     "role": "user",
                     "content": &msg.content,
-                }));
+                });
+                // Preserve _msg_class for system-injected messages
+                if let Some(cls) = msg.metadata.get("_msg_class") {
+                    val["_msg_class"] = cls.clone();
+                }
+                result.push(val);
             }
             Role::System => {
                 result.push(json!({
@@ -154,11 +159,20 @@ pub fn api_values_to_chatmessages(values: &[Value]) -> Vec<ChatMessage> {
                     continue;
                 }
 
+                let mut metadata = HashMap::new();
+                // Preserve _msg_class for system-injected messages so the TUI
+                // can filter them out when replaying history.
+                if let Some(cls) = val.get("_msg_class").and_then(|v| v.as_str()) {
+                    metadata.insert(
+                        "_msg_class".to_string(),
+                        serde_json::Value::String(cls.to_string()),
+                    );
+                }
                 result.push(ChatMessage {
                     role: Role::User,
                     content: val["content"].as_str().unwrap_or("").to_string(),
                     timestamp: Utc::now(),
-                    metadata: HashMap::new(),
+                    metadata,
                     tool_calls: Vec::new(),
                     tokens: None,
                     thinking_trace: None,
@@ -543,5 +557,40 @@ mod tests {
         let restored = api_values_to_chatmessages(&api_values);
         assert_eq!(restored.len(), 1);
         assert_eq!(restored[0].role, Role::System);
+    }
+
+    #[test]
+    fn test_msg_class_preserved_roundtrip() {
+        // System-injected nudge message should preserve _msg_class through roundtrip
+        let api_values = vec![
+            json!({"role": "user", "content": "[SYSTEM] Before finishing, verify...", "_msg_class": "nudge"}),
+            json!({"role": "assistant", "content": "Done."}),
+        ];
+
+        let restored = api_values_to_chatmessages(&api_values);
+        assert_eq!(restored.len(), 2);
+        assert_eq!(
+            restored[0]
+                .metadata
+                .get("_msg_class")
+                .and_then(|v| v.as_str()),
+            Some("nudge"),
+            "_msg_class should be preserved in metadata"
+        );
+
+        // Convert back to API values — _msg_class should survive
+        let re_api = chatmessages_to_api_values(&restored);
+        assert_eq!(re_api[0]["_msg_class"], "nudge");
+    }
+
+    #[test]
+    fn test_msg_class_not_added_for_normal_messages() {
+        let api_values = vec![json!({"role": "user", "content": "Hello"})];
+
+        let restored = api_values_to_chatmessages(&api_values);
+        assert!(
+            !restored[0].metadata.contains_key("_msg_class"),
+            "Normal user messages should not have _msg_class"
+        );
     }
 }

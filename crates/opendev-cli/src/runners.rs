@@ -307,6 +307,15 @@ pub async fn run_interactive(
                     if msg.metadata.contains_key("display_hidden") {
                         continue;
                     }
+                    // Skip system-injected messages (nudges, directives, internal)
+                    if msg.metadata.contains_key("_msg_class") {
+                        continue;
+                    }
+                    // Also skip messages with [SYSTEM] prefix from older sessions
+                    // that were persisted before _msg_class was preserved
+                    if msg.content.starts_with("[SYSTEM] ") {
+                        continue;
+                    }
                     app_state.messages.push(opendev_tui::app::DisplayMessage {
                         role: opendev_tui::app::DisplayRole::User,
                         content: msg.content.clone(),
@@ -315,6 +324,22 @@ pub async fn run_interactive(
                     });
                 }
                 opendev_models::Role::Assistant => {
+                    // Add reasoning/thinking trace if present
+                    // reasoning_content = native model reasoning (o1/o3)
+                    // thinking_trace = our internal thinking step
+                    let trace = msg
+                        .reasoning_content
+                        .as_deref()
+                        .or(msg.thinking_trace.as_deref())
+                        .unwrap_or("");
+                    if !trace.is_empty() {
+                        app_state.messages.push(opendev_tui::app::DisplayMessage {
+                            role: opendev_tui::app::DisplayRole::Reasoning,
+                            content: trace.to_string(),
+                            tool_call: None,
+                            collapsed: false,
+                        });
+                    }
                     // Add assistant text
                     if !msg.content.is_empty() {
                         app_state.messages.push(opendev_tui::app::DisplayMessage {
@@ -324,8 +349,11 @@ pub async fn run_interactive(
                             collapsed: false,
                         });
                     }
-                    // Add tool calls
+                    // Add tool calls (skip task_complete — it's an internal control tool)
                     for tc in &msg.tool_calls {
+                        if tc.name == "task_complete" {
+                            continue;
+                        }
                         app_state.messages.push(opendev_tui::app::DisplayMessage {
                             role: opendev_tui::app::DisplayRole::Assistant,
                             content: String::new(),
