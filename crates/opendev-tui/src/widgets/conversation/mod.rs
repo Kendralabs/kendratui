@@ -60,6 +60,8 @@ pub struct ConversationWidget<'a> {
     cached_lines: Option<&'a [Line<'static>]>,
     /// Active subagent executions for nested inline display.
     active_subagents: &'a [crate::widgets::nested_tool::SubagentDisplayState],
+    /// Cached path shortener (avoids repeated home_dir syscalls in spinner).
+    shortener: Option<&'a crate::formatters::PathShortener>,
     /// Whether backgrounding is in progress (waiting for agent to yield).
     backgrounding_pending: bool,
     /// Info about a recently-backgrounded task: (task_id, when).
@@ -80,6 +82,7 @@ impl<'a> ConversationWidget<'a> {
             compaction_active: false,
             cached_lines: None,
             active_subagents: &[],
+            shortener: None,
             backgrounding_pending: false,
             backgrounded_task_info: None,
         }
@@ -125,6 +128,11 @@ impl<'a> ConversationWidget<'a> {
         subagents: &'a [crate::widgets::nested_tool::SubagentDisplayState],
     ) -> Self {
         self.active_subagents = subagents;
+        self
+    }
+
+    pub fn path_shortener(mut self, shortener: &'a crate::formatters::PathShortener) -> Self {
+        self.shortener = Some(shortener);
         self
     }
 

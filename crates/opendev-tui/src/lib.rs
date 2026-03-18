@@ -26,9 +26,9 @@ pub use formatters::style_tokens::{
     TerminalBackground, Theme, ThemeName, auto_detect_theme, detect_terminal_background,
 };
 pub use formatters::{
-    ToolCategory, categorize_tool, format_error, format_info, format_tool_call_display,
-    format_tool_call_parts, format_tool_call_parts_with_wd, format_warning, strip_system_reminders,
-    tool_color, truncate_output,
+    PathShortener, ToolCategory, categorize_tool, format_error, format_info,
+    format_tool_call_display, format_tool_call_parts, format_tool_call_parts_with_wd,
+    format_warning, strip_system_reminders, tool_color, truncate_output,
 };
 pub use widgets::{
     NestedToolWidget, SpinnerState, SubagentDisplayState, TaskProgress, TodoDisplayItem,

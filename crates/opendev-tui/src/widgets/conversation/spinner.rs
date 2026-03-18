@@ -6,18 +6,30 @@ use ratatui::{
 };
 
 use crate::formatters::style_tokens;
-use crate::formatters::tool_registry::format_tool_call_parts_with_wd;
+use crate::formatters::tool_registry::format_tool_call_parts_short;
 use crate::widgets::spinner::{COMPACTION_CHAR, COMPLETED_CHAR, CONTINUATION_CHAR, SPINNER_FRAMES};
 
 use super::ConversationWidget;
 
 impl<'a> ConversationWidget<'a> {
+    /// Get or create a `PathShortener` for this widget.
+    fn get_shortener(&self) -> std::borrow::Cow<'_, crate::formatters::PathShortener> {
+        if let Some(s) = self.shortener {
+            std::borrow::Cow::Borrowed(s)
+        } else {
+            std::borrow::Cow::Owned(crate::formatters::PathShortener::new(Some(
+                self.working_dir,
+            )))
+        }
+    }
+
     /// Build spinner/progress lines separately from message content.
     ///
     /// These are rendered outside the scrollable area so that spinner
     /// animation (60ms ticks) doesn't shift scroll math or cause jitter.
     pub(super) fn build_spinner_lines(&self) -> Vec<Line<'a>> {
         let mut lines: Vec<Line> = Vec::new();
+        let shortener = self.get_shortener();
 
         let active_unfinished: Vec<_> = self
             .active_tools
@@ -70,8 +82,7 @@ impl<'a> ConversationWidget<'a> {
                         (name.to_string(), task.to_string())
                     };
 
-                    let task_desc =
-                        crate::formatters::replace_wd_in_text(&task_desc, Some(self.working_dir));
+                    let task_desc = shortener.shorten_text(&task_desc);
                     let task_short = if task_desc.len() > 60 {
                         format!("{}...", &task_desc[..60])
                     } else {
@@ -97,18 +108,15 @@ impl<'a> ConversationWidget<'a> {
                     ]));
 
                     if let Some(sa) = subagent {
-                        self.build_subagent_spinner_lines(sa, &mut lines);
+                        self.build_subagent_spinner_lines(sa, &shortener, &mut lines);
                     }
 
                     // Blank line between subagent blocks
                     lines.push(Line::from(""));
                 } else {
                     // Normal tool: ⠋ verb(arg) (Xs)
-                    let (verb, arg) = format_tool_call_parts_with_wd(
-                        &tool.name,
-                        &tool.args,
-                        Some(self.working_dir),
-                    );
+                    let (verb, arg) =
+                        format_tool_call_parts_short(&tool.name, &tool.args, &shortener);
                     lines.push(Line::from(vec![
                         Span::styled(
                             format!("{spinner} "),
@@ -179,6 +187,7 @@ impl<'a> ConversationWidget<'a> {
     fn build_subagent_spinner_lines(
         &self,
         sa: &crate::widgets::nested_tool::SubagentDisplayState,
+        shortener: &crate::formatters::PathShortener,
         lines: &mut Vec<Line<'a>>,
     ) {
         if sa.finished {
@@ -216,8 +225,7 @@ impl<'a> ConversationWidget<'a> {
             } else {
                 ('\u{2717}', style_tokens::ERROR)
             };
-            let (verb, arg) =
-                format_tool_call_parts_with_wd(&ct.tool_name, &ct.args, Some(self.working_dir));
+            let (verb, arg) = format_tool_call_parts_short(&ct.tool_name, &ct.args, shortener);
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("  {CONTINUATION_CHAR}  "),
@@ -233,8 +241,7 @@ impl<'a> ConversationWidget<'a> {
         for at in sa.active_tools.values() {
             let at_idx = at.tick % SPINNER_FRAMES.len();
             let at_ch = SPINNER_FRAMES[at_idx];
-            let (verb, arg) =
-                format_tool_call_parts_with_wd(&at.tool_name, &at.args, Some(self.working_dir));
+            let (verb, arg) = format_tool_call_parts_short(&at.tool_name, &at.args, shortener);
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("  {CONTINUATION_CHAR}  "),

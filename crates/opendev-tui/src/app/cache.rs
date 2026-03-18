@@ -186,7 +186,7 @@ impl App {
                     next_role,
                     &mut self.state.cached_lines,
                     &mut self.state.markdown_cache,
-                    Some(&self.state.working_dir),
+                    &self.state.path_shortener,
                     content_width,
                 );
             }
@@ -206,13 +206,13 @@ impl App {
         next_role: Option<&DisplayRole>,
         lines: &mut Vec<ratatui::text::Line<'static>>,
         markdown_cache: &mut HashMap<u64, Vec<ratatui::text::Line<'static>>>,
-        working_dir: Option<&str>,
+        shortener: &crate::formatters::PathShortener,
         content_width: u16,
     ) {
         use crate::formatters::display::strip_system_reminders;
         use crate::formatters::markdown::MarkdownRenderer;
         use crate::formatters::style_tokens::{self, Indent};
-        use crate::formatters::tool_registry::{categorize_tool, format_tool_call_parts_with_wd};
+        use crate::formatters::tool_registry::{categorize_tool, format_tool_call_parts_short};
         use crate::formatters::wrap::wrap_spans_to_lines;
         use crate::widgets::spinner::{COMPLETED_CHAR, CONTINUATION_CHAR};
         use ratatui::style::{Modifier, Style};
@@ -358,7 +358,7 @@ impl App {
             } else {
                 (COMPLETED_CHAR, style_tokens::ERROR)
             };
-            let (verb, arg) = format_tool_call_parts_with_wd(&tc.name, &tc.arguments, working_dir);
+            let (verb, arg) = format_tool_call_parts_short(&tc.name, &tc.arguments, shortener);
             lines.push(Line::from(vec![
                 Span::styled(format!("{icon} "), Style::default().fg(icon_color)),
                 Span::styled(
@@ -399,12 +399,10 @@ impl App {
                         } else {
                             Cow::Borrowed(Indent::RESULT_CONT)
                         };
+                        let shortened = shortener.shorten_text(result_line);
                         lines.push(Line::from(vec![
                             Span::styled(prefix_char, Style::default().fg(style_tokens::SUBTLE)),
-                            Span::styled(
-                                result_line.clone(),
-                                Style::default().fg(style_tokens::SUBTLE),
-                            ),
+                            Span::styled(shortened, Style::default().fg(style_tokens::SUBTLE)),
                         ]));
                     }
                 }
@@ -433,7 +431,7 @@ impl App {
                     (COMPLETED_CHAR, style_tokens::ERROR)
                 };
                 let (n_verb, n_arg) =
-                    format_tool_call_parts_with_wd(&nested.name, &nested.arguments, working_dir);
+                    format_tool_call_parts_short(&nested.name, &nested.arguments, shortener);
                 lines.push(Line::from(vec![
                     Span::styled(
                         format!("{}\u{2514}\u{2500} ", Indent::CONT),

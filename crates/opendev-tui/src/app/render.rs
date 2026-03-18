@@ -62,6 +62,7 @@ impl App {
                 ConversationWidget::new(&self.state.messages, self.state.scroll_offset)
                     .version(&self.state.version)
                     .working_dir(&self.state.working_dir)
+                    .path_shortener(&self.state.path_shortener)
                     .mode(mode_str)
                     .active_tools(&self.state.active_tools)
                     .active_subagents(&self.state.active_subagents)

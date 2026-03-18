@@ -384,39 +384,13 @@ impl StatusBarWidget<'_> {
             return String::new();
         }
 
-        let dir_display = shorten_path(self.working_dir);
+        let shortener = crate::formatters::PathShortener::default();
+        let dir_display = shortener.shorten_display(self.working_dir);
         match self.git_branch {
             Some(branch) => format!("{dir_display} ({branch})"),
             None => dir_display,
         }
     }
-}
-
-/// Shorten a path for display (show last 2 components, replace home with ~).
-fn shorten_path(path: &str) -> String {
-    // Replace home directory with ~
-    let display = if let Some(home) = dirs_home(path) {
-        home
-    } else {
-        path.to_string()
-    };
-
-    let parts: Vec<&str> = display.split('/').filter(|p| !p.is_empty()).collect();
-    if parts.len() <= 2 {
-        return display;
-    }
-    format!(".../{}", parts[parts.len() - 2..].join("/"))
-}
-
-/// Replace home directory prefix with ~ if possible.
-fn dirs_home(path: &str) -> Option<String> {
-    // Try to detect home directory from env
-    if let Ok(home) = std::env::var("HOME")
-        && path.starts_with(&home)
-    {
-        return Some(format!("~{}", &path[home.len()..]));
-    }
-    None
 }
 
 #[cfg(test)]
@@ -431,10 +405,11 @@ mod tests {
     }
 
     #[test]
-    fn test_shorten_path() {
-        assert_eq!(shorten_path("/home/user"), "/home/user");
+    fn test_shorten_display() {
+        let ps = crate::formatters::PathShortener::default();
+        assert_eq!(ps.shorten_display("/home/user"), "/home/user");
         assert_eq!(
-            shorten_path("/home/user/projects/myapp"),
+            ps.shorten_display("/home/user/projects/myapp"),
             ".../projects/myapp"
         );
     }

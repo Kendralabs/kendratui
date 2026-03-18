@@ -285,9 +285,11 @@ pub async fn run_interactive(
         .unwrap_or_else(opendev_tui::auto_detect_theme);
 
     // Populate initial TUI state from config
+    let wd_str = working_dir.display().to_string();
     let mut app_state = opendev_tui::AppState {
         model: config.model.clone(),
-        working_dir: working_dir.display().to_string(),
+        path_shortener: opendev_tui::formatters::PathShortener::new(Some(&wd_str)),
+        working_dir: wd_str,
         git_branch: detect_git_branch(working_dir),
         version: env!("CARGO_PKG_VERSION").to_string(),
         theme: resolved_theme.theme(),

@@ -24,6 +24,8 @@ pub struct AppState {
     pub model: String,
     /// Current working directory.
     pub working_dir: String,
+    /// Cached path shortener for display (avoids repeated syscalls).
+    pub path_shortener: crate::formatters::PathShortener,
     /// Git branch name (if in a repo).
     pub git_branch: Option<String>,
     /// Tokens used in current session.
@@ -148,6 +150,7 @@ impl Default for AppState {
             reasoning_level: ReasoningLevel::Medium,
             model: String::from("claude-sonnet-4"),
             working_dir: String::from("."),
+            path_shortener: crate::formatters::PathShortener::new(Some(".")),
             git_branch: None,
             tokens_used: 0,
             tokens_limit: 200_000,

@@ -18,7 +18,7 @@ use ratatui::{
 };
 
 use crate::formatters::style_tokens;
-use crate::formatters::tool_registry::format_tool_call_parts_with_wd;
+use crate::formatters::tool_registry::format_tool_call_parts_short;
 
 /// Tree connector characters (UTF-8 box drawing).
 const TREE_BRANCH: &str = "\u{251c}\u{2500}";
@@ -40,6 +40,7 @@ const GREEN_GRADIENT: &[Color] = &[
 pub struct NestedToolWidget<'a> {
     subagents: &'a [SubagentDisplayState],
     working_dir: Option<&'a str>,
+    shortener: Option<&'a crate::formatters::PathShortener>,
 }
 
 impl<'a> NestedToolWidget<'a> {
@@ -47,11 +48,17 @@ impl<'a> NestedToolWidget<'a> {
         Self {
             subagents,
             working_dir: None,
+            shortener: None,
         }
     }
 
     pub fn working_dir(mut self, wd: &'a str) -> Self {
         self.working_dir = Some(wd);
+        self
+    }
+
+    pub fn path_shortener(mut self, shortener: &'a crate::formatters::PathShortener) -> Self {
+        self.shortener = Some(shortener);
         self
     }
 }
@@ -61,6 +68,14 @@ impl Widget for NestedToolWidget<'_> {
         if self.subagents.is_empty() {
             return;
         }
+
+        let owned_shortener;
+        let shortener = if let Some(s) = self.shortener {
+            s
+        } else {
+            owned_shortener = crate::formatters::PathShortener::new(self.working_dir);
+            &owned_shortener
+        };
 
         let block = Block::default()
             .borders(Borders::TOP)
@@ -103,7 +118,7 @@ impl Widget for NestedToolWidget<'_> {
             };
 
             let elapsed = subagent.elapsed_secs();
-            let task_text = crate::formatters::replace_wd_in_text(&subagent.task, self.working_dir);
+            let task_text = shortener.shorten_text(&subagent.task);
             let task_preview = if task_text.len() > 60 {
                 format!("{}...", &task_text[..60])
             } else {
@@ -165,10 +180,10 @@ impl Widget for NestedToolWidget<'_> {
                 let spinner_idx = tool_state.tick % SPINNER_CHARS.len();
                 let spinner_ch = SPINNER_CHARS[spinner_idx];
                 let tool_elapsed = tool_state.started_at.elapsed().as_secs();
-                let (verb, arg) = format_tool_call_parts_with_wd(
+                let (verb, arg) = format_tool_call_parts_short(
                     &tool_state.tool_name,
                     &tool_state.args,
-                    self.working_dir,
+                    shortener,
                 );
 
                 lines.push(Line::from(vec![
@@ -203,11 +218,8 @@ impl Widget for NestedToolWidget<'_> {
                 } else {
                     ("\u{23fa}", style_tokens::ERROR)
                 };
-                let (verb, arg) = format_tool_call_parts_with_wd(
-                    &completed.tool_name,
-                    &completed.args,
-                    self.working_dir,
-                );
+                let (verb, arg) =
+                    format_tool_call_parts_short(&completed.tool_name, &completed.args, shortener);
 
                 lines.push(Line::from(vec![
                     Span::styled(
