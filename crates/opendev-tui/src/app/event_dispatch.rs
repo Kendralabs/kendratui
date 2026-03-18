@@ -305,7 +305,23 @@ impl App {
                         (tc, 0, std::time::Duration::ZERO, success)
                     };
 
-                    let summary = {
+                    let summary = if !success {
+                        // Show first meaningful line of the output as error context
+                        let error_hint = output
+                            .lines()
+                            .find(|l| {
+                                !l.starts_with("__subagent_stats__:")
+                                    && !l.starts_with("task_id:")
+                                    && !l.trim().is_empty()
+                            })
+                            .unwrap_or("unknown error");
+                        let truncated = if error_hint.len() > 120 {
+                            format!("{}...", &error_hint[..120])
+                        } else {
+                            error_hint.to_string()
+                        };
+                        format!("Failed: {truncated}")
+                    } else {
                         let elapsed_secs = stats.2.as_secs();
                         let elapsed_str = if elapsed_secs >= 60 {
                             format!("{}m {}s", elapsed_secs / 60, elapsed_secs % 60)
