@@ -433,10 +433,7 @@ impl super::base::ProviderAdapter for GeminiAdapter {
         // Each chunk has candidates[0].content.parts with text or thought parts.
         let candidates = data.get("candidates")?.as_array()?;
         let candidate = candidates.first()?;
-        let parts = candidate
-            .get("content")?
-            .get("parts")?
-            .as_array()?;
+        let parts = candidate.get("content")?.get("parts")?.as_array()?;
 
         for part in parts {
             let is_thought = part.get("thought").and_then(|t| t.as_bool()) == Some(true);

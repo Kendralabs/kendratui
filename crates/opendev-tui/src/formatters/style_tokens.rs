@@ -257,10 +257,10 @@ impl Theme {
             heading_1: Color::Rgb(180, 165, 220), // Soft purple
             heading_2: Color::Rgb(180, 165, 220),
             heading_3: Color::Rgb(180, 165, 220),
-            code_fg: Color::Rgb(140, 210, 155),   // Muted green
-            code_bg: Color::Rgb(40, 42, 54),      // Background
-            bullet: Color::Rgb(98, 114, 164),     // Comment
-            bold_fg: Color::Rgb(235, 225, 210),   // Warm off-white
+            code_fg: Color::Rgb(140, 210, 155), // Muted green
+            code_bg: Color::Rgb(40, 42, 54),    // Background
+            bullet: Color::Rgb(98, 114, 164),   // Comment
+            bold_fg: Color::Rgb(235, 225, 210), // Warm off-white
         }
     }
 }

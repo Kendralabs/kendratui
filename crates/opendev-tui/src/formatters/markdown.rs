@@ -278,9 +278,7 @@ fn parse_inline_spans_with_palette(text: &str, palette: &MdPalette) -> Vec<Span<
             let display: Cow<'static, str> = Cow::Owned(link_text.to_string());
             spans.push(Span::styled(
                 display,
-                Style::default()
-                    .fg(palette.link)
-                    .add_modifier(base_mod),
+                Style::default().fg(palette.link).add_modifier(base_mod),
             ));
             remaining = &remaining[link_end..];
         } else if let Some(code_start) = next_backtick {
