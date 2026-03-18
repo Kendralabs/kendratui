@@ -360,7 +360,7 @@ impl super::base::ProviderAdapter for OpenAiAdapter {
         if let Some(ref effort) = reasoning_effort {
             responses_payload["reasoning"] = json!({
                 "effort": effort,
-                "summary": "auto",
+                "summary": "detailed",
             });
             // OpenAI rejects temperature when reasoning is set
         } else if !Self::is_reasoning_model(&payload) {
