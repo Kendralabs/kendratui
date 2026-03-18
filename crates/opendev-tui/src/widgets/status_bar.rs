@@ -232,17 +232,12 @@ impl Widget for StatusBarWidget<'_> {
                         .add_modifier(Modifier::BOLD),
                 ));
             }
-            let task_word = if self.background_tasks == 1 {
-                "task"
-            } else {
-                "tasks"
-            };
             spans.push(Span::styled(
-                format!("{} background {task_word}", self.background_tasks),
+                format!("\u{2699} {}", self.background_tasks),
                 Style::default().fg(style_tokens::BLUE_TASK),
             ));
             spans.push(Span::styled(
-                " (Ctrl+B)",
+                " (Ctrl+P)",
                 Style::default().fg(style_tokens::GREY),
             ));
         }

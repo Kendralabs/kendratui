@@ -59,6 +59,7 @@ impl App {
                     || !self.state.welcome_panel.fade_complete
                     || self.state.task_watcher_open
                     || self.state.last_task_completion.is_some()
+                    || self.state.backgrounded_task_info.is_some()
                 {
                     self.state.dirty = true;
                 }
@@ -105,6 +106,7 @@ impl App {
             // Agent events
             AppEvent::AgentStarted => {
                 self.state.agent_active = true;
+                self.state.backgrounded_task_info = None;
                 self.state.dirty = true;
             }
             AppEvent::AgentChunk(text) => {
@@ -729,6 +731,8 @@ impl App {
                 query_summary,
             } => {
                 self.state.backgrounding_pending = false;
+                self.state.backgrounded_task_info =
+                    Some((task_id.clone(), std::time::Instant::now()));
                 self.push_system_message(format!(
                     "Agent moved to background [{task_id}]: {query_summary}"
                 ));

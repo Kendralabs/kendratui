@@ -67,7 +67,9 @@ impl App {
                     .active_subagents(&self.state.active_subagents)
                     .task_progress(self.state.task_progress.as_ref())
                     .spinner_char(self.state.spinner.current())
-                    .compaction_active(self.state.compaction_active);
+                    .compaction_active(self.state.compaction_active)
+                    .backgrounding_pending(self.state.backgrounding_pending)
+                    .backgrounded_task_info(self.state.backgrounded_task_info.as_ref());
             if !self.state.cached_lines.is_empty() {
                 conversation = conversation.cached_lines(&self.state.cached_lines);
             }
@@ -150,29 +152,7 @@ impl App {
         );
         frame.render_widget(status, chunks[3]);
 
-        // Background task panel overlay (Ctrl+B) — unified quick summary
-        if self.state.background_panel_open {
-            let unified = self.collect_unified_tasks();
-            let task_items: Vec<crate::widgets::background_tasks::TaskDisplayItem> = unified
-                .iter()
-                .map(|t| crate::widgets::background_tasks::TaskDisplayItem {
-                    task_id: t.task_id.clone(),
-                    description: t.description.clone(),
-                    state: t.state.clone(),
-                    runtime_secs: t.runtime_secs,
-                })
-                .collect();
-            let running = task_items.iter().filter(|t| t.state == "running").count();
-            let total = task_items.len();
-            let panel = crate::widgets::background_tasks::BackgroundTaskPanel::new(
-                &task_items,
-                running,
-                total,
-            );
-            frame.render_widget(panel, chunks[0]);
-        }
-
-        // Task watcher panel overlay (Alt+B)
+        // Task watcher panel overlay (Ctrl+P / Alt+B)
         if self.state.task_watcher_open {
             let unified = self.collect_unified_tasks();
             let selected = self

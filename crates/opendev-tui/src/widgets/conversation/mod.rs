@@ -60,6 +60,10 @@ pub struct ConversationWidget<'a> {
     cached_lines: Option<&'a [Line<'static>]>,
     /// Active subagent executions for nested inline display.
     active_subagents: &'a [crate::widgets::nested_tool::SubagentDisplayState],
+    /// Whether backgrounding is in progress (waiting for agent to yield).
+    backgrounding_pending: bool,
+    /// Info about a recently-backgrounded task: (task_id, when).
+    backgrounded_task_info: Option<&'a (String, std::time::Instant)>,
 }
 
 impl<'a> ConversationWidget<'a> {
@@ -76,6 +80,8 @@ impl<'a> ConversationWidget<'a> {
             compaction_active: false,
             cached_lines: None,
             active_subagents: &[],
+            backgrounding_pending: false,
+            backgrounded_task_info: None,
         }
     }
 
@@ -119,6 +125,19 @@ impl<'a> ConversationWidget<'a> {
         subagents: &'a [crate::widgets::nested_tool::SubagentDisplayState],
     ) -> Self {
         self.active_subagents = subagents;
+        self
+    }
+
+    pub fn backgrounding_pending(mut self, pending: bool) -> Self {
+        self.backgrounding_pending = pending;
+        self
+    }
+
+    pub fn backgrounded_task_info(
+        mut self,
+        info: Option<&'a (String, std::time::Instant)>,
+    ) -> Self {
+        self.backgrounded_task_info = info;
         self
     }
 

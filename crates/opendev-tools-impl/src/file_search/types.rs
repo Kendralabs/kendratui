@@ -75,16 +75,22 @@ impl SearchArgs {
 
         Ok(Self {
             pattern,
-            path: args.get("path").and_then(|v| v.as_str()).map(String::from),
+            path: args
+                .get("path")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(String::from),
             glob: args
                 .get("glob")
                 .or_else(|| args.get("include"))
                 .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
                 .map(String::from),
             file_type: args
                 .get("type")
                 .or_else(|| args.get("file_type"))
                 .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
                 .map(String::from),
             case_insensitive: args.get("-i").and_then(|v| v.as_bool()).unwrap_or(false),
             multiline: args

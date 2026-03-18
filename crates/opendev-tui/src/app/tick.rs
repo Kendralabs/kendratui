@@ -122,6 +122,13 @@ impl App {
             self.state.last_task_completion = None;
         }
 
+        // Clear backgrounded task info after 3 seconds
+        if let Some((_, when)) = &self.state.backgrounded_task_info
+            && when.elapsed() > Duration::from_secs(3)
+        {
+            self.state.backgrounded_task_info = None;
+        }
+
         // Auto-scroll if user hasn't manually scrolled up
         if !self.state.user_scrolled {
             self.state.scroll_offset = 0;

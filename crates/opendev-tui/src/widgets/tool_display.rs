@@ -14,17 +14,26 @@ use ratatui::{
 
 use crate::app::ToolExecution;
 use crate::formatters::style_tokens;
-use crate::formatters::tool_registry::format_tool_call_parts;
+use crate::formatters::tool_registry::format_tool_call_parts_with_wd;
 use crate::widgets::spinner::{COMPLETED_CHAR, SPINNER_FRAMES};
 
 /// Widget that displays active tool executions.
 pub struct ToolDisplayWidget<'a> {
     tools: &'a [ToolExecution],
+    working_dir: Option<&'a str>,
 }
 
 impl<'a> ToolDisplayWidget<'a> {
     pub fn new(tools: &'a [ToolExecution]) -> Self {
-        Self { tools }
+        Self {
+            tools,
+            working_dir: None,
+        }
+    }
+
+    pub fn working_dir(mut self, wd: &'a str) -> Self {
+        self.working_dir = Some(wd);
+        self
     }
 }
 
@@ -60,7 +69,8 @@ impl Widget for ToolDisplayWidget<'_> {
             };
 
             // Tool header with elapsed time
-            let (verb, arg) = format_tool_call_parts(&tool.name, &tool.args);
+            let (verb, arg) =
+                format_tool_call_parts_with_wd(&tool.name, &tool.args, self.working_dir);
             let elapsed_str = format!(" ({}s)", tool.elapsed_secs);
 
             lines.push(Line::from(vec![

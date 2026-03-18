@@ -76,7 +76,9 @@ impl App {
         if self.state.task_watcher_open {
             let task_count = self.collect_unified_tasks().len();
             match (key.modifiers, key.code) {
-                (_, KeyCode::Char('q')) | (_, KeyCode::Esc) => {
+                (_, KeyCode::Char('q'))
+                | (_, KeyCode::Esc)
+                | (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
                     self.state.task_watcher_open = false;
                 }
                 (_, KeyCode::Char('j')) | (_, KeyCode::Down) => {
@@ -550,8 +552,9 @@ impl App {
                     self.state.dirty = true;
                 }
             }
-            // Alt+B — toggle task watcher panel
-            (KeyModifiers::ALT, KeyCode::Char('b')) => {
+            // Alt+B / Ctrl+P — toggle task watcher panel
+            (KeyModifiers::ALT, KeyCode::Char('b'))
+            | (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
                 self.state.task_watcher_open = !self.state.task_watcher_open;
                 if self.state.task_watcher_open {
                     self.state.task_watcher_selected = 0;
@@ -559,7 +562,7 @@ impl App {
                     self.state.task_watcher_focus = TaskWatcherFocus::List;
                 }
             }
-            // Ctrl+B — background running agent or toggle panel
+            // Ctrl+B — background running agent (no-op when idle)
             (KeyModifiers::CONTROL, KeyCode::Char('b')) => {
                 if self.state.agent_active && !self.state.backgrounding_pending {
                     // Background the running agent
@@ -572,9 +575,6 @@ impl App {
                         token.request_background();
                         self.state.backgrounding_pending = true;
                     }
-                } else {
-                    // Toggle background panel (existing behavior)
-                    self.state.background_panel_open = !self.state.background_panel_open;
                 }
                 self.state.dirty = true;
             }

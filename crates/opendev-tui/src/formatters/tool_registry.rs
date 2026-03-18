@@ -469,7 +469,9 @@ pub fn format_tool_call_display(
 
 /// Strip the working directory prefix from a path to show relative paths.
 ///
+/// Priority: working_dir prefix → `relative`, then home dir → `~/…`, else as-is.
 /// E.g., `/Users/me/project/src/main.rs` with working_dir `/Users/me/project` → `src/main.rs`
+///       `/Users/me/other/file.rs` → `~/other/file.rs`
 fn make_relative(path: &str, working_dir: Option<&str>) -> String {
     if let Some(wd) = working_dir
         && !wd.is_empty()
@@ -484,7 +486,23 @@ fn make_relative(path: &str, working_dir: Option<&str>) -> String {
     }
     // Strip leading "./" for cleaner display — LLMs sometimes produce these
     let cleaned = path.strip_prefix("./").unwrap_or(path);
-    cleaned.to_string()
+    // Replace home directory with ~ for paths outside the working dir
+    shorten_home(cleaned)
+}
+
+/// Replace the user's home directory prefix with `~`.
+fn shorten_home(path: &str) -> String {
+    if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy();
+        if let Some(rest) = path.strip_prefix(home_str.as_ref()) {
+            let rest = rest.strip_prefix('/').unwrap_or(rest);
+            if rest.is_empty() {
+                return "~".to_string();
+            }
+            return format!("~/{rest}");
+        }
+    }
+    path.to_string()
 }
 
 /// Replace working directory paths in free-form text with relative equivalents.
@@ -494,7 +512,7 @@ fn make_relative(path: &str, working_dir: Option<&str>) -> String {
 pub fn replace_wd_in_text(text: &str, working_dir: Option<&str>) -> String {
     let wd = match working_dir {
         Some(w) if !w.is_empty() => w,
-        _ => return text.to_string(),
+        _ => return replace_home_in_text(text),
     };
     // Pass 1: replace "wd/" → "" (slash is a natural boundary)
     let wd_slash = format!("{wd}/");
@@ -518,7 +536,39 @@ pub fn replace_wd_in_text(text: &str, working_dir: Option<&str>) -> String {
         remaining = after;
     }
     out.push_str(remaining);
-    out
+    // Pass 3: replace remaining home dir paths with ~/...
+    replace_home_in_text(&out)
+}
+
+/// Replace the user's home directory prefix with `~` in free-form text.
+fn replace_home_in_text(text: &str) -> String {
+    if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy();
+        let home_slash = format!("{}/", home_str);
+        // Replace "home/" → "~/" first (slash is a natural boundary)
+        let result = text.replace(&home_slash, "~/");
+        // Then replace standalone home dir at boundaries
+        let mut out = String::with_capacity(result.len());
+        let mut remaining = result.as_str();
+        while let Some(pos) = remaining.find(home_str.as_ref()) {
+            out.push_str(&remaining[..pos]);
+            let after = &remaining[pos + home_str.len()..];
+            let extends_path = after
+                .as_bytes()
+                .first()
+                .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.');
+            if extends_path {
+                out.push_str(&home_str); // not a boundary — keep original
+            } else {
+                out.push('~'); // boundary — replace with "~"
+            }
+            remaining = after;
+        }
+        out.push_str(remaining);
+        out
+    } else {
+        text.to_string()
+    }
 }
 
 /// Format a tool call into separate verb and arg parts.
@@ -777,9 +827,44 @@ mod tests {
 
     #[test]
     fn test_replace_wd_in_text_no_working_dir() {
-        let text = "some text /Users/me/project/file.rs";
-        assert_eq!(replace_wd_in_text(text, None), text);
-        assert_eq!(replace_wd_in_text(text, Some("")), text);
+        // With no working dir, home dir paths should still be shortened
+        let home = dirs::home_dir().unwrap();
+        let home_str = home.to_string_lossy();
+        let text = format!("some text {home_str}/project/file.rs");
+        let result = replace_wd_in_text(&text, None);
+        assert_eq!(result, "some text ~/project/file.rs");
+
+        let text2 = format!("some text {home_str}/project/file.rs");
+        let result2 = replace_wd_in_text(&text2, Some(""));
+        assert_eq!(result2, "some text ~/project/file.rs");
+    }
+
+    #[test]
+    fn test_make_relative_home_dir_fallback() {
+        // Paths outside working dir but under home should use ~/...
+        let home = dirs::home_dir().unwrap();
+        let home_str = home.to_string_lossy();
+        let path = format!("{home_str}/other-project/src/main.rs");
+        let result = make_relative(&path, Some(&format!("{home_str}/my-project")));
+        assert_eq!(result, "~/other-project/src/main.rs");
+    }
+
+    #[test]
+    fn test_make_relative_home_dir_itself() {
+        let home = dirs::home_dir().unwrap();
+        let home_str = home.to_string_lossy();
+        let result = make_relative(&home_str, Some("/some/other/dir"));
+        assert_eq!(result, "~");
+    }
+
+    #[test]
+    fn test_replace_wd_in_text_home_fallback_after_wd() {
+        // Paths outside wd but under home should become ~/...
+        let home = dirs::home_dir().unwrap();
+        let home_str = home.to_string_lossy();
+        let text = format!("List({home_str}/other-project)");
+        let result = replace_wd_in_text(&text, Some(&format!("{home_str}/my-project")));
+        assert_eq!(result, "List(~/other-project)");
     }
 
     #[test]

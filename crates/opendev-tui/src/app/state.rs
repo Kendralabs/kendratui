@@ -60,8 +60,8 @@ pub struct AppState {
     pub autocomplete: crate::autocomplete::AutocompleteEngine,
     /// Number of running background tasks.
     pub background_task_count: usize,
-    /// Whether the background task panel overlay is open.
-    pub background_panel_open: bool,
+    /// Info about a recently-backgrounded task: (task_id, when).
+    pub backgrounded_task_info: Option<(String, Instant)>,
     /// Active subagent executions for nested display.
     pub active_subagents: Vec<crate::widgets::nested_tool::SubagentDisplayState>,
     /// Shared todo manager for syncing panel state with tool results.
@@ -168,7 +168,7 @@ impl Default for AppState {
                 std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             ),
             background_task_count: 0,
-            background_panel_open: false,
+            backgrounded_task_info: None,
             active_subagents: Vec::new(),
             todo_manager: None,
             todo_items: Vec::new(),
