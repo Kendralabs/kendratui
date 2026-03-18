@@ -490,10 +490,10 @@ impl super::base::ProviderAdapter for AnthropicAdapter {
             && supports_thinking(&model)
         {
             let budget_tokens: u64 = match effort.as_str() {
-                "low" => 4096,
-                "medium" => 10000,
-                "high" => 20000,
-                _ => 10000,
+                "low" => 4000,
+                "medium" => 16000,
+                "high" => 31999,
+                _ => 16000,
             };
             payload["thinking"] = json!({
                 "type": "enabled",
@@ -805,7 +805,7 @@ mod tests {
         });
         let result = adapter.convert_request(payload);
         assert_eq!(result["thinking"]["type"], "enabled");
-        assert_eq!(result["thinking"]["budget_tokens"], 10000);
+        assert_eq!(result["thinking"]["budget_tokens"], 16000);
         assert_eq!(result["temperature"], 1);
         // _reasoning_effort should be stripped
         assert!(result.get("_reasoning_effort").is_none());
@@ -867,7 +867,7 @@ mod tests {
             "max_tokens": 1024
         });
         let result = adapter.convert_request(payload);
-        // budget_tokens for "high" is 20000, so max_tokens should be at least 21024
-        assert!(result["max_tokens"].as_u64().unwrap() >= 21024);
+        // budget_tokens for "high" is 31999, so max_tokens should be at least 33023
+        assert!(result["max_tokens"].as_u64().unwrap() >= 33023);
     }
 }
