@@ -86,15 +86,17 @@ impl<'a> ConversationWidget<'a> {
                             self.active_subagents.iter().find(|s| s.task == tool_task)
                         });
                     let (agent_name, task_desc) = if let Some(sa) = subagent {
-                        (sa.name.clone(), sa.task.clone())
+                        (sa.name.clone(), sa.display_label().to_string())
                     } else {
                         let name = tool
                             .args
                             .get("agent_type")
                             .and_then(|v| v.as_str())
                             .unwrap_or("Agent");
-                        let task = tool.args.get("task").and_then(|v| v.as_str()).unwrap_or("");
-                        (name.to_string(), task.to_string())
+                        let desc = tool.args.get("description").and_then(|v| v.as_str())
+                            .or_else(|| tool.args.get("task").and_then(|v| v.as_str()))
+                            .unwrap_or("");
+                        (name.to_string(), desc.to_string())
                     };
 
                     let task_desc = shortener.shorten_text(&task_desc);

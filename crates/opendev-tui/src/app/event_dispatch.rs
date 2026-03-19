@@ -125,11 +125,13 @@ impl App {
             }
             AppEvent::AgentFinished => {
                 self.state.agent_active = false;
+                self.state.backgrounding_pending = false;
                 self.state.dirty = true;
                 self.drain_next_pending_message();
             }
             AppEvent::AgentError(err) => {
                 self.state.agent_active = false;
+                self.state.backgrounding_pending = false;
                 self.state.messages.push(DisplayMessage {
                     role: DisplayRole::System,
                     content: format!("Error: {err}"),
@@ -187,6 +189,7 @@ impl App {
                         task,
                     );
                     sa.parent_tool_id = Some(tool_id.clone());
+                    sa.description = args.get("description").and_then(|v| v.as_str()).map(String::from);
                     self.state.active_subagents.push(sa);
                 }
 
@@ -652,6 +655,7 @@ impl App {
                         token.request(); // Signals all layers simultaneously
                     }
                     self.state.agent_active = false;
+                    self.state.backgrounding_pending = false;
                     self.state.pending_messages.clear();
                 }
                 self.state.dirty = true;
@@ -661,6 +665,7 @@ impl App {
             }
             AppEvent::AgentInterrupted => {
                 self.state.agent_active = false;
+                self.state.backgrounding_pending = false;
                 self.state.task_progress = None;
                 // Clear active tools
                 self.state.active_tools.clear();

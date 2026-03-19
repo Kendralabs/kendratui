@@ -133,6 +133,11 @@ impl BaseTool for SpawnSubagentTool {
                                     targets a different directory than the current project \
                                     (e.g., exploring another codebase at a specific path). \
                                     The subagent's tools will resolve relative paths from this directory."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "A short (3-8 word) summary of the task for display. \
+                                    Examples: 'Trace tool_call_count updates', 'Find auth middleware chain'."
                 }
             },
             "required": ["agent_type", "task"]

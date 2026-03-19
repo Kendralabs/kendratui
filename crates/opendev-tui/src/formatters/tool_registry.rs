@@ -118,7 +118,7 @@ static TOOL_REGISTRY: &[ToolDisplayEntry] = &[
         result_format: ResultFormat::File,
     },
     ToolDisplayEntry {
-        names: &["patch_file"],
+        names: &["patch_file", "patch"],
         category: ToolCategory::FileWrite,
         verb: "Patch",
         label: "file",
@@ -153,7 +153,7 @@ static TOOL_REGISTRY: &[ToolDisplayEntry] = &[
     },
     // Web tools
     ToolDisplayEntry {
-        names: &["fetch_url"],
+        names: &["fetch_url", "web_fetch"],
         category: ToolCategory::Web,
         verb: "Fetch",
         label: "url",
@@ -177,7 +177,7 @@ static TOOL_REGISTRY: &[ToolDisplayEntry] = &[
         result_format: ResultFormat::Generic,
     },
     ToolDisplayEntry {
-        names: &["capture_web_screenshot"],
+        names: &["capture_web_screenshot", "web_screenshot"],
         category: ToolCategory::Web,
         verb: "Capture Web Screenshot",
         label: "page",
@@ -333,6 +333,15 @@ static TOOL_REGISTRY: &[ToolDisplayEntry] = &[
         primary_arg_keys: &["path", "file_path"],
         result_format: ResultFormat::File,
     },
+    // Batch
+    ToolDisplayEntry {
+        names: &["batch_tool"],
+        category: ToolCategory::Other,
+        verb: "Batch",
+        label: "tools",
+        primary_arg_keys: &["invocations"],
+        result_format: ResultFormat::Generic,
+    },
     // Misc
     ToolDisplayEntry {
         names: &["invoke_skill"],
@@ -349,7 +358,7 @@ static DEFAULT_ENTRY: ToolDisplayEntry = ToolDisplayEntry {
     names: &[],
     category: ToolCategory::Other,
     verb: "Call",
-    label: "tool",
+    label: "",
     primary_arg_keys: &[
         "command",
         "file_path",
@@ -515,6 +524,16 @@ fn format_parts_inner(
 ) -> (String, String) {
     let entry = lookup_tool(tool_name);
 
+    // Special case: batch_tool shows tool count
+    if tool_name == "batch_tool" {
+        let count = args
+            .get("invocations")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        return ("Batch".to_string(), format!("{count} tool calls"));
+    }
+
     // Special case: spawn_subagent shows "AgentType(task_summary)" instead of "Spawn(subagent)"
     if tool_name == "spawn_subagent" {
         let verb = args
@@ -531,7 +550,7 @@ fn format_parts_inner(
             })
             .unwrap_or_else(|| "Agent".to_string());
         let task =
-            extract_arg_from_keys(&["task"], args).unwrap_or_else(|| "working...".to_string());
+            extract_arg_from_keys(&["description", "task"], args).unwrap_or_else(|| "working...".to_string());
         return (verb, task);
     }
 
@@ -577,7 +596,30 @@ fn format_parts_inner(
         }
     }
 
-    // Fallback: verb(label)
+    // Fallback for unknown tools: derive display from tool_name itself
+    // e.g. "batch_tool" → "Batch Tool", "web_fetch" → "Web Fetch"
+    if entry.verb == "Call" {
+        let pretty_name = tool_name
+            .replace('_', " ")
+            .split_whitespace()
+            .map(|w| {
+                let mut c = w.chars();
+                match c.next() {
+                    Some(ch) => format!("{}{}", ch.to_uppercase(), c.as_str()),
+                    None => String::new(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if let Some(arg) = extract_arg_from_keys(entry.primary_arg_keys, args) {
+            return (pretty_name, arg);
+        }
+
+        return (pretty_name, String::new());
+    }
+
+    // Known tool with no arg extracted: verb(label)
     (entry.verb.to_string(), entry.label.to_string())
 }
 
@@ -620,6 +662,8 @@ mod tests {
         assert_eq!(tool_display_parts("read_file"), ("Read", "file"));
         assert_eq!(tool_display_parts("run_command"), ("Bash", "command"));
         assert_eq!(tool_display_parts("mcp__something"), ("MCP", "tool"));
+        // Unknown tools still return DEFAULT_ENTRY with empty label
+        assert_eq!(tool_display_parts("unknown_xyz"), ("Call", ""));
     }
 
     #[test]
@@ -694,7 +738,39 @@ mod tests {
         let entry = lookup_tool("completely_unknown");
         assert_eq!(entry.category, ToolCategory::Other);
         assert_eq!(entry.verb, "Call");
-        assert_eq!(entry.label, "tool");
+        assert_eq!(entry.label, "");
+    }
+
+    #[test]
+    fn test_unknown_tool_derives_pretty_name() {
+        let args = HashMap::new();
+        let (verb, arg) = format_tool_call_parts("some_fancy_tool", &args);
+        assert_eq!(verb, "Some Fancy Tool");
+        assert_eq!(arg, "");
+    }
+
+    #[test]
+    fn test_unknown_tool_with_arg() {
+        let mut args = HashMap::new();
+        args.insert(
+            "command".to_string(),
+            serde_json::Value::String("do stuff".to_string()),
+        );
+        let (verb, arg) = format_tool_call_parts("my_tool", &args);
+        assert_eq!(verb, "My Tool");
+        assert_eq!(arg, "do stuff");
+    }
+
+    #[test]
+    fn test_batch_tool_display() {
+        let mut args = HashMap::new();
+        args.insert(
+            "invocations".to_string(),
+            serde_json::json!([{"tool": "read_file"}, {"tool": "edit_file"}, {"tool": "bash"}]),
+        );
+        let (verb, arg) = format_tool_call_parts("batch_tool", &args);
+        assert_eq!(verb, "Batch");
+        assert_eq!(arg, "3 tool calls");
     }
 
     #[test]
