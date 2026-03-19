@@ -246,13 +246,18 @@ impl ReactLoop {
             let streaming = http_client.supports_streaming();
             debug!(streaming, "LLM call mode");
             let http_result = if streaming {
-                // Use SSE streaming — fires callbacks as chunks arrive
+                // Use SSE streaming — fires callbacks as chunks arrive.
+                // After a completion nudge, suppress text output so the
+                // nudge's verification response is not shown to the user.
                 let cb = event_callback;
+                let suppress_text = completion_nudge_sent;
                 let stream_cb = opendev_http::streaming::FnStreamCallback(|event| {
                     use opendev_http::streaming::StreamEvent;
                     match event {
                         StreamEvent::TextDelta(text) => {
-                            if let Some(cb) = cb {
+                            if !suppress_text
+                                && let Some(cb) = cb
+                            {
                                 cb.on_agent_chunk(text);
                             }
                         }
