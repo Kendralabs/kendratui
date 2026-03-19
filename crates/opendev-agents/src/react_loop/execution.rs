@@ -721,8 +721,12 @@ impl ReactLoop {
                                 .filter(|c| !c.trim().is_empty())
                                 .map(|c| c.to_string())
                                 .unwrap_or(summary);
-                            // Emit as agent chunk so TUI displays it
-                            if let Some(cb) = event_callback {
+                            // Emit as agent chunk so TUI displays it — but
+                            // skip if streaming already delivered the content
+                            // via TextDelta callbacks.
+                            if !streaming
+                                && let Some(cb) = event_callback
+                            {
                                 cb.on_agent_chunk(&display_text);
                             }
                             iter_metrics.total_duration_ms =
