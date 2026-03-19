@@ -445,11 +445,7 @@ fn extract_arg_from_keys(
         if let Some(val) = args.get(*key)
             && let Some(s) = val.as_str()
         {
-            let display = s.replace('\n', " ");
-            if display.len() > 80 {
-                return Some(format!("{}...", &display[..77]));
-            }
-            return Some(display);
+            return Some(s.replace('\n', " "));
         }
     }
 
@@ -502,7 +498,13 @@ pub fn format_tool_call_parts_short(
     shortener: &super::path_shortener::PathShortener,
 ) -> (String, String) {
     let (verb, arg) = format_parts_inner(tool_name, args, shortener);
-    (verb, shortener.shorten_text(&arg))
+    let shortened = shortener.shorten_text(&arg);
+    let truncated = if shortened.len() > 80 {
+        format!("{}...", &shortened[..77])
+    } else {
+        shortened
+    };
+    (verb, truncated)
 }
 
 /// Inner implementation of tool call formatting (before universal path replacement).
