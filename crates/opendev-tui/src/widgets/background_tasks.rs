@@ -122,7 +122,9 @@ impl Widget for TaskWatcherPanel<'_> {
         let filtered_bg = self.filtered_bg_tasks();
         let filtered_bg_running = filtered_bg
             .iter()
-            .filter(|t| t.state == crate::managers::background_agents::BackgroundAgentState::Running)
+            .filter(|t| {
+                t.state == crate::managers::background_agents::BackgroundAgentState::Running
+            })
             .count();
         let running_count =
             self.subagents.iter().filter(|s| !s.finished).count() + filtered_bg_running;
@@ -320,17 +322,15 @@ fn render_cell(data: &TaskCellData, area: Rect, buf: &mut Buffer) {
     }
 
     // Build display lines, flattening embedded newlines
-    let lines: Vec<String> = data
-        .activity
-        .iter()
-        .map(|s| s.replace('\n', " "))
-        .collect();
+    let lines: Vec<String> = data.activity.iter().map(|s| s.replace('\n', " ")).collect();
 
     let visible_h = content_area.height as usize;
     let total_lines = lines.len();
 
     // Compute visible window (default: auto-scroll to bottom, scroll_offset scrolls up)
-    let scroll_up = data.scroll_offset.min(total_lines.saturating_sub(visible_h));
+    let scroll_up = data
+        .scroll_offset
+        .min(total_lines.saturating_sub(visible_h));
     let end = total_lines.saturating_sub(scroll_up);
     let start = end.saturating_sub(visible_h);
 
@@ -396,10 +396,7 @@ fn build_subagent_cell(
     } else {
         let slow_tick = spinner_tick / 3;
         let idx = slow_tick % SPINNER_FRAMES.len();
-        (
-            SPINNER_FRAMES[idx].to_string(),
-            style_tokens::BLUE_BRIGHT,
-        )
+        (SPINNER_FRAMES[idx].to_string(), style_tokens::BLUE_BRIGHT)
     };
 
     let label = sa.display_label();
@@ -409,7 +406,8 @@ fn build_subagent_cell(
     let mut activity: Vec<String> = Vec::new();
 
     for completed in &sa.completed_tools {
-        let (verb, arg) = format_tool_call_parts_short(&completed.tool_name, &completed.args, shortener);
+        let (verb, arg) =
+            format_tool_call_parts_short(&completed.tool_name, &completed.args, shortener);
         let icon_ch = if completed.success {
             SUCCESS_CHAR
         } else {
@@ -419,7 +417,8 @@ fn build_subagent_cell(
     }
 
     for tool_state in sa.active_tools.values() {
-        let (verb, arg) = format_tool_call_parts_short(&tool_state.tool_name, &tool_state.args, shortener);
+        let (verb, arg) =
+            format_tool_call_parts_short(&tool_state.tool_name, &tool_state.args, shortener);
         let slow_tick = tool_state.tick / 3;
         let spinner_idx = slow_tick % SPINNER_FRAMES.len();
         let spinner_ch = SPINNER_FRAMES[spinner_idx];
@@ -525,7 +524,9 @@ fn build_bg_agent_cell(
     let footer = format!("{status_str} {elapsed_str} {} tools", task.tool_call_count);
     let footer_color = match task.state {
         crate::managers::background_agents::BackgroundAgentState::Running => style_tokens::SUBTLE,
-        crate::managers::background_agents::BackgroundAgentState::Completed => style_tokens::SUCCESS,
+        crate::managers::background_agents::BackgroundAgentState::Completed => {
+            style_tokens::SUCCESS
+        }
         _ => style_tokens::ERROR,
     };
 

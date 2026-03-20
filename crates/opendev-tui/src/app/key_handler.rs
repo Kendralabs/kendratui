@@ -108,10 +108,16 @@ impl App {
             return;
         }
 
+        // [DIAG] Log all keys received while task watcher is open
+        if self.state.task_watcher_open {
+            tracing::warn!("[DIAG] key while watcher open: code={:?} modifiers={:?} kind={:?}", key.code, key.modifiers, key.kind);
+        }
+
         // Ctrl+B — background agent: handle before any modal can swallow it
         if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('b') {
             // If task watcher is open, Ctrl+B closes it
             if self.state.task_watcher_open {
+                tracing::warn!("[DIAG] Ctrl+B closing task_watcher, was={}", self.state.task_watcher_open);
                 self.state.task_watcher_open = false;
                 self.state.force_clear = true;
                 self.state.dirty = true;
@@ -120,6 +126,32 @@ impl App {
             if self.try_background_agent() {
                 // Dismiss any active modal with a permissive response to unblock the react loop
                 self.dismiss_modals_for_background();
+            }
+            self.state.dirty = true;
+            return;
+        }
+
+        // Ctrl+P — toggle task watcher panel: handle before any modal can swallow it
+        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('p') {
+            if self.state.task_watcher_open {
+                tracing::warn!("[DIAG] Ctrl+P closing task_watcher, was={}", self.state.task_watcher_open);
+                self.state.task_watcher_open = false;
+                self.state.force_clear = true;
+            } else {
+                let has_bg_subagents =
+                    self.state.active_subagents.iter().any(|s| s.backgrounded);
+                let has_bg_agents = !self.state.bg_agent_manager.all_tasks().is_empty();
+                if has_bg_subagents || has_bg_agents {
+                    self.state.task_watcher_open = true;
+                    self.state.task_watcher_focus = 0;
+                    self.state.task_watcher_cell_scrolls.clear();
+                    self.state.task_watcher_page = 0;
+                } else {
+                    use crate::widgets::toast::{Toast, ToastLevel};
+                    self.state
+                        .toasts
+                        .push(Toast::new("No background tasks", ToastLevel::Info));
+                }
             }
             self.state.dirty = true;
             return;
@@ -184,7 +216,8 @@ impl App {
                 // Close
                 (_, KeyCode::Char('q'))
                 | (_, KeyCode::Esc)
-                | (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
+                | (KeyModifiers::ALT, KeyCode::Char('b')) => {
+                    tracing::warn!("[DIAG] overlay q/Esc/Alt+B closing task_watcher, modifiers={:?} code={:?}", key.modifiers, key.code);
                     self.state.task_watcher_open = false;
                     self.state.force_clear = true;
                 }
@@ -723,9 +756,8 @@ impl App {
                     self.state.dirty = true;
                 }
             }
-            // Alt+B / Ctrl+P — toggle task watcher subpanel
-            (KeyModifiers::ALT, KeyCode::Char('b'))
-            | (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
+            // Alt+B — toggle task watcher subpanel
+            (KeyModifiers::ALT, KeyCode::Char('b')) => {
                 if self.state.task_watcher_open {
                     self.state.task_watcher_open = false;
                     self.state.force_clear = true;
@@ -861,19 +893,19 @@ mod tests {
         assert_eq!(app.state.scroll_offset, 1);
         assert_eq!(app.state.scroll_accel_level, 0);
 
-        // Immediate second press (within 200ms): accelerates to 3
+        // Immediate second press (within 200ms): accelerates to 2
         app.handle_key(up);
-        assert_eq!(app.state.scroll_offset, 4); // 1 + 3
+        assert_eq!(app.state.scroll_offset, 3); // 1 + 2
         assert_eq!(app.state.scroll_accel_level, 1);
 
-        // Third press: accelerates to 6
+        // Third press: accelerates to 3
         app.handle_key(up);
-        assert_eq!(app.state.scroll_offset, 10); // 4 + 6
+        assert_eq!(app.state.scroll_offset, 6); // 3 + 3
         assert_eq!(app.state.scroll_accel_level, 2);
 
-        // Fourth press: stays at 6 (capped)
+        // Fourth press: stays at 3 (capped)
         app.handle_key(up);
-        assert_eq!(app.state.scroll_offset, 16); // 10 + 6
+        assert_eq!(app.state.scroll_offset, 9); // 6 + 3
         assert_eq!(app.state.scroll_accel_level, 2);
     }
 
@@ -889,12 +921,12 @@ mod tests {
         app.handle_key(up);
         app.handle_key(up);
         assert_eq!(app.state.scroll_accel_level, 1);
-        assert_eq!(app.state.scroll_offset, 4); // 1 + 3
+        assert_eq!(app.state.scroll_offset, 3); // 1 + 2
 
         // Direction change resets acceleration
         app.handle_key(down);
         assert_eq!(app.state.scroll_accel_level, 0);
-        assert_eq!(app.state.scroll_offset, 3); // 4 - 1
+        assert_eq!(app.state.scroll_offset, 2); // 3 - 1
     }
 
     #[test]

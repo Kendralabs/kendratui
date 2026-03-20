@@ -209,9 +209,7 @@ impl ToolRegistry {
         }
 
         // Cache result for dedup
-        if !skip_dedup
-            && let Ok(mut cache) = self.dedup_cache.lock()
-        {
+        if !skip_dedup && let Ok(mut cache) = self.dedup_cache.lock() {
             cache.insert(dedup_key, result.clone());
         }
 

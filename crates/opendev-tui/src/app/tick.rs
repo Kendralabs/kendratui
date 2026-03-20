@@ -24,8 +24,8 @@ impl App {
 
         match self.state.scroll_accel_level {
             0 => 1,
-            1 => 3,
-            _ => 6,
+            1 => 2,
+            _ => 3,
         }
     }
 
@@ -166,6 +166,7 @@ impl App {
             {
                 self.state.task_watcher_open = false;
                 self.state.task_watcher_all_done_at = None;
+                self.state.force_clear = true;
             }
         }
 

@@ -545,8 +545,7 @@ impl ReactLoop {
                             "Your previous response was truncated due to output token limit. \
                              Continue from where you left off.",
                         );
-                        iter_metrics.total_duration_ms =
-                            iter_start.elapsed().as_millis() as u64;
+                        iter_metrics.total_duration_ms = iter_start.elapsed().as_millis() as u64;
                         self.push_metrics(iter_metrics);
                         continue;
                     }
@@ -1251,7 +1250,8 @@ impl ReactLoop {
                                 "name": tool_name,
                                 "content": "Agent spawned successfully. Running independently in the background.",
                             }));
-                            iter_metrics.total_duration_ms = iter_start.elapsed().as_millis() as u64;
+                            iter_metrics.total_duration_ms =
+                                iter_start.elapsed().as_millis() as u64;
                             self.push_metrics(iter_metrics);
                             return Ok(AgentResult::backgrounded(messages.clone()));
                         }

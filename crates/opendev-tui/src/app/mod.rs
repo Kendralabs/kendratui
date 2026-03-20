@@ -211,6 +211,7 @@ impl App {
             // Double swap_buffers resets both internal buffers → next draw() rewrites
             // every cell (full repaint) without any terminal escape sequences.
             if self.state.force_clear {
+                tracing::warn!("[DIAG] processing force_clear, task_watcher_open={}", self.state.task_watcher_open);
                 // Re-enable alternate scroll mode after focus regain (some terminals
                 // reset it on focus change).
                 {

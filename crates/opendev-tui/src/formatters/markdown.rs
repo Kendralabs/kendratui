@@ -131,6 +131,34 @@ impl MarkdownRenderer {
                 continue;
             }
 
+            // Horizontal rules (---, ***, ___)
+            if is_horizontal_rule(raw_line) {
+                let rule: Cow<'static, str> = Cow::Borrowed("────────────────────────────────");
+                lines.push(Line::from(Span::styled(
+                    rule,
+                    Style::default()
+                        .fg(style_tokens::GREY)
+                        .add_modifier(base_mod),
+                )));
+                continue;
+            }
+
+            // Blockquotes (> text)
+            if let Some(quote_content) = raw_line
+                .strip_prefix("> ")
+                .or_else(|| if raw_line == ">" { Some("") } else { None })
+            {
+                let mut spans = vec![Span::styled(
+                    Cow::<'static, str>::Borrowed("  │ "),
+                    Style::default()
+                        .fg(style_tokens::GREY)
+                        .add_modifier(base_mod),
+                )];
+                spans.extend(parse_inline_spans_with_palette(quote_content, palette));
+                lines.push(Line::from(spans));
+                continue;
+            }
+
             // Headers
             if let Some(header) = raw_line.strip_prefix("### ") {
                 let h: Cow<'static, str> = Cow::Owned(header.to_string());
@@ -317,6 +345,18 @@ fn parse_inline_spans_with_palette(text: &str, palette: &MdPalette) -> Vec<Span<
     }
 
     spans
+}
+
+/// Check if a line is a horizontal rule (---, ***, ___).
+fn is_horizontal_rule(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.len() < 3 {
+        return false;
+    }
+    let first = trimmed.chars().next().unwrap();
+    matches!(first, '-' | '*' | '_')
+        && trimmed.chars().all(|c| c == first || c == ' ')
+        && trimmed.chars().filter(|&c| c == first).count() >= 3
 }
 
 /// Parse bold markers with a custom palette.
