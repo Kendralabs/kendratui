@@ -2,10 +2,8 @@
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
-use crate::event::AppEvent;
-use crate::widgets::TaskWatcherFocus;
-
 use super::{App, AutonomyLevel, OperationMode};
+use crate::event::AppEvent;
 
 impl App {
     fn next_char_boundary(s: &str, pos: usize) -> usize {
@@ -30,8 +28,23 @@ impl App {
     }
 
     /// Attempt to background the running agent. Returns true if initiated.
+    /// Only allowed when a bash/run_command/spawn_subagent tool is actively running.
     fn try_background_agent(&mut self) -> bool {
         if !self.state.agent_active || self.state.backgrounding_pending {
+            return false;
+        }
+        // Only allow backgrounding when a bash tool or subagent is actively running
+        let has_backgroundable = self
+            .state
+            .active_tools
+            .iter()
+            .any(|t| t.name == "bash" || t.name == "run_command" || t.name == "spawn_subagent");
+        if !has_backgroundable {
+            use crate::widgets::toast::{Toast, ToastLevel};
+            self.state.toasts.push(Toast::new(
+                "No backgroundable task running".to_string(),
+                ToastLevel::Warning,
+            ));
             return false;
         }
         if !self.state.bg_agent_manager.can_accept() {
@@ -46,9 +59,7 @@ impl App {
             self.state.backgrounding_pending = true;
             true
         } else {
-            self.push_system_message(
-                "Cannot background: agent token not ready yet.".to_string(),
-            );
+            self.push_system_message("Cannot background: agent token not ready yet.".to_string());
             false
         }
     }
@@ -114,8 +125,9 @@ impl App {
                 KeyCode::Enter => {
                     if let Some(selected) = picker.select() {
                         self.state.model = selected.id.clone();
-                        self.push_system_message(format!(
-                            "Model switched to: {} ({})",
+                        self.push_slash_echo("/models");
+                        self.push_command_result(format!(
+                            "Model set to {} ({})",
                             selected.name, selected.provider_display
                         ));
                         // Reset reasoning level — new model may have different support
@@ -139,94 +151,108 @@ impl App {
             return;
         }
 
-        // Delegate to task watcher panel when open
+        // Delegate to task watcher overlay when open — consume all keys
         if self.state.task_watcher_open {
-            let task_count = self.collect_unified_tasks().len();
+            // Compute covered bg task IDs (parent tasks with backgrounded subagents)
+            let covered_bg_task_ids: std::collections::HashSet<&String> = self
+                .state
+                .active_subagents
+                .iter()
+                .filter(|s| s.backgrounded && !s.finished)
+                .filter_map(|s| self.state.bg_subagent_map.get(&s.subagent_id))
+                .collect();
+            let filtered_bg_count = self
+                .state
+                .bg_agent_manager
+                .all_tasks()
+                .iter()
+                .filter(|t| !covered_bg_task_ids.contains(&t.task_id))
+                .count();
+            let total_tasks = self.state.active_subagents.len() + filtered_bg_count;
+
             match (key.modifiers, key.code) {
+                // Close
                 (_, KeyCode::Char('q'))
                 | (_, KeyCode::Esc)
                 | (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
                     self.state.task_watcher_open = false;
                 }
-                (_, KeyCode::Char('j')) | (_, KeyCode::Down) => {
-                    if task_count > 0 {
-                        self.state.task_watcher_selected =
-                            (self.state.task_watcher_selected + 1) % task_count;
-                        self.state.task_watcher_output_scroll = 0;
+
+                // Focus navigation: left
+                (_, KeyCode::Char('h')) | (_, KeyCode::Left) => {
+                    if self.state.task_watcher_focus > 0 {
+                        self.state.task_watcher_focus -= 1;
                     }
                 }
+                // Focus navigation: right
+                (_, KeyCode::Char('l')) | (_, KeyCode::Right) => {
+                    if total_tasks > 0 {
+                        self.state.task_watcher_focus =
+                            (self.state.task_watcher_focus + 1).min(total_tasks - 1);
+                    }
+                }
+                // Focus navigation: up (move by cols)
                 (_, KeyCode::Char('k')) | (_, KeyCode::Up) => {
-                    if task_count > 0 {
-                        self.state.task_watcher_selected = if self.state.task_watcher_selected == 0
-                        {
-                            task_count - 1
-                        } else {
-                            self.state.task_watcher_selected - 1
-                        };
-                        self.state.task_watcher_output_scroll = 0;
+                    let cols = crate::widgets::background_tasks::compute_grid_cols(
+                        total_tasks,
+                        self.state.terminal_width,
+                    );
+                    if self.state.task_watcher_focus >= cols {
+                        self.state.task_watcher_focus -= cols;
                     }
                 }
-                (_, KeyCode::Enter) => {
-                    self.state.task_watcher_focus = match self.state.task_watcher_focus {
-                        TaskWatcherFocus::List => TaskWatcherFocus::Output,
-                        TaskWatcherFocus::Output => TaskWatcherFocus::List,
-                    };
-                }
-                (KeyModifiers::CONTROL, KeyCode::Char('d')) => {
-                    if self.state.task_watcher_focus == TaskWatcherFocus::Output {
-                        self.state.task_watcher_output_scroll =
-                            self.state.task_watcher_output_scroll.saturating_add(10);
+                // Focus navigation: down (move by cols)
+                (_, KeyCode::Char('j')) | (_, KeyCode::Down) => {
+                    let cols = crate::widgets::background_tasks::compute_grid_cols(
+                        total_tasks,
+                        self.state.terminal_width,
+                    );
+                    let new_focus = self.state.task_watcher_focus + cols;
+                    if total_tasks > 0 {
+                        self.state.task_watcher_focus = new_focus.min(total_tasks - 1);
                     }
                 }
-                (KeyModifiers::CONTROL, KeyCode::Char('u')) => {
-                    if self.state.task_watcher_focus == TaskWatcherFocus::Output {
-                        self.state.task_watcher_output_scroll =
-                            self.state.task_watcher_output_scroll.saturating_sub(10);
+
+                // Scroll within focused cell: up
+                (KeyModifiers::SHIFT, KeyCode::Char('K')) => {
+                    let idx = self.state.task_watcher_focus;
+                    while self.state.task_watcher_cell_scrolls.len() <= idx {
+                        self.state.task_watcher_cell_scrolls.push(0);
+                    }
+                    self.state.task_watcher_cell_scrolls[idx] += 1;
+                }
+                // Scroll within focused cell: down
+                (KeyModifiers::SHIFT, KeyCode::Char('J')) => {
+                    let idx = self.state.task_watcher_focus;
+                    if let Some(scroll) = self.state.task_watcher_cell_scrolls.get_mut(idx) {
+                        *scroll = scroll.saturating_sub(1);
                     }
                 }
+
+                // Kill focused background task
                 (_, KeyCode::Char('x')) => {
-                    let tasks = self.collect_unified_tasks();
-                    if let Some(task) = tasks.get(self.state.task_watcher_selected)
-                        && task.state == "running"
-                    {
-                        let task_id = task.task_id.clone();
-                        match task.kind {
-                            crate::widgets::UnifiedTaskKind::Agent => {
-                                if self.state.bg_agent_manager.kill_task(&task_id) {
-                                    let _ = self
-                                        .event_tx
-                                        .send(AppEvent::BackgroundAgentKilled { task_id });
-                                }
-                            }
-                            crate::widgets::UnifiedTaskKind::Process => {
-                                let _ = self.event_tx.send(AppEvent::KillTask(task_id));
-                            }
+                    let sa_count = self.state.active_subagents.len();
+                    let focus = self.state.task_watcher_focus;
+                    if focus >= sa_count {
+                        let bg_idx = focus - sa_count;
+                        let bg_tasks = self.state.bg_agent_manager.all_tasks();
+                        if bg_idx < bg_tasks.len() {
+                            let task_id = bg_tasks[bg_idx].task_id.clone();
+                            self.state.bg_agent_manager.kill_task(&task_id);
                         }
                     }
                 }
-                (_, KeyCode::Char('d')) => {
-                    let tasks = self.collect_unified_tasks();
-                    if let Some(task) = tasks.get(self.state.task_watcher_selected)
-                        && task.state != "running"
-                    {
-                        let _task_id = task.task_id.clone();
-                        match task.kind {
-                            crate::widgets::UnifiedTaskKind::Agent => {
-                                self.state.bg_agent_manager.cleanup_old(0.0);
-                            }
-                            crate::widgets::UnifiedTaskKind::Process => {
-                                if let Ok(mut mgr) = self.task_manager.try_lock() {
-                                    mgr.remove_task(&_task_id);
-                                }
-                            }
-                        }
-                        // Adjust selection
-                        let new_count = task_count.saturating_sub(1);
-                        if self.state.task_watcher_selected >= new_count && new_count > 0 {
-                            self.state.task_watcher_selected = new_count - 1;
-                        }
-                    }
+
+                // Page navigation: left
+                (KeyModifiers::SHIFT, KeyCode::Char('H')) => {
+                    self.state.task_watcher_page =
+                        self.state.task_watcher_page.saturating_sub(1);
                 }
+                // Page navigation: right
+                (KeyModifiers::SHIFT, KeyCode::Char('L')) => {
+                    self.state.task_watcher_page += 1; // clamped in render
+                }
+
                 _ => {}
             }
             self.state.dirty = true;
@@ -684,14 +710,27 @@ impl App {
                     self.state.dirty = true;
                 }
             }
-            // Alt+B / Ctrl+P — toggle task watcher panel
+            // Alt+B / Ctrl+P — toggle task watcher subpanel
             (KeyModifiers::ALT, KeyCode::Char('b'))
             | (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
-                self.state.task_watcher_open = !self.state.task_watcher_open;
                 if self.state.task_watcher_open {
-                    self.state.task_watcher_selected = 0;
-                    self.state.task_watcher_output_scroll = 0;
-                    self.state.task_watcher_focus = TaskWatcherFocus::List;
+                    self.state.task_watcher_open = false;
+                } else {
+                    let has_bg_subagents =
+                        self.state.active_subagents.iter().any(|s| s.backgrounded);
+                    let has_bg_agents = !self.state.bg_agent_manager.all_tasks().is_empty();
+                    if has_bg_subagents || has_bg_agents {
+                        self.state.task_watcher_open = true;
+                        self.state.task_watcher_focus = 0;
+                        self.state.task_watcher_cell_scrolls.clear();
+                        self.state.task_watcher_page = 0;
+                    } else {
+                        use crate::widgets::toast::{Toast, ToastLevel};
+                        self.state.toasts.push(Toast::new(
+                            "No background tasks",
+                            ToastLevel::Info,
+                        ));
+                    }
                 }
             }
             // Ctrl+X — leader key prefix
@@ -706,6 +745,13 @@ impl App {
             // Ctrl+R — open session picker
             (KeyModifiers::CONTROL, KeyCode::Char('r')) => {
                 self.execute_slash_command("/sessions");
+            }
+            // Ctrl+Shift+R — force full screen redraw
+            // (Ctrl+L is intercepted by macOS Terminal.app as "Clear to Previous Mark")
+            (m, KeyCode::Char('R' | 'r'))
+                if m.contains(KeyModifiers::CONTROL) && m.contains(KeyModifiers::SHIFT) =>
+            {
+                self.state.force_clear = true;
             }
             // Ctrl+B handled at top of handle_key (before modals)
             // Regular character input
@@ -775,11 +821,11 @@ mod tests {
         let mut app = App::new();
         let pgup = crossterm::event::KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE);
         app.handle_key(pgup);
-        // First press: base=3 (no accel), page multiplier 3x = 9
-        assert_eq!(app.state.scroll_offset, 9);
+        // First press: base=1 (no accel), page multiplier 3x = 3
+        assert_eq!(app.state.scroll_offset, 3);
         assert!(app.state.user_scrolled);
 
-        // Page down reduces offset; direction change resets accel, so base=3, 3x=9
+        // Page down reduces offset; direction change resets accel, so base=1, 3x=3
         let pgdn = crossterm::event::KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE);
         app.handle_key(pgdn);
         assert_eq!(app.state.scroll_offset, 0);
@@ -796,25 +842,25 @@ mod tests {
         let mut app = App::new();
         // Set agent_active so Up/Down arrow scrolls (bypasses command history)
         app.state.agent_active = true;
-        // First up-arrow: base amount = 3
+        // First up-arrow: base amount = 1
         let up = crossterm::event::KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
         app.handle_key(up);
-        assert_eq!(app.state.scroll_offset, 3);
+        assert_eq!(app.state.scroll_offset, 1);
         assert_eq!(app.state.scroll_accel_level, 0);
 
-        // Immediate second press (within 200ms): accelerates to 6
+        // Immediate second press (within 200ms): accelerates to 3
         app.handle_key(up);
-        assert_eq!(app.state.scroll_offset, 9); // 3 + 6
+        assert_eq!(app.state.scroll_offset, 4); // 1 + 3
         assert_eq!(app.state.scroll_accel_level, 1);
 
-        // Third press: accelerates to 12
+        // Third press: accelerates to 6
         app.handle_key(up);
-        assert_eq!(app.state.scroll_offset, 21); // 9 + 12
+        assert_eq!(app.state.scroll_offset, 10); // 4 + 6
         assert_eq!(app.state.scroll_accel_level, 2);
 
-        // Fourth press: stays at 12 (capped)
+        // Fourth press: stays at 6 (capped)
         app.handle_key(up);
-        assert_eq!(app.state.scroll_offset, 33); // 21 + 12
+        assert_eq!(app.state.scroll_offset, 16); // 10 + 6
         assert_eq!(app.state.scroll_accel_level, 2);
     }
 
@@ -830,12 +876,12 @@ mod tests {
         app.handle_key(up);
         app.handle_key(up);
         assert_eq!(app.state.scroll_accel_level, 1);
-        assert_eq!(app.state.scroll_offset, 9); // 3 + 6
+        assert_eq!(app.state.scroll_offset, 4); // 1 + 3
 
         // Direction change resets acceleration
         app.handle_key(down);
         assert_eq!(app.state.scroll_accel_level, 0);
-        assert_eq!(app.state.scroll_offset, 6); // 9 - 3
+        assert_eq!(app.state.scroll_offset, 3); // 4 - 1
     }
 
     #[test]

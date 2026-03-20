@@ -388,14 +388,20 @@ impl AdaptedClient {
                     }
                     message["tool_calls"] = serde_json::Value::Array(finalized);
                 }
-                let finish =
-                    stop_reason
-                        .as_deref()
-                        .unwrap_or(if message.get("tool_calls").is_some() {
+                // Normalize provider-specific stop reasons to Chat Completions values
+                let finish = match stop_reason.as_deref() {
+                    Some("end_turn") => "stop",
+                    Some("max_tokens") => "length",
+                    Some("tool_use") => "tool_calls",
+                    Some(other) => other,
+                    None => {
+                        if message.get("tool_calls").is_some() {
                             "tool_calls"
                         } else {
                             "stop"
-                        });
+                        }
+                    }
+                };
                 let response = serde_json::json!({
                     "id": "stream-accumulated",
                     "object": "chat.completion",
