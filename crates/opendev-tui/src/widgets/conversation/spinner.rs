@@ -50,9 +50,14 @@ impl<'a> ConversationWidget<'a> {
                         .add_modifier(Modifier::ITALIC),
                 ),
             ]));
-        } else if self.backgrounding_pending {
-            // Backgrounding feedback takes priority over tool spinners so the user
-            // sees immediate confirmation that Ctrl+B was registered.
+        } else if self.backgrounding_pending
+            && !active_unfinished
+                .iter()
+                .any(|t| t.name == "spawn_subagent")
+        {
+            // Backgrounding feedback for non-subagent tools (e.g. bash, run_command).
+            // When subagents are active, we fall through to the normal rendering loop
+            // so the subagent list stays visible with per-agent "Sending to background…".
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("{} ", self.spinner_char),
@@ -180,6 +185,24 @@ impl<'a> ConversationWidget<'a> {
         shortener: &crate::formatters::PathShortener,
         lines: &mut Vec<Line<'a>>,
     ) {
+        if self.backgrounding_pending {
+            // During Ctrl+B transition, show a single "Sending to background…" sub-line
+            // instead of the normal tool activity, so each subagent stays visible.
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("  {CONTINUATION_CHAR}  "),
+                    Style::default().fg(style_tokens::GREY),
+                ),
+                Span::styled(
+                    "Sending to background\u{2026}",
+                    Style::default()
+                        .fg(style_tokens::SUBTLE)
+                        .add_modifier(Modifier::ITALIC),
+                ),
+            ]));
+            return;
+        }
+
         if sa.finished {
             // Subagent finished but tool not yet — show Done summary
             let tool_count = sa.tool_call_count;
