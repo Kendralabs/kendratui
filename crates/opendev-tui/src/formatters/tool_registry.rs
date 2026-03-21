@@ -341,15 +341,6 @@ static TOOL_REGISTRY: &[ToolDisplayEntry] = &[
         primary_arg_keys: &["path", "file_path"],
         result_format: ResultFormat::File,
     },
-    // Batch
-    ToolDisplayEntry {
-        names: &["batch_tool"],
-        category: ToolCategory::Other,
-        verb: "Batch",
-        label: "tools",
-        primary_arg_keys: &["invocations"],
-        result_format: ResultFormat::Generic,
-    },
     // Misc
     ToolDisplayEntry {
         names: &["invoke_skill"],
@@ -532,16 +523,6 @@ fn format_parts_inner(
 ) -> (String, String) {
     let entry = lookup_tool(tool_name);
 
-    // Special case: batch_tool shows tool count
-    if tool_name == "batch_tool" {
-        let count = args
-            .get("invocations")
-            .and_then(|v| v.as_array())
-            .map(|a| a.len())
-            .unwrap_or(0);
-        return ("Batch".to_string(), format!("{count} tool calls"));
-    }
-
     // Special case: spawn_subagent shows "AgentType(task_summary)" instead of "Spawn(subagent)"
     if tool_name == "spawn_subagent" {
         let verb = args
@@ -600,17 +581,15 @@ fn format_parts_inner(
 
     // Special case: list_files/Glob shows pattern, optionally with path
     if matches!(tool_name, "list_files" | "Glob") {
-        let pattern = args
-            .get("pattern")
-            .and_then(|v| v.as_str())
-            .unwrap_or("*");
+        let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
         let pattern_display = if pattern.len() > 40 {
             format!("{}...", &pattern[..37])
         } else {
             pattern.to_string()
         };
         if let Some(path) = args.get("path").and_then(|v| v.as_str())
-            && path != "." && !path.is_empty()
+            && path != "."
+            && !path.is_empty()
         {
             let rel = shortener.shorten(path);
             return ("List".to_string(), format!("{pattern_display} in {rel}"));
@@ -805,18 +784,6 @@ mod tests {
         let (verb, arg) = format_tool_call_parts("my_tool", &args);
         assert_eq!(verb, "My Tool");
         assert_eq!(arg, "do stuff");
-    }
-
-    #[test]
-    fn test_batch_tool_display() {
-        let mut args = HashMap::new();
-        args.insert(
-            "invocations".to_string(),
-            serde_json::json!([{"tool": "read_file"}, {"tool": "edit_file"}, {"tool": "bash"}]),
-        );
-        let (verb, arg) = format_tool_call_parts("batch_tool", &args);
-        assert_eq!(verb, "Batch");
-        assert_eq!(arg, "3 tool calls");
     }
 
     #[test]

@@ -52,7 +52,6 @@ pub(super) fn register_default_tools(
 
     // Scheduling & misc
     registry.register(Arc::new(ScheduleTool));
-    // BatchTool is registered later (needs Arc<ToolRegistry> for dispatch).
     registry.register(Arc::new(NotebookEditTool));
     registry.register(Arc::new(TaskCompleteTool));
     registry.register(Arc::new(VlmTool));

@@ -100,9 +100,6 @@ impl AgentRuntime {
         let (todo_manager, mut channel_receivers, tool_approval_tx) =
             tools::register_default_tools(&tool_registry);
 
-        // BatchTool needs Arc<ToolRegistry> for dispatching calls.
-        tool_registry.register(Arc::new(BatchTool::new(Arc::clone(&tool_registry))));
-
         // Register custom tools from .opendev/tools/ and .opencode/tool/ directories.
         let custom_tools = opendev_tools_impl::custom_tool::discover_custom_tools(working_dir);
         for tool in custom_tools {
@@ -673,6 +670,20 @@ mod tests {
         let rt = runtime.unwrap();
         // Should have tools registered
         assert!(rt.tool_registry.tool_names().len() > 20);
+        assert!(
+            !rt.tool_registry
+                .tool_names()
+                .contains(&"batch_tool".to_string()),
+            "batch_tool should not be registered"
+        );
+        assert!(
+            !rt.tool_registry.get_schemas().iter().any(|schema| schema
+                .get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(|n| n.as_str())
+                == Some("batch_tool")),
+            "batch_tool schema should not be exposed"
+        );
     }
 
     #[test]
@@ -695,5 +706,9 @@ mod tests {
         let prompt = build_system_prompt(tmp.path(), &config);
         // Should produce a non-trivial prompt from embedded templates
         assert!(!prompt.is_empty());
+        assert!(
+            !prompt.contains("batch_tool"),
+            "system prompt should not advertise batch_tool"
+        );
     }
 }
