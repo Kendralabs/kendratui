@@ -412,12 +412,13 @@ mod tests {
 
     #[test]
     fn test_tool_context_builder() {
-        let ctx = ToolContext::new("/tmp/project")
+        let project_dir = std::env::temp_dir().join("project");
+        let ctx = ToolContext::new(&project_dir)
             .with_subagent(true)
             .with_session_id("sess-123")
             .with_value("key", serde_json::json!("value"));
 
-        assert_eq!(ctx.working_dir, PathBuf::from("/tmp/project"));
+        assert_eq!(ctx.working_dir, project_dir);
         assert!(ctx.is_subagent);
         assert_eq!(ctx.session_id.as_deref(), Some("sess-123"));
         assert_eq!(ctx.values.get("key"), Some(&serde_json::json!("value")));
@@ -475,7 +476,7 @@ mod tests {
             idle_timeout_secs: 30,
             max_timeout_secs: 300,
         };
-        let ctx = ToolContext::new("/tmp/project").with_timeout_config(config);
+        let ctx = ToolContext::new(std::env::temp_dir().join("project")).with_timeout_config(config);
         assert!(ctx.timeout_config.is_some());
         let tc = ctx.timeout_config.unwrap();
         assert_eq!(tc.idle_timeout_secs, 30);
