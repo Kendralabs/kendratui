@@ -729,8 +729,7 @@ impl App {
                     let has_remaining = self.state.active_subagents.iter().any(|s| {
                         s.backgrounded
                             && !s.finished
-                            && self.state.bg_subagent_map.get(&s.subagent_id)
-                                == Some(&bg_task_id)
+                            && self.state.bg_subagent_map.get(&s.subagent_id) == Some(&bg_task_id)
                     });
                     let pending = self
                         .state

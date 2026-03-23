@@ -537,7 +537,10 @@ mod tests {
         let json = r#"{"isNewTopic": true, "title": ""}"#;
         let result: TopicResult = serde_json::from_str(json).unwrap();
         assert!(result.is_new_topic);
-        let title = result.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+        let title = result
+            .title
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty());
         assert!(title.is_none());
     }
 
@@ -545,7 +548,10 @@ mod tests {
     fn test_title_trimming() {
         let json = r#"{"isNewTopic": true, "title": "  debug login flow  "}"#;
         let result: TopicResult = serde_json::from_str(json).unwrap();
-        let title = result.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+        let title = result
+            .title
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty());
         assert_eq!(title.as_deref(), Some("debug login flow"));
     }
 

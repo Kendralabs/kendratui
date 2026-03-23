@@ -472,10 +472,7 @@ impl App {
                         .fg(style_tokens::PRIMARY)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    format!(" {arg}"),
-                    Style::default().fg(style_tokens::SUBTLE),
-                ),
+                Span::styled(format!(" {arg}"), Style::default().fg(style_tokens::SUBTLE)),
             ]));
 
             // Diff tools are never collapsed

@@ -119,7 +119,7 @@ impl<'a> ConversationWidget<'a> {
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::styled(
-                            format!("({task_short})"),
+                            format!(" {task_short}"),
                             Style::default().fg(style_tokens::SUBTLE),
                         ),
                     ]));
@@ -130,7 +130,7 @@ impl<'a> ConversationWidget<'a> {
 
                     lines.push(Line::from(""));
                 } else {
-                    // Normal tool: ⠋ verb(arg) (Xs)
+                    // Normal tool: ⠋ verb arg Xs
                     let (verb, arg) =
                         format_tool_call_parts_short(&tool.name, &tool.args, &shortener);
                     lines.push(Line::from(vec![
@@ -144,12 +144,9 @@ impl<'a> ConversationWidget<'a> {
                                 .fg(style_tokens::PRIMARY)
                                 .add_modifier(Modifier::BOLD),
                         ),
+                        Span::styled(format!(" {arg}"), Style::default().fg(style_tokens::SUBTLE)),
                         Span::styled(
-                            format!("({arg})"),
-                            Style::default().fg(style_tokens::SUBTLE),
-                        ),
-                        Span::styled(
-                            format!(" ({}s)", tool.elapsed_secs),
+                            format!(" {}s", tool.elapsed_secs),
                             Style::default().fg(style_tokens::GREY),
                         ),
                     ]));
@@ -167,7 +164,7 @@ impl<'a> ConversationWidget<'a> {
                     Style::default().fg(style_tokens::SUBTLE),
                 ),
                 Span::styled(
-                    format!("({}s \u{00b7} esc to interrupt)", elapsed),
+                    format!("{}s \u{00b7} esc to interrupt", elapsed),
                     Style::default().fg(style_tokens::SUBTLE),
                 ),
             ]));
@@ -205,7 +202,7 @@ impl<'a> ConversationWidget<'a> {
             // Subagent finished but tool not yet — show Done summary
             let tool_count = sa.tool_call_count;
             let count_str = if tool_count > 0 {
-                format!(" ({tool_count} tool uses)")
+                format!(" · {tool_count} tool uses")
             } else {
                 String::new()
             };
@@ -244,7 +241,7 @@ impl<'a> ConversationWidget<'a> {
                 ),
                 Span::styled(format!("{icon} "), Style::default().fg(color)),
                 Span::styled(verb, Style::default().fg(style_tokens::SUBTLE)),
-                Span::styled(format!("({arg})"), Style::default().fg(style_tokens::GREY)),
+                Span::styled(format!(" {arg}"), Style::default().fg(style_tokens::GREY)),
             ]));
         }
 
@@ -263,7 +260,7 @@ impl<'a> ConversationWidget<'a> {
                     Style::default().fg(style_tokens::BLUE_BRIGHT),
                 ),
                 Span::styled(verb, Style::default().fg(style_tokens::SUBTLE)),
-                Span::styled(format!("({arg})"), Style::default().fg(style_tokens::GREY)),
+                Span::styled(format!(" {arg}"), Style::default().fg(style_tokens::GREY)),
             ]));
         }
 
@@ -289,7 +286,7 @@ impl<'a> ConversationWidget<'a> {
         let hidden = total_completed.saturating_sub(1);
         if hidden > 0 {
             lines.push(Line::from(Span::styled(
-                format!("      +{hidden} more tool uses (ctrl+b to run in background)"),
+                format!("      +{hidden} more tool uses · ctrl+b to run in background"),
                 Style::default()
                     .fg(style_tokens::GREY)
                     .add_modifier(Modifier::ITALIC),
