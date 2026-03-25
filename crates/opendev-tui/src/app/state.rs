@@ -215,7 +215,7 @@ impl Default for AppState {
             todo_spinner_tick: 0,
             plan_name: None,
             file_changes: None,
-            version: String::from("0.1.0"),
+            version: env!("CARGO_PKG_VERSION").to_string(),
             welcome_panel: WelcomePanelState::new(),
             terminal_width: 80,
             terminal_height: 24,

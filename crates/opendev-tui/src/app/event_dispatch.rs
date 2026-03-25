@@ -369,7 +369,10 @@ impl App {
                         .and_then(|s| s.parse::<usize>().ok())
                         .unwrap_or(0);
                     if step_count > 0 {
-                        (vec![format!("Plan approved · {step_count} todos created")], false)
+                        (
+                            vec![format!("Plan approved · {step_count} todos created")],
+                            false,
+                        )
                     } else {
                         (vec!["Plan approved".to_string()], false)
                     }
@@ -472,11 +475,9 @@ impl App {
                         && !self.state.todo_items.is_empty()
                     {
                         self.state.todo_expanded = true;
-                        self.state.todo_all_done_at = None;
                     }
                     if tool_name == "clear_todos" {
                         self.state.todo_items.clear();
-                        self.state.todo_all_done_at = None;
                     }
                 }
 

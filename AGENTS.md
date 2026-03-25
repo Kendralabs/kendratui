@@ -8,8 +8,8 @@ This file provides guidance to coding agents when working with code in this repo
 # Build the entire workspace
 cargo build --workspace
 
-# Run all tests
-cargo test --workspace
+# Run all tests (skip doc-tests that have 0 tests)
+cargo test --workspace --lib --tests
 
 # Type/lint checks
 cargo check --workspace
@@ -72,7 +72,7 @@ crates/
 ### 1. Unit & Integration Tests
 
 ```bash
-cargo test --workspace
+cargo test --workspace --lib --tests
 ```
 
 All tests must pass. If you added new logic, add unit tests covering it. If the change touches cross-crate behavior, add or update integration tests in the relevant `tests/integration.rs`.
