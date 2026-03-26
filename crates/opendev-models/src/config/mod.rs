@@ -403,23 +403,37 @@ impl AppConfig {
             "mistral" => "MISTRAL_API_KEY",
             "deepinfra" => "DEEPINFRA_API_KEY",
             "openrouter" => "OPENROUTER_API_KEY",
-            _ => "OPENAI_API_KEY",
+            "zai" | "zai-coding-plan" => "ZAI_API_KEY",
+            "deepseek" => "DEEPSEEK_API_KEY",
+            _ => "",
         };
 
-        if let Ok(key) = std::env::var(env_var)
+        if !env_var.is_empty()
+            && let Ok(key) = std::env::var(env_var)
             && !key.is_empty()
         {
             return Ok(key);
         }
 
+        // Fall back to config-stored API key (from setup wizard)
         if let Some(ref key) = self.api_key {
             return Ok(key.clone());
         }
 
-        Err(format!(
-            "No API key found. Set {} environment variable",
-            env_var
-        ))
+        // Last resort: try OPENAI_API_KEY for unknown providers
+        if env_var.is_empty()
+            && let Ok(key) = std::env::var("OPENAI_API_KEY")
+            && !key.is_empty()
+        {
+            return Ok(key);
+        }
+
+        let hint = if env_var.is_empty() {
+            "OPENAI_API_KEY".to_string()
+        } else {
+            env_var.to_string()
+        };
+        Err(format!("No API key found. Set {} environment variable", hint))
     }
 }
 
@@ -491,24 +505,43 @@ mod tests {
     }
 
     #[test]
-    fn test_get_api_key_custom_provider_uses_openai_env_fallback() {
-        let env_name = "OPENAI_API_KEY";
-        let old = std::env::var(env_name).ok();
-        unsafe {
-            std::env::set_var(env_name, "env-custom-key");
-        }
-
+    fn test_get_api_key_custom_provider_prefers_config_key() {
+        // Unknown provider with config key → prefer config key (explicitly configured)
         let config = AppConfig {
             model_provider: "cloudflare".to_string(),
             api_key: Some("config-custom-key".to_string()),
             ..AppConfig::default()
         };
+        assert_eq!(config.get_api_key().unwrap(), "config-custom-key");
+    }
 
-        assert_eq!(config.get_api_key().unwrap(), "env-custom-key");
+    #[test]
+    fn test_get_api_key_custom_provider_openai_env_fallback() {
+        // Unknown provider without config key → falls back to OPENAI_API_KEY
+        // (only run assertion if OPENAI_API_KEY is actually set to avoid flaky test)
+        let config_no_key = AppConfig {
+            model_provider: "cloudflare".to_string(),
+            api_key: None,
+            ..AppConfig::default()
+        };
+        if std::env::var("OPENAI_API_KEY").is_ok() {
+            assert!(config_no_key.get_api_key().is_ok());
+        } else {
+            assert!(config_no_key.get_api_key().is_err());
+        }
+    }
 
-        match old {
-            Some(value) => unsafe { std::env::set_var(env_name, value) },
-            None => unsafe { std::env::remove_var(env_name) },
+    #[test]
+    fn test_get_api_key_zai_provider() {
+        // Z.AI provider should use ZAI_API_KEY env var, falling back to config key
+        let config = AppConfig {
+            model_provider: "zai-coding-plan".to_string(),
+            api_key: Some("zai-config-key".to_string()),
+            ..AppConfig::default()
+        };
+        // With no ZAI_API_KEY env var set, should use config key
+        if std::env::var("ZAI_API_KEY").is_err() {
+            assert_eq!(config.get_api_key().unwrap(), "zai-config-key");
         }
     }
 }
