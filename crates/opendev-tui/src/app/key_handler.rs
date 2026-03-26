@@ -792,18 +792,15 @@ impl App {
             }
             // Ctrl+I — toggle ALL thinking blocks collapsed/expanded
             (KeyModifiers::CONTROL, KeyCode::Char('i')) => {
-                let mut toggled = false;
+                self.state.thinking_expanded = !self.state.thinking_expanded;
                 for msg in self.state.messages.iter_mut() {
                     if msg.role == DisplayRole::Reasoning {
-                        msg.collapsed = !msg.collapsed;
-                        toggled = true;
+                        msg.collapsed = !self.state.thinking_expanded;
                     }
                 }
-                if toggled {
-                    self.state.message_generation += 1;
-                    self.state.scroll_offset = 0;
-                    self.state.user_scrolled = false;
-                }
+                self.state.message_generation += 1;
+                self.state.scroll_offset = 0;
+                self.state.user_scrolled = false;
             }
             // Ctrl+T — toggle todo panel expanded/collapsed
             (KeyModifiers::CONTROL, KeyCode::Char('t')) => {

@@ -75,6 +75,8 @@ pub struct AppState {
     pub todo_items: Vec<TodoDisplayItem>,
     /// Whether the todo panel is expanded (true) or collapsed (false).
     pub todo_expanded: bool,
+    /// Whether thinking blocks should start expanded (toggled by Ctrl+I).
+    pub thinking_expanded: bool,
     /// Spinner tick counter for todo panel animation.
     pub todo_spinner_tick: usize,
     /// Optional plan name for the todo panel title.
@@ -212,6 +214,7 @@ impl Default for AppState {
             todo_manager: None,
             todo_items: Vec::new(),
             todo_expanded: true,
+            thinking_expanded: false,
             todo_spinner_tick: 0,
             plan_name: None,
             file_changes: None,

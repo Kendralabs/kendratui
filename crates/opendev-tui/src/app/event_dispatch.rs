@@ -277,7 +277,7 @@ impl App {
                         role: DisplayRole::Reasoning,
                         content,
                         tool_call: None,
-                        collapsed: true,
+                        collapsed: !self.state.thinking_expanded,
                         thinking_started_at: Some(std::time::Instant::now()),
                         thinking_duration_secs: None,
                     });
