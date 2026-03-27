@@ -115,13 +115,13 @@ The AGENTS.md file has been created at {path}. Provide a brief 1-sentence summar
 
 --- plan_approved_signal ---
 <plan_approved>
-Your plan has been approved and {todos_created} todos are ready.
+Your plan has been approved.
 
 <approved_plan>
 {plan_content}
 </approved_plan>
 
-Work through the todos in order:
+Now call write_todos to create your task list from the plan's implementation steps. Group related steps into 4-8 parent todos with sub-steps as children. Then work through them in order:
 - Mark todo as "doing" (update_todo)
 - Implement the step fully — write code, edit files, run commands as needed
 - Mark as "done" (complete_todo) only after the implementation is complete
@@ -159,6 +159,16 @@ You now have codebase context. Spawn a Planner subagent with:
 (1) the original task, (2) what you learned from exploring,
 (3) plan file path: {plan_file_path}
 </explore_complete>
+
+--- existing_todos_reminder ---
+You have an existing todo list from before:
+
+{todo_status}
+
+Based on the user's message, decide how to proceed:
+- Continue working on incomplete todos if the user wants to resume
+- Call write_todos to replace the list if the user changed direction
+- Call clear_todos if the todos are no longer relevant
 
 --- plan_file_reference ---
 A plan file exists from a previous session at {plan_file_path}. You may read

@@ -57,9 +57,17 @@ What you learned from exploring the codebase
 - path/to/new_file.py
 
 ## Implementation Steps
-1. First concrete step
-2. Second concrete step
-3. ...
+Write 4-8 high-level steps (never more than 8). Use indented sub-items for details:
+
+1. Set up project structure
+   - Create config module
+   - Add dependency to Cargo.toml
+2. Implement core logic
+   - Add handler function
+   - Wire up routing
+3. Write tests and verify
+   - Unit tests for new functions
+   - Integration test for end-to-end flow
 
 ## Verification
 
@@ -82,7 +90,7 @@ What you learned from exploring the codebase
 ```
 
 The `---BEGIN PLAN---` and `---END PLAN---` delimiters are REQUIRED.
-The `## Implementation Steps` section with numbered items is REQUIRED (todos are created from it).
+The `## Implementation Steps` section is REQUIRED. Keep it to 4-8 high-level numbered steps with indented sub-items for details.
 
 ## Testing in Your Plan
 

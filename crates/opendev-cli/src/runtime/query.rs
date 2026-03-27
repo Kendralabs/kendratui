@@ -180,6 +180,24 @@ impl AgentRuntime {
             }
         }
 
+        // Inject existing TODO state reminder if there are incomplete todos
+        if let Ok(mgr) = self.todo_manager.lock()
+            && mgr.has_todos()
+            && mgr.has_incomplete_todos()
+        {
+            let todo_status = mgr.format_status();
+            let reminder = opendev_agents::prompts::reminders::get_reminder(
+                "existing_todos_reminder",
+                &[("todo_status", &todo_status)],
+            );
+            if !reminder.is_empty() {
+                messages.push(serde_json::json!({
+                    "role": "user",
+                    "content": format!("<system-reminder>{}</system-reminder>", reminder)
+                }));
+            }
+        }
+
         // Step 6: Set original task for completion nudge context
         self.react_loop.set_original_task(Some(query.to_string()));
 

@@ -241,6 +241,19 @@ impl AgentRuntime {
                     ),
                 )
             }
+            "ollama" => {
+                let adapter = opendev_http::adapters::ollama::OllamaAdapter::new();
+                let url = effective_base_url.unwrap_or_else(|| adapter.api_url().to_string());
+                let mut hdrs = HeaderMap::new();
+                hdrs.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                (
+                    url,
+                    hdrs,
+                    Some(
+                        Box::new(adapter) as Box<dyn opendev_http::adapters::base::ProviderAdapter>
+                    ),
+                )
+            }
             "gemini" | "google" => {
                 let adapter = opendev_http::adapters::gemini::GeminiAdapter::new(&config.model);
                 let api_url = effective_base_url
@@ -581,6 +594,19 @@ impl AgentRuntime {
                     hdrs.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
                     (
                         api_url,
+                        hdrs,
+                        Some(Box::new(adapter) as Box<dyn ProviderAdapter>),
+                    )
+                }
+                "ollama" => {
+                    let adapter = opendev_http::adapters::ollama::OllamaAdapter::new();
+                    let url = api_base_url
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| adapter.api_url().to_string());
+                    let mut hdrs = HeaderMap::new();
+                    hdrs.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                    (
+                        url,
                         hdrs,
                         Some(Box::new(adapter) as Box<dyn ProviderAdapter>),
                     )

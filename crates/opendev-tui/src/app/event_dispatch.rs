@@ -907,6 +907,36 @@ impl App {
                     }
                 }
                 self.state.active_subagents.clear();
+                // Re-sync TUI todo display after interrupt
+                // (InProgress items were reset to Pending by reset_stuck_todos)
+                if let Some(ref mgr) = self.state.todo_manager
+                    && let Ok(mgr) = mgr.lock()
+                {
+                    self.state.todo_items = mgr
+                        .all()
+                        .iter()
+                        .map(|item| TodoDisplayItem {
+                            id: item.id,
+                            title: item.title.clone(),
+                            status: match item.status {
+                                opendev_runtime::TodoStatus::Pending => {
+                                    TodoDisplayStatus::Pending
+                                }
+                                opendev_runtime::TodoStatus::InProgress => {
+                                    TodoDisplayStatus::InProgress
+                                }
+                                opendev_runtime::TodoStatus::Completed => {
+                                    TodoDisplayStatus::Completed
+                                }
+                            },
+                            active_form: if item.active_form.is_empty() {
+                                None
+                            } else {
+                                Some(item.active_form.clone())
+                            },
+                        })
+                        .collect();
+                }
                 // Show interrupt feedback in the conversation
                 self.state.messages.push(DisplayMessage::new(
                     DisplayRole::Interrupt,

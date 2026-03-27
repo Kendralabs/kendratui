@@ -4,18 +4,17 @@
 //! this tool to present the plan and get user sign-off before implementation.
 //!
 //! On approval the tool:
-//! 1. Parses implementation steps from the plan markdown
-//! 2. Creates todo items from those steps (via a shared `TodoManager`)
-//! 3. Registers the plan in the `PlanIndex` for session tracking
-//! 4. Stores the plan file to `~/.opendev/plans/`
+//! 1. Registers the plan in the `PlanIndex` for session tracking
+//! 2. Stores the plan file to `~/.opendev/plans/`
+//!
+//! Todo creation is deferred to the LLM's `write_todos` call after approval,
+//! which produces better hierarchical grouping than automated parsing.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use opendev_runtime::{
-    PlanApprovalRequest, PlanApprovalSender, PlanIndex, TodoManager, parse_plan_steps,
-};
+use opendev_runtime::{PlanApprovalRequest, PlanApprovalSender, PlanIndex, TodoManager};
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
 /// Minimum plan length in characters to be considered valid.
@@ -288,19 +287,12 @@ impl BaseTool for PresentPlanTool {
             auto_approve_mode = true;
         }
 
-        // Parse implementation steps into todos (capped at 10 parents;
-        // the LLM's subsequent write_todos call handles proper grouping with children).
-        let steps = parse_plan_steps(&plan_content);
-        let step_count = steps.len();
-
-        // Create todos from plan steps
+        // Clear any previous plan's todos — the LLM will create new ones
+        // via write_todos after approval, with proper hierarchical grouping.
         if let Some(ref mgr) = self.todo_manager
             && let Ok(mut todo_mgr) = mgr.lock()
         {
-            todo_mgr.clear(); // Clear any previous plan's todos
-            for step in steps.iter().take(10) {
-                todo_mgr.add(step.clone());
-            }
+            todo_mgr.clear();
         }
 
         // Register in PlanIndex and copy plan to ~/.opendev/plans/
@@ -334,27 +326,11 @@ impl BaseTool for PresentPlanTool {
         metadata.insert("auto_approve".into(), serde_json::json!(auto_approve_mode));
         metadata.insert("plan_file_path".into(), serde_json::json!(plan_file_path));
         metadata.insert("plan_length".into(), serde_json::json!(plan_content.len()));
-        metadata.insert("step_count".into(), serde_json::json!(step_count));
         metadata.insert("plan_content".into(), serde_json::json!(plan_content));
 
         if let Some(ref name) = plan_name {
             metadata.insert("plan_name".into(), serde_json::json!(name));
         }
-
-        // Format step list for agent context
-        let step_list = if steps.is_empty() {
-            String::new()
-        } else {
-            let items: Vec<String> = steps
-                .iter()
-                .enumerate()
-                .map(|(i, s)| format!("  {}. {s}", i + 1))
-                .collect();
-            format!(
-                "\n\nTodo items created ({step_count}):\n{}",
-                items.join("\n")
-            )
-        };
 
         let plan_name_display = plan_name
             .as_deref()
@@ -363,9 +339,9 @@ impl BaseTool for PresentPlanTool {
 
         ToolResult::ok_with_metadata(
             format!(
-                "Plan completed{plan_name_display} ({} chars, {step_count} steps). \
+                "Plan approved{plan_name_display} ({} chars). \
                  Proceed with implementation.\n\n\
-                 Plan file: {plan_file_path}{step_list}",
+                 Plan file: {plan_file_path}",
                 plan_content.len()
             ),
             metadata,
@@ -466,7 +442,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_present_plan_valid_creates_todos() {
+    async fn test_present_plan_valid_no_auto_todos() {
         let todo_mgr = Arc::new(Mutex::new(TodoManager::new()));
         let tool = PresentPlanTool::with_todo_manager(Arc::clone(&todo_mgr));
         let ctx = ToolContext::new("/tmp");
@@ -495,16 +471,10 @@ mod tests {
             result.metadata.get("plan_approved"),
             Some(&serde_json::json!(true))
         );
-        assert_eq!(
-            result.metadata.get("step_count"),
-            Some(&serde_json::json!(3))
-        );
 
-        // Verify todos were created
+        // Verify NO todos were auto-created (LLM handles via write_todos)
         let mgr = todo_mgr.lock().unwrap();
-        assert_eq!(mgr.total(), 3);
-        assert_eq!(mgr.all()[0].title, "First step");
-        assert_eq!(mgr.all()[2].title, "Third step");
+        assert_eq!(mgr.total(), 0);
 
         std::fs::remove_file(&path).ok();
     }
