@@ -133,6 +133,13 @@ impl Widget for InputWidget<'_> {
             spans.push(Span::styled("─".repeat(remaining_dashes), sep_style));
         }
         let sep_line = Line::from(spans);
+        // Pre-fill entire row with ─ so any rendering gap stays filled
+        buf.set_string(
+            area.left(),
+            area.top(),
+            "─".repeat(area.width as usize),
+            sep_style,
+        );
         buf.set_line(area.left(), area.top(), &sep_line, area.width);
 
         // Rows below separator: multiline input
