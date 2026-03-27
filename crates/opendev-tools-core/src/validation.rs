@@ -108,7 +108,108 @@ fn validate_value_type(
         }
     }
 
+    // Check minLength for strings
+    if let Some(s) = value.as_str()
+        && let Some(min_len) = prop_schema.get("minLength").and_then(|v| v.as_u64())
+        && (s.len() as u64) < min_len
+    {
+        return Err(format!(
+            "Parameter '{key}' string length {} is below minimum {min_len}",
+            s.len()
+        ));
+    }
+
+    // Check maxLength for strings
+    if let Some(s) = value.as_str()
+        && let Some(max_len) = prop_schema.get("maxLength").and_then(|v| v.as_u64())
+        && (s.len() as u64) > max_len
+    {
+        return Err(format!(
+            "Parameter '{key}' string length {} exceeds maximum {max_len}",
+            s.len()
+        ));
+    }
+
+    // Check minItems / maxItems for arrays
+    if let Some(arr) = value.as_array() {
+        if let Some(min_items) = prop_schema.get("minItems").and_then(|v| v.as_u64())
+            && (arr.len() as u64) < min_items
+        {
+            return Err(format!(
+                "Parameter '{key}' array has {} items, minimum is {min_items}",
+                arr.len()
+            ));
+        }
+        if let Some(max_items) = prop_schema.get("maxItems").and_then(|v| v.as_u64())
+            && (arr.len() as u64) > max_items
+        {
+            return Err(format!(
+                "Parameter '{key}' array has {} items, maximum is {max_items}",
+                arr.len()
+            ));
+        }
+
+        // Validate each array element against the "items" sub-schema
+        if let Some(items_schema) = prop_schema.get("items") {
+            for (i, elem) in arr.iter().enumerate() {
+                let elem_key = format!("{key}[{i}]");
+                validate_array_item(&elem_key, elem, items_schema)?;
+            }
+        }
+    }
+
+    // Validate nested object properties
+    if let Some(obj) = value.as_object()
+        && let Some(properties) = prop_schema.get("properties").and_then(|p| p.as_object())
+    {
+        // Check required fields in nested object
+        if let Some(required) = prop_schema.get("required").and_then(|r| r.as_array()) {
+            for req in required {
+                if let Some(field_name) = req.as_str()
+                    && !obj.contains_key(field_name)
+                {
+                    return Err(format!(
+                        "Parameter '{key}' is missing required field '{field_name}'"
+                    ));
+                }
+            }
+        }
+        // Validate each property
+        for (prop_key, prop_val) in obj {
+            if let Some(prop_def) = properties.get(prop_key) {
+                let nested_key = format!("{key}.{prop_key}");
+                validate_value_type(&nested_key, prop_val, prop_def)?;
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Validate an array element against an items schema.
+///
+/// Handles `oneOf` by trying each variant — the element is valid if any variant matches.
+fn validate_array_item(
+    key: &str,
+    value: &serde_json::Value,
+    items_schema: &serde_json::Value,
+) -> Result<(), String> {
+    // Handle oneOf: try each variant, accept if any matches
+    if let Some(variants) = items_schema.get("oneOf").and_then(|v| v.as_array()) {
+        let mut last_err = None;
+        for variant in variants {
+            match validate_value_type(key, value, variant) {
+                Ok(()) => return Ok(()),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        return Err(last_err.unwrap_or_else(|| {
+            format!("Parameter '{key}' does not match any allowed schema variant")
+        }));
+    }
+
+    // No oneOf — validate directly against items schema
+    validate_value_type(key, value, items_schema)
 }
 
 /// Get a human-readable type name for a JSON value.
@@ -354,5 +455,212 @@ mod tests {
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].path, "file");
         assert!(errors[0].message.contains("Missing required"));
+    }
+
+    // --- minLength / maxLength tests ---
+
+    #[test]
+    fn test_validate_min_length_ok() {
+        let schema = make_schema(
+            json!({"name": {"type": "string", "minLength": 1}}),
+            vec!["name"],
+        );
+        let mut args = HashMap::new();
+        args.insert("name".into(), json!("hello"));
+        assert!(validate_args(&args, &schema).is_ok());
+    }
+
+    #[test]
+    fn test_validate_min_length_empty_string_rejected() {
+        let schema = make_schema(
+            json!({"name": {"type": "string", "minLength": 1}}),
+            vec!["name"],
+        );
+        let mut args = HashMap::new();
+        args.insert("name".into(), json!(""));
+        let result = validate_args(&args, &schema);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("below minimum"));
+    }
+
+    #[test]
+    fn test_validate_max_length_rejected() {
+        let schema = make_schema(
+            json!({"name": {"type": "string", "maxLength": 5}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("name".into(), json!("toolong"));
+        assert!(validate_args(&args, &schema).is_err());
+    }
+
+    // --- minItems / maxItems tests ---
+
+    #[test]
+    fn test_validate_max_items_ok() {
+        let schema = make_schema(
+            json!({"items": {"type": "array", "maxItems": 3}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("items".into(), json!(["a", "b"]));
+        assert!(validate_args(&args, &schema).is_ok());
+    }
+
+    #[test]
+    fn test_validate_max_items_exceeded() {
+        let schema = make_schema(
+            json!({"items": {"type": "array", "maxItems": 2}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("items".into(), json!(["a", "b", "c"]));
+        let result = validate_args(&args, &schema);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("maximum is 2"));
+    }
+
+    #[test]
+    fn test_validate_min_items_rejected() {
+        let schema = make_schema(
+            json!({"items": {"type": "array", "minItems": 1}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("items".into(), json!([]));
+        let result = validate_args(&args, &schema);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("minimum is 1"));
+    }
+
+    // --- Array items validation ---
+
+    #[test]
+    fn test_validate_array_items_string_type() {
+        let schema = make_schema(
+            json!({"tags": {"type": "array", "items": {"type": "string"}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("tags".into(), json!(["a", "b"]));
+        assert!(validate_args(&args, &schema).is_ok());
+    }
+
+    #[test]
+    fn test_validate_array_items_wrong_type() {
+        let schema = make_schema(
+            json!({"tags": {"type": "array", "items": {"type": "string"}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("tags".into(), json!(["a", 42]));
+        let result = validate_args(&args, &schema);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("tags[1]"));
+    }
+
+    #[test]
+    fn test_validate_array_items_min_length() {
+        let schema = make_schema(
+            json!({"tags": {"type": "array", "items": {"type": "string", "minLength": 1}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("tags".into(), json!(["ok", ""]));
+        let result = validate_args(&args, &schema);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("tags[1]"), "Expected tags[1] in: {err}");
+        assert!(err.contains("below minimum"), "Expected 'below minimum' in: {err}");
+    }
+
+    // --- oneOf tests ---
+
+    #[test]
+    fn test_validate_array_one_of_string_accepted() {
+        let schema = make_schema(
+            json!({"todos": {"type": "array", "items": {"oneOf": [
+                {"type": "string", "minLength": 1},
+                {"type": "object", "properties": {"content": {"type": "string", "minLength": 1}}, "required": ["content"]}
+            ]}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("todos".into(), json!(["Step A", "Step B"]));
+        assert!(validate_args(&args, &schema).is_ok());
+    }
+
+    #[test]
+    fn test_validate_array_one_of_object_accepted() {
+        let schema = make_schema(
+            json!({"todos": {"type": "array", "items": {"oneOf": [
+                {"type": "string", "minLength": 1},
+                {"type": "object", "properties": {"content": {"type": "string", "minLength": 1}}, "required": ["content"]}
+            ]}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert(
+            "todos".into(),
+            json!([{"content": "Step A"}, {"content": "Step B"}]),
+        );
+        assert!(validate_args(&args, &schema).is_ok());
+    }
+
+    #[test]
+    fn test_validate_array_one_of_empty_string_rejected() {
+        let schema = make_schema(
+            json!({"todos": {"type": "array", "items": {"oneOf": [
+                {"type": "string", "minLength": 1},
+                {"type": "object", "properties": {"content": {"type": "string", "minLength": 1}}, "required": ["content"]}
+            ]}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert("todos".into(), json!(["Valid", ""]));
+        let result = validate_args(&args, &schema);
+        assert!(result.is_err(), "Empty string should be rejected by oneOf");
+    }
+
+    #[test]
+    fn test_validate_array_one_of_empty_content_rejected() {
+        let schema = make_schema(
+            json!({"todos": {"type": "array", "items": {"oneOf": [
+                {"type": "string", "minLength": 1},
+                {"type": "object", "properties": {"content": {"type": "string", "minLength": 1}}, "required": ["content"]}
+            ]}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert(
+            "todos".into(),
+            json!([{"content": "Valid"}, {"content": ""}]),
+        );
+        let result = validate_args(&args, &schema);
+        assert!(
+            result.is_err(),
+            "Object with empty content should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_validate_array_one_of_missing_content_rejected() {
+        let schema = make_schema(
+            json!({"todos": {"type": "array", "items": {"oneOf": [
+                {"type": "string", "minLength": 1},
+                {"type": "object", "properties": {"content": {"type": "string", "minLength": 1}}, "required": ["content"]}
+            ]}}}),
+            vec![],
+        );
+        let mut args = HashMap::new();
+        args.insert(
+            "todos".into(),
+            json!([{"status": "in_progress"}]),
+        );
+        let result = validate_args(&args, &schema);
+        assert!(
+            result.is_err(),
+            "Object missing required 'content' should be rejected"
+        );
     }
 }

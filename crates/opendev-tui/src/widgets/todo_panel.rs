@@ -152,15 +152,7 @@ impl<'a> TodoPanelWidget<'a> {
                 ),
             };
 
-            let display_title = if item.title.trim().is_empty() {
-                item.active_form
-                    .as_deref()
-                    .filter(|s| !s.trim().is_empty())
-                    .unwrap_or("(untitled)")
-                    .to_string()
-            } else {
-                item.title.clone()
-            };
+            let display_title = item.title.clone();
 
             lines.push(Line::from(vec![
                 Span::styled(symbol, style),
@@ -524,48 +516,4 @@ mod tests {
         assert_eq!(todo_panel_height(15, true), 12); // capped at 12
     }
 
-    #[test]
-    fn test_empty_title_shows_fallback() {
-        let items = vec![TodoDisplayItem {
-            id: 1,
-            title: "".into(),
-            status: TodoDisplayStatus::InProgress,
-            active_form: Some("Working on it".into()),
-        }];
-        let widget = TodoPanelWidget::new(&items);
-        let (done, in_progress, total) = widget.counts();
-        let lines = widget.build_lines(done, in_progress, total);
-        assert_eq!(lines.len(), 1);
-        let text: String = lines[0]
-            .spans
-            .iter()
-            .map(|s| s.content.to_string())
-            .collect();
-        assert!(
-            text.contains("Working on it"),
-            "Empty title should fall back to active_form, got: {text}"
-        );
-    }
-
-    #[test]
-    fn test_empty_title_no_active_form_shows_untitled() {
-        let items = vec![TodoDisplayItem {
-            id: 1,
-            title: "  ".into(),
-            status: TodoDisplayStatus::Pending,
-            active_form: None,
-        }];
-        let widget = TodoPanelWidget::new(&items);
-        let (done, in_progress, total) = widget.counts();
-        let lines = widget.build_lines(done, in_progress, total);
-        let text: String = lines[0]
-            .spans
-            .iter()
-            .map(|s| s.content.to_string())
-            .collect();
-        assert!(
-            text.contains("(untitled)"),
-            "Empty title with no active_form should show (untitled), got: {text}"
-        );
-    }
 }

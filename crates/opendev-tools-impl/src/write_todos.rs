@@ -39,11 +39,11 @@ impl BaseTool for WriteTodosTool {
                     "description": "List of parent todo items (max 10). Each can be a string or an object with 'content' (required), 'status' (optional), 'activeForm' (optional), and 'children' (optional array of sub-step strings, hidden in UI but shown in status output).",
                     "items": {
                         "oneOf": [
-                            { "type": "string" },
+                            { "type": "string", "minLength": 1 },
                             {
                                 "type": "object",
                                 "properties": {
-                                    "content": { "type": "string" },
+                                    "content": { "type": "string", "minLength": 1 },
                                     "status": { "type": "string" },
                                     "activeForm": { "type": "string" },
                                     "children": {
@@ -76,10 +76,19 @@ impl BaseTool for WriteTodosTool {
         for item in todos_val {
             if let Some(s) = item.as_str() {
                 let title = strip_markdown(s);
+                if title.trim().is_empty() {
+                    continue; // skip empty items
+                }
                 items.push((title, TodoStatus::Pending, String::new(), Vec::new()));
             } else if let Some(obj) = item.as_object() {
                 let content = match obj.get("content").and_then(|v| v.as_str()) {
-                    Some(c) => strip_markdown(c),
+                    Some(c) => {
+                        let stripped = strip_markdown(c);
+                        if stripped.trim().is_empty() {
+                            continue; // skip empty items
+                        }
+                        stripped
+                    }
                     None => return ToolResult::fail("Each todo object requires a 'content' field"),
                 };
                 let status = obj
@@ -292,6 +301,31 @@ mod tests {
         let output = result.output.as_deref().unwrap_or("");
         assert!(output.contains("Add login endpoint"));
         assert!(output.contains("Integration tests"));
+    }
+
+    #[tokio::test]
+    async fn test_write_todos_skips_empty_content() {
+        let (tool, mgr) = make_tool();
+        let ctx = ToolContext::new("/tmp");
+        let result = tool
+            .execute(
+                make_args(&[(
+                    "todos",
+                    serde_json::json!([
+                        "",
+                        "Valid item",
+                        {"content": "  ", "status": "in_progress"},
+                        {"content": "Another valid"}
+                    ]),
+                )]),
+                &ctx,
+            )
+            .await;
+        assert!(result.success);
+        let m = mgr.lock().unwrap();
+        assert_eq!(m.total(), 2, "Empty items should be filtered out");
+        assert_eq!(m.get(1).unwrap().title, "Valid item");
+        assert_eq!(m.get(2).unwrap().title, "Another valid");
     }
 
     #[tokio::test]
