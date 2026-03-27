@@ -430,7 +430,7 @@ impl App {
                     return;
                 }
                 if tool_name == "spawn_subagent" {
-                    // Remove matching subagent from active list (cleanup only, no summary display)
+                    // Remove matching subagent from active list, creating a persistent summary
                     let subagent_idx = self
                         .state
                         .active_subagents
@@ -446,8 +446,26 @@ impl App {
                         });
                     if let Some(idx) = subagent_idx {
                         let removed = self.state.active_subagents.remove(idx);
-                        // Clean up bg_subagent_map if this was a backgrounded subagent
                         self.state.bg_subagent_map.remove(&removed.subagent_id);
+
+                        // Create persistent completion summary in conversation
+                        let summary_line = removed.completion_summary();
+                        self.state.messages.push(DisplayMessage {
+                            role: DisplayRole::Assistant,
+                            content: String::new(),
+                            tool_call: Some(DisplayToolCall {
+                                name: tool_name.clone(),
+                                arguments,
+                                summary: None,
+                                success,
+                                collapsed: false,
+                                result_lines: vec![summary_line],
+                                nested_calls: Vec::new(),
+                            }),
+                            collapsed: false,
+                            thinking_started_at: None,
+                            thinking_duration_secs: None,
+                        });
                     }
                 } else if !display_lines.is_empty() {
                     self.state.messages.push(DisplayMessage {

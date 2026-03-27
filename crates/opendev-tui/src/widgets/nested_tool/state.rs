@@ -3,6 +3,19 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+use crate::formatters::tool_line::format_elapsed;
+
+/// Format a token count as human-readable (e.g., "1.2k tokens", "3.5M tokens").
+fn format_token_count(tokens: u64) -> String {
+    if tokens >= 1_000_000 {
+        format!("{:.1}M tokens", tokens as f64 / 1_000_000.0)
+    } else if tokens >= 1_000 {
+        format!("{:.1}k tokens", tokens as f64 / 1_000.0)
+    } else {
+        format!("{tokens} tokens")
+    }
+}
+
 /// State tracking for a single subagent execution.
 #[derive(Debug, Clone)]
 pub struct SubagentDisplayState {
@@ -143,6 +156,28 @@ impl SubagentDisplayState {
     /// Elapsed time since start.
     pub fn elapsed_secs(&self) -> u64 {
         self.started_at.elapsed().as_secs()
+    }
+
+    /// Generate a persistent completion summary for display after the subagent finishes.
+    /// Format: "Done (N tool uses, Xs, N.Nk tokens)"
+    pub fn completion_summary(&self) -> String {
+        let mut parts = Vec::new();
+
+        let tc = self.tool_call_count;
+        parts.push(if tc == 1 {
+            "1 tool use".to_string()
+        } else {
+            format!("{tc} tool uses")
+        });
+
+        let elapsed = self.started_at.elapsed().as_secs();
+        parts.push(format_elapsed(elapsed));
+
+        if self.token_count > 0 {
+            parts.push(format_token_count(self.token_count));
+        }
+
+        format!("Done ({})", parts.join(", "))
     }
 
     /// Generate a summary of current activity.
@@ -327,5 +362,45 @@ mod tests {
         let mut state = SubagentDisplayState::new("id-act4".into(), "test".into(), "task".into());
         state.finish(true, "Done".into(), 0, None);
         assert_eq!(state.activity_summary(), "Done");
+    }
+
+    #[test]
+    fn test_format_token_count() {
+        assert_eq!(format_token_count(500), "500 tokens");
+        assert_eq!(format_token_count(1_500), "1.5k tokens");
+        assert_eq!(format_token_count(23_456), "23.5k tokens");
+        assert_eq!(format_token_count(1_500_000), "1.5M tokens");
+    }
+
+    #[test]
+    fn test_completion_summary_with_tokens() {
+        let mut state = SubagentDisplayState::new("id-cs".into(), "Explore".into(), "task".into());
+        // Simulate tool calls and tokens
+        for i in 0..5 {
+            let id = format!("tc-{i}");
+            state.add_tool_call("read_file".into(), id.clone(), HashMap::new());
+            state.complete_tool_call(&id, true);
+        }
+        state.add_tokens(2000, 1500);
+        let summary = state.completion_summary();
+        assert!(summary.starts_with("Done (5 tool uses, "));
+        assert!(summary.contains("3.5k tokens"));
+    }
+
+    #[test]
+    fn test_completion_summary_no_tokens() {
+        let state = SubagentDisplayState::new("id-cs2".into(), "Explore".into(), "task".into());
+        let summary = state.completion_summary();
+        assert!(summary.starts_with("Done (0 tool uses, "));
+        assert!(!summary.contains("tokens"));
+    }
+
+    #[test]
+    fn test_completion_summary_singular() {
+        let mut state = SubagentDisplayState::new("id-cs3".into(), "Explore".into(), "task".into());
+        state.add_tool_call("grep".into(), "tc-0".into(), HashMap::new());
+        state.complete_tool_call("tc-0", true);
+        let summary = state.completion_summary();
+        assert!(summary.starts_with("Done (1 tool use, "));
     }
 }
