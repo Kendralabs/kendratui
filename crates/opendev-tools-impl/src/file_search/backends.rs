@@ -54,7 +54,25 @@ impl AstGrepTool {
             if stderr.trim().is_empty() {
                 return ToolResult::ok("No structural matches found");
             }
-            return ToolResult::fail(format!("ast-grep error: {stderr}"));
+            let stderr_str = stderr.trim();
+            let mut msg = format!("ast-grep error: {stderr_str}");
+
+            if stderr_str.contains("Multiple AST nodes") {
+                msg.push_str(
+                    "\n\nHint: Pattern parses as multiple separate AST nodes. \
+                     Use a single expression or statement pattern.",
+                );
+            } else if stderr_str.contains("parse") || stderr_str.contains("Cannot parse") {
+                msg.push_str(
+                    "\n\nHint: Pattern must be valid standalone syntax in the target language. \
+                     Common mistakes:\n\
+                     - Class method definitions like `name(): void {}` are not standalone \
+                     — use `function name(): void {}` or search by call: `$OBJ.name($$$ARGS)`\n\
+                     - Rust functions need visibility: `pub fn $NAME($$$ARGS)` not `fn $NAME($$$ARGS)`",
+                );
+            }
+
+            return ToolResult::fail(msg);
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);

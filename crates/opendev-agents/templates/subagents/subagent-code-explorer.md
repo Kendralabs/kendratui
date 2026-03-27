@@ -21,7 +21,7 @@ You must NOT create, modify, or delete any files. Your role is to search and ana
 **Default to ast_grep** for code exploration. It understands code structure and eliminates false positives from comments, strings, and partial matches. Fall back to grep only for plain text content (strings, comments, config values, error messages).
 
 Common exploration tasks that ast_grep handles precisely:
-- Find function definitions: `fn $NAME($$$ARGS) -> Result<$$$>` or `async fn $NAME($$$ARGS)`
+- Find function definitions: `pub fn $NAME($$$ARGS) -> $RET` or `pub async fn $NAME($$$ARGS)`
 - Find trait/interface implementations: `impl $TRAIT for $TYPE { $$$BODY }`
 - Find struct/class declarations: `struct $NAME { $$$FIELDS }` or `class $NAME extends $BASE`
 - Find specific call patterns: `tokio::spawn($$$ARGS)`, `console.log($$$ARGS)`, `await $EXPR`

@@ -980,4 +980,298 @@ mod tests {
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 3);
     }
+
+    // --- Integration tests for ast_grep (require `sg` binary) ---
+
+    /// Helper: skip test if ast-grep (sg) is not installed.
+    fn sg_installed() -> bool {
+        std::process::Command::new("sg")
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_rust_struct_pattern() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("lib.rs"),
+            "pub struct Config {\n    pub name: String,\n    pub value: i32,\n}\n",
+        )
+        .unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("pub struct $NAME { $$$FIELDS }")),
+            ("lang", serde_json::json!("rust")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success, "should succeed: {:?}", result.output);
+        let output = result.output.unwrap_or_default();
+        assert!(output.contains("Config"), "should find struct Config: {output}");
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_rust_impl_pattern() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("lib.rs"),
+            concat!(
+                "pub struct Foo;\n",
+                "pub trait Bar { fn bar(&self); }\n",
+                "impl Bar for Foo {\n    fn bar(&self) {}\n}\n",
+            ),
+        )
+        .unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("impl $TRAIT for $TYPE { $$$BODY }")),
+            ("lang", serde_json::json!("rust")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap_or_default();
+        assert!(output.contains("Bar"), "should find impl Bar for Foo: {output}");
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_typescript_function() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("index.ts"),
+            "function greet(name: string): void {\n  console.log(name);\n}\n",
+        )
+        .unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            (
+                "pattern",
+                serde_json::json!("function $NAME($$$ARGS): void { $$$BODY }"),
+            ),
+            ("lang", serde_json::json!("typescript")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap_or_default();
+        assert!(output.contains("greet"), "should find greet function: {output}");
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_call_pattern() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("app.js"),
+            "console.log('hello');\nconsole.log('world');\nalert('test');\n",
+        )
+        .unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("console.log($$$ARGS)")),
+            ("lang", serde_json::json!("javascript")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap_or_default();
+        assert!(
+            output.contains("console.log"),
+            "should find console.log calls: {output}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_no_matches() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("main.rs"), "fn main() {}\n").unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("pub struct $NAME { $$$FIELDS }")),
+            ("lang", serde_json::json!("rust")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap_or_default();
+        assert!(
+            output.contains("No structural matches found"),
+            "should report no matches: {output}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_invalid_pattern_error() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("index.ts"), "class Foo {}\n").unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            (
+                "pattern",
+                serde_json::json!("$NAME($$$ARGS): void { $$$BODY }"),
+            ),
+            ("lang", serde_json::json!("typescript")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(!result.success, "should fail for invalid pattern");
+        let error = result.error.unwrap_or_default();
+        assert!(
+            error.contains("Hint:"),
+            "should include helpful hint: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_path_not_found() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("fn $NAME()")),
+            ("path", serde_json::json!("nonexistent_dir")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(!result.success);
+        let error = result.error.unwrap_or_default();
+        assert!(
+            error.contains("Path not found"),
+            "should report path not found: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_with_head_limit() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("lib.rs"),
+            concat!(
+                "pub struct A;\npub struct B;\npub struct C;\n",
+                "pub struct D;\npub struct E;\n",
+            ),
+        )
+        .unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("pub struct $NAME;")),
+            ("lang", serde_json::json!("rust")),
+            ("head_limit", serde_json::json!(2)),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap_or_default();
+        // Should show only 2 matches but mention total
+        let match_lines: Vec<&str> = output
+            .lines()
+            .filter(|l| l.contains("pub struct"))
+            .collect();
+        assert_eq!(match_lines.len(), 2, "should limit to 2 matches: {output}");
+        assert!(
+            output.contains("of 5 matches shown"),
+            "should mention total: {output}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_go_function() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("main.go"),
+            "package main\n\nfunc greet(name string) {\n\tfmt.Println(name)\n}\n",
+        )
+        .unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("func $NAME($$$ARGS) { $$$BODY }")),
+            ("lang", serde_json::json!("go")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap_or_default();
+        assert!(output.contains("greet"), "should find greet function: {output}");
+    }
+
+    #[tokio::test]
+    async fn test_ast_grep_multiple_matches() {
+        if !sg_installed() {
+            return;
+        }
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("app.js"),
+            concat!(
+                "console.log('a');\n",
+                "console.log('b');\n",
+                "console.log('c');\n",
+            ),
+        )
+        .unwrap();
+
+        let tool = AstGrepTool;
+        let ctx = ToolContext::new(tmp.path());
+        let args = make_args(&[
+            ("pattern", serde_json::json!("console.log($$$ARGS)")),
+            ("lang", serde_json::json!("javascript")),
+        ]);
+
+        let result = tool.execute(args, &ctx).await;
+        assert!(result.success);
+        let output = result.output.unwrap_or_default();
+        let match_lines: Vec<&str> = output
+            .lines()
+            .filter(|l| l.contains("console.log"))
+            .collect();
+        assert_eq!(
+            match_lines.len(),
+            3,
+            "should find all 3 console.log calls: {output}"
+        );
+    }
 }

@@ -149,7 +149,7 @@ static TOOL_REGISTRY: &[ToolDisplayEntry] = &[
     ToolDisplayEntry {
         names: &["ast_grep", "AstGrep"],
         category: ToolCategory::Search,
-        verb: "AST",
+        verb: "AST-Grep",
         label: "code",
         primary_arg_keys: &["pattern"],
         result_format: ResultFormat::Directory,
@@ -755,9 +755,9 @@ fn format_parts_inner(
             format!("\"{pattern}\"")
         };
         if let Some(lang) = args.get("lang").and_then(|v| v.as_str()) {
-            return ("AST".to_string(), format!("{pattern_display} [{lang}]"));
+            return ("AST-Grep".to_string(), format!("{pattern_display} [{lang}]"));
         }
-        return ("AST".to_string(), pattern_display);
+        return ("AST-Grep".to_string(), pattern_display);
     }
 
     // Special case: list_files/Glob shows pattern, optionally with path
@@ -1031,5 +1031,43 @@ mod tests {
         let (verb, arg) = format_tool_call_parts("list_files", &args);
         assert_eq!(verb, "List");
         assert_eq!(arg, "**/*.rs");
+    }
+
+    #[test]
+    fn test_ast_grep_shows_pattern() {
+        let mut args = HashMap::new();
+        args.insert(
+            "pattern".to_string(),
+            serde_json::json!("fn $NAME($$$ARGS)"),
+        );
+        let (verb, arg) = format_tool_call_parts("ast_grep", &args);
+        assert_eq!(verb, "AST-Grep");
+        assert_eq!(arg, "\"fn $NAME($$$ARGS)\"");
+    }
+
+    #[test]
+    fn test_ast_grep_shows_pattern_with_lang() {
+        let mut args = HashMap::new();
+        args.insert(
+            "pattern".to_string(),
+            serde_json::json!("fn $NAME($$$ARGS)"),
+        );
+        args.insert("lang".to_string(), serde_json::json!("rust"));
+        let (verb, arg) = format_tool_call_parts("ast_grep", &args);
+        assert_eq!(verb, "AST-Grep");
+        assert_eq!(arg, "\"fn $NAME($$$ARGS)\" [rust]");
+    }
+
+    #[test]
+    fn test_ast_grep_long_pattern_truncated() {
+        let mut args = HashMap::new();
+        args.insert(
+            "pattern".to_string(),
+            serde_json::json!("function $NAME($$$PARAMS): Promise<$RET> { $$$BODY }"),
+        );
+        let (verb, arg) = format_tool_call_parts("ast_grep", &args);
+        assert_eq!(verb, "AST-Grep");
+        // Pattern > 40 chars gets truncated with "..."
+        assert!(arg.contains("..."), "should truncate long pattern: {arg}");
     }
 }
