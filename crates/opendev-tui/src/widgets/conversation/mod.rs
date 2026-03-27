@@ -65,10 +65,10 @@ pub struct ConversationWidget<'a> {
     shortener: Option<&'a crate::formatters::PathShortener>,
     /// Whether backgrounding is in progress (waiting for agent to yield).
     backgrounding_pending: bool,
-    /// Current animated thinking verb (typewriter-revealed text).
+    /// Current animated thinking verb (full text).
     thinking_verb: &'a str,
-    /// Whether the thinking verb is fully revealed (controls ellipsis display).
-    verb_fully_revealed: bool,
+    /// Fade-in intensity for the thinking verb (0.0 = dim, 1.0 = bright).
+    verb_fade_intensity: f32,
 }
 
 impl<'a> ConversationWidget<'a> {
@@ -88,7 +88,7 @@ impl<'a> ConversationWidget<'a> {
             shortener: None,
             backgrounding_pending: false,
             thinking_verb: "Thinking",
-            verb_fully_revealed: true,
+            verb_fade_intensity: 1.0,
         }
     }
 
@@ -145,9 +145,9 @@ impl<'a> ConversationWidget<'a> {
         self
     }
 
-    pub fn thinking_verb(mut self, verb: &'a str, fully_revealed: bool) -> Self {
+    pub fn thinking_verb(mut self, verb: &'a str, fade_intensity: f32) -> Self {
         self.thinking_verb = verb;
-        self.verb_fully_revealed = fully_revealed;
+        self.verb_fade_intensity = fade_intensity;
         self
     }
 

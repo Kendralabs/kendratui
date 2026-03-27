@@ -93,16 +93,15 @@ impl SpinnerState {
         self.tick_count
     }
 
-    /// Get the current thinking verb text (typewriter-revealed).
-    pub fn current_verb(&self) -> &str {
-        let verb = THINKING_VERBS[self.verb_index];
-        thinking_verbs::compute_verb_text(verb, self.verb_tick)
+    /// Get the current thinking verb (full text).
+    pub fn current_verb(&self) -> &'static str {
+        THINKING_VERBS[self.verb_index]
     }
 
-    /// Whether the current verb is fully revealed (for ellipsis display).
-    pub fn is_verb_fully_revealed(&self) -> bool {
+    /// Get the fade-in intensity for the current verb (0.0 = dim, 1.0 = bright).
+    pub fn verb_fade_intensity(&self) -> f32 {
         let verb = THINKING_VERBS[self.verb_index];
-        thinking_verbs::is_fully_revealed(verb, self.verb_tick)
+        thinking_verbs::compute_fade_intensity(verb, self.verb_tick)
     }
 
     /// Reset to initial state.
@@ -155,7 +154,8 @@ mod tests {
         spinner.reset();
         assert_eq!(spinner.tick_count(), 0);
         assert_eq!(spinner.current(), SPINNER_FRAMES[0]);
-        assert_eq!(spinner.current_verb(), "T"); // reset to first verb, tick 0
+        assert_eq!(spinner.current_verb(), "Thinking"); // reset to first verb
+        assert!((spinner.verb_fade_intensity() - 0.0).abs() < f32::EPSILON); // tick 0 = dim
     }
 
     #[test]
@@ -168,7 +168,7 @@ mod tests {
             spinner.tick();
         }
         // Should now be on a different verb
-        assert_ne!(spinner.current_verb(), &first_verb[..1]);
+        assert_ne!(spinner.current_verb(), first_verb);
     }
 
     #[test]

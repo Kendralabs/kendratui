@@ -21,7 +21,7 @@ impl App {
             .spinner_char(self.state.spinner.current())
             .compaction_active(self.state.compaction_active)
             .backgrounding_pending(self.state.backgrounding_pending)
-            .thinking_verb(self.state.spinner.current_verb(), self.state.spinner.is_verb_fully_revealed());
+            .thinking_verb(self.state.spinner.current_verb(), self.state.spinner.verb_fade_intensity());
         widget
             .build_spinner_lines()
             .iter()
@@ -85,7 +85,7 @@ impl App {
                     .spinner_char(self.state.spinner.current())
                     .compaction_active(self.state.compaction_active)
                     .backgrounding_pending(self.state.backgrounding_pending)
-                    .thinking_verb(self.state.spinner.current_verb(), self.state.spinner.is_verb_fully_revealed());
+                    .thinking_verb(self.state.spinner.current_verb(), self.state.spinner.verb_fade_intensity());
             if !self.state.cached_lines.is_empty() {
                 conversation = conversation.cached_lines(&self.state.cached_lines);
             }

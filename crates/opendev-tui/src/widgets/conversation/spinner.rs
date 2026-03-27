@@ -165,12 +165,22 @@ impl<'a> ConversationWidget<'a> {
                     ),
                     Span::styled(
                         if progress.description == "Thinking" {
-                            let suffix = if self.verb_fully_revealed { "... " } else { " " };
-                            format!("{}{}", self.thinking_verb, suffix)
+                            format!("{}... ", self.thinking_verb)
                         } else {
                             format!("{}... ", progress.description)
                         },
-                        Style::default().fg(style_tokens::SUBTLE),
+                        if progress.description == "Thinking" {
+                            // Fade from DIM_GREY to SUBTLE based on intensity
+                            let (dr, dg, db) = (107u8, 114u8, 128u8); // DIM_GREY
+                            let (sr, sg, sb) = (154u8, 160u8, 172u8); // SUBTLE
+                            let t = self.verb_fade_intensity;
+                            let r = dr as f32 + (sr as f32 - dr as f32) * t;
+                            let g = dg as f32 + (sg as f32 - dg as f32) * t;
+                            let b = db as f32 + (sb as f32 - db as f32) * t;
+                            Style::default().fg(ratatui::style::Color::Rgb(r as u8, g as u8, b as u8))
+                        } else {
+                            Style::default().fg(style_tokens::SUBTLE)
+                        },
                     ),
                     Span::styled(
                         format!("{}s \u{00b7} esc to interrupt", elapsed),

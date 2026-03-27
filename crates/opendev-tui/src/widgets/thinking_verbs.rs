@@ -1,13 +1,14 @@
-//! Animated thinking verb list and typewriter reveal logic.
+//! Animated thinking verb list and fade-in transition logic.
 //!
 //! Provides 100+ verbs that cycle during LLM processing with a
-//! character-by-character typewriter reveal animation.
+//! dim-to-bright fade-in color animation.
 
-/// Ticks per character during the typewriter reveal phase.
-/// At 60ms tick rate, this means 120ms per character.
+/// Ticks per character used to compute the fade-in duration.
+/// Longer verbs get a proportionally longer fade. At 60ms tick rate,
+/// a 10-char verb fades in over 10×2×60ms = 1.2s.
 pub const TICKS_PER_CHAR: u64 = 2;
 
-/// Ticks to hold the fully-revealed verb before cycling to the next.
+/// Ticks to hold the fully-visible verb before cycling to the next.
 /// At 60ms tick rate, this is ~3 seconds.
 pub const HOLD_TICKS: u64 = 50;
 
@@ -147,23 +148,16 @@ pub fn cycle_ticks_for(verb: &str) -> u64 {
     verb.len() as u64 * TICKS_PER_CHAR + HOLD_TICKS
 }
 
-/// Compute the visible portion of a verb at the given tick within its cycle.
+/// Compute fade-in intensity (0.0 = fully dim, 1.0 = fully bright).
 ///
-/// During the reveal phase, returns a prefix slice of the verb.
-/// After full reveal, returns the complete verb.
-pub fn compute_verb_text(verb: &str, verb_tick: u64) -> &str {
-    let chars_revealed = (verb_tick / TICKS_PER_CHAR) as usize;
-    if chars_revealed >= verb.len() {
-        verb
-    } else {
-        // All verbs are ASCII, so byte slicing is safe
-        &verb[..chars_revealed.max(1)]
+/// During the fade-in phase, intensity ramps linearly from 0.0 to 1.0.
+/// After the fade completes, returns 1.0 for the hold duration.
+pub fn compute_fade_intensity(verb: &str, verb_tick: u64) -> f32 {
+    let fade_ticks = verb.len() as u64 * TICKS_PER_CHAR;
+    if fade_ticks == 0 {
+        return 1.0;
     }
-}
-
-/// Whether the verb is fully revealed at the given tick.
-pub fn is_fully_revealed(verb: &str, verb_tick: u64) -> bool {
-    (verb_tick / TICKS_PER_CHAR) as usize >= verb.len()
+    (verb_tick as f32 / fade_ticks as f32).min(1.0)
 }
 
 /// Advance to the next verb index using a prime step for pseudo-random feel.
@@ -192,28 +186,16 @@ mod tests {
     }
 
     #[test]
-    fn test_typewriter_progression() {
-        let verb = "Pondering";
-        // Tick 0-1: show first char (0/2=0, clamped to 1)
-        assert_eq!(compute_verb_text(verb, 0), "P");
-        assert_eq!(compute_verb_text(verb, 1), "P");
-        // Tick 2-3: still one char (2/2=1)
-        assert_eq!(compute_verb_text(verb, 2), "P");
-        assert_eq!(compute_verb_text(verb, 3), "P");
-        // Tick 4-5: two chars (4/2=2)
-        assert_eq!(compute_verb_text(verb, 4), "Po");
-        assert_eq!(compute_verb_text(verb, 5), "Po");
-        // Tick 6: three chars (6/2=3)
-        assert_eq!(compute_verb_text(verb, 6), "Pon");
-    }
-
-    #[test]
-    fn test_full_reveal() {
-        let verb = "Pondering"; // 9 chars
-        let reveal_tick = 9 * TICKS_PER_CHAR; // 18
-        assert_eq!(compute_verb_text(verb, reveal_tick), "Pondering");
-        assert!(is_fully_revealed(verb, reveal_tick));
-        assert!(!is_fully_revealed(verb, reveal_tick - 1));
+    fn test_fade_intensity_progression() {
+        let verb = "Pondering"; // 9 chars, fade_ticks = 18
+        // Tick 0: intensity = 0.0
+        assert!((compute_fade_intensity(verb, 0) - 0.0).abs() < f32::EPSILON);
+        // Tick 9: halfway through fade = 0.5
+        assert!((compute_fade_intensity(verb, 9) - 0.5).abs() < f32::EPSILON);
+        // Tick 18: fully faded in = 1.0
+        assert!((compute_fade_intensity(verb, 18) - 1.0).abs() < f32::EPSILON);
+        // Tick 50: still 1.0 during hold
+        assert!((compute_fade_intensity(verb, 50) - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
