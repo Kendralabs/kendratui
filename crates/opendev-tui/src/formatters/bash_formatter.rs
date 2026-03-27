@@ -50,12 +50,7 @@ impl BashFormatter {
 impl ToolFormatter for BashFormatter {
     fn format<'a>(&self, _tool_name: &str, output: &str) -> FormattedOutput<'a> {
         let exit_code = Self::parse_exit_code(output);
-        let success = exit_code.is_none_or(|c| c == 0);
-        let status_color = if success {
-            style_tokens::SUCCESS
-        } else {
-            style_tokens::ERROR
-        };
+        let status_color = style_tokens::GREY;
 
         // Header: command line or generic label
         let cmd = Self::extract_command(output);
@@ -157,10 +152,10 @@ mod tests {
         let result = f.format("Bash", output);
 
         let footer = result.footer.unwrap();
-        // Check that exit code 127 is present and colored red
+        // Check that exit code 127 is present and colored grey (same as success)
         let code_span = &footer.spans[1];
         assert_eq!(code_span.content.as_ref(), "127");
-        assert_eq!(code_span.style.fg, Some(style_tokens::ERROR));
+        assert_eq!(code_span.style.fg, Some(style_tokens::GREY));
     }
 
     #[test]

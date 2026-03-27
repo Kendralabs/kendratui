@@ -661,10 +661,10 @@ impl ReactLoop {
                             content_preview = &content[..content.len().min(120)],
                             "Post-nudge acceptance — emitting suppressed content"
                         );
-                        if !content.is_empty() {
-                            if let Some(cb) = event_callback {
-                                cb.on_agent_chunk(&content);
-                            }
+                        if !content.is_empty()
+                            && let Some(cb) = event_callback
+                        {
+                            cb.on_agent_chunk(&content);
                         }
                     }
 

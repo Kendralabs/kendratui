@@ -480,7 +480,7 @@ impl<'a> ConversationWidget<'a> {
             }
         } else if effective_collapsed {
             if is_bash {
-                lines.extend(build_bash_preview(&tc.result_lines, tc.success));
+                lines.extend(build_bash_preview(&tc.result_lines));
             } else if !tc.result_lines.is_empty() {
                 let count = tc.result_lines.len();
                 let verb = crate::formatters::tool_registry::lookup_tool(&tc.name).verb;
@@ -499,7 +499,7 @@ impl<'a> ConversationWidget<'a> {
             }
         } else if tc.result_lines.is_empty() && is_bash {
             // Empty bash output: show "(no output)"
-            lines.extend(build_bash_preview(&tc.result_lines, tc.success));
+            lines.extend(build_bash_preview(&tc.result_lines));
         }
 
         // Nested tool calls (from subagent execution)
@@ -510,17 +510,22 @@ impl<'a> ConversationWidget<'a> {
     }
 }
 
+/// Strip ANSI escape sequences from a string.
+fn strip_ansi(s: &str) -> String {
+    use std::sync::LazyLock;
+    static RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"\x1B\[[\d;]*[A-Za-z]|\x1B[@-_][0-?]*[ -/]*[@-~]").unwrap()
+    });
+    RE.replace_all(s, "").to_string()
+}
+
 /// Build a Codex-style inline preview for Bash tool results.
 ///
 /// - Empty output → single `(no output)` line
 /// - ≤4 lines → all lines shown inline
 /// - >4 lines → first 2, `… +N lines`, last 2
-pub(crate) fn build_bash_preview(result_lines: &[String], success: bool) -> Vec<Line<'static>> {
-    let text_color = if success {
-        style_tokens::SUBTLE
-    } else {
-        style_tokens::ERROR
-    };
+pub(crate) fn build_bash_preview(result_lines: &[String]) -> Vec<Line<'static>> {
+    let text_color = style_tokens::SUBTLE;
     let total = result_lines.len();
 
     // Helper: build a result line with the appropriate prefix
@@ -532,7 +537,7 @@ pub(crate) fn build_bash_preview(result_lines: &[String], success: bool) -> Vec<
         };
         Line::from(vec![
             Span::styled(prefix, Style::default().fg(style_tokens::GREY)),
-            Span::styled(text.to_string(), Style::default().fg(text_color)),
+            Span::styled(strip_ansi(text), Style::default().fg(text_color)),
         ])
     };
 

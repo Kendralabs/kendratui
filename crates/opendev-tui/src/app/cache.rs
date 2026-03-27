@@ -638,7 +638,7 @@ impl App {
                 }
             } else if effective_collapsed {
                 if is_bash {
-                    lines.extend(build_bash_preview(&tc.result_lines, tc.success));
+                    lines.extend(build_bash_preview(&tc.result_lines));
                 } else if !tc.result_lines.is_empty() {
                     let count = tc.result_lines.len();
                     let verb = crate::formatters::tool_registry::lookup_tool(&tc.name).verb;
@@ -649,7 +649,7 @@ impl App {
                     )));
                 }
             } else if tc.result_lines.is_empty() && is_bash {
-                lines.extend(build_bash_preview(&tc.result_lines, tc.success));
+                lines.extend(build_bash_preview(&tc.result_lines));
             }
 
             for nested in &tc.nested_calls {
