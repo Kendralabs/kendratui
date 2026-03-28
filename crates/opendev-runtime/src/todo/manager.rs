@@ -624,6 +624,86 @@ mod tests {
     }
 
     #[test]
+    fn test_interrupt_resume_cycle() {
+        let mut mgr = TodoManager::from_steps(&["A".into(), "B".into(), "C".into()]);
+        mgr.start(2);
+        assert_eq!(mgr.get(2).unwrap().status, TodoStatus::InProgress);
+
+        // Simulate interrupt
+        let reset = mgr.reset_stuck_todos();
+        assert_eq!(reset, 1);
+        assert_eq!(mgr.get(2).unwrap().status, TodoStatus::Pending);
+        assert_eq!(mgr.in_progress_count(), 0);
+
+        // Simulate resume — start same item again
+        mgr.start(2);
+        assert_eq!(mgr.get(2).unwrap().status, TodoStatus::InProgress);
+        assert_eq!(mgr.in_progress_count(), 1);
+    }
+
+    #[test]
+    fn test_multiple_interrupt_resume_cycles() {
+        let mut mgr = TodoManager::from_steps(&["A".into(), "B".into()]);
+
+        for _ in 0..3 {
+            mgr.start(1);
+            assert_eq!(mgr.get(1).unwrap().status, TodoStatus::InProgress);
+
+            let reset = mgr.reset_stuck_todos();
+            assert_eq!(reset, 1);
+            assert_eq!(mgr.get(1).unwrap().status, TodoStatus::Pending);
+        }
+
+        // Final resume
+        mgr.start(1);
+        assert_eq!(mgr.get(1).unwrap().status, TodoStatus::InProgress);
+        assert_eq!(mgr.pending_count(), 1); // B still pending
+    }
+
+    #[test]
+    fn test_interrupt_preserves_completed() {
+        let mut mgr = TodoManager::from_steps(&["A".into(), "B".into(), "C".into()]);
+        mgr.complete(1);
+        mgr.start(2);
+        // A=done, B=doing, C=pending
+
+        let reset = mgr.reset_stuck_todos();
+        assert_eq!(reset, 1);
+        assert_eq!(mgr.get(1).unwrap().status, TodoStatus::Completed);
+        assert_eq!(mgr.get(2).unwrap().status, TodoStatus::Pending);
+        assert_eq!(mgr.get(3).unwrap().status, TodoStatus::Pending);
+    }
+
+    #[test]
+    fn test_write_todos_after_interrupt() {
+        let mut mgr = TodoManager::from_steps(&["Old A".into(), "Old B".into()]);
+        mgr.start(1);
+        mgr.reset_stuck_todos();
+
+        // Write entirely new todos
+        mgr.write_todos(vec![
+            ("New X".into(), TodoStatus::Pending, String::new(), Vec::new()),
+            ("New Y".into(), TodoStatus::InProgress, "Working on Y".into(), Vec::new()),
+        ]);
+
+        assert_eq!(mgr.total(), 2);
+        assert_eq!(mgr.get(1).unwrap().title, "New X");
+        assert_eq!(mgr.get(2).unwrap().status, TodoStatus::InProgress);
+    }
+
+    #[test]
+    fn test_clear_after_interrupt() {
+        let mut mgr = TodoManager::from_steps(&["A".into(), "B".into()]);
+        mgr.start(1);
+        mgr.reset_stuck_todos();
+        assert_eq!(mgr.total(), 2);
+
+        mgr.clear();
+        assert_eq!(mgr.total(), 0);
+        assert!(!mgr.has_todos());
+    }
+
+    #[test]
     fn test_find_todo_formats() {
         let mgr = TodoManager::from_steps(&["Alpha".into(), "Beta".into(), "Gamma".into()]);
 

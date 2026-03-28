@@ -216,6 +216,43 @@ impl App {
                 self.state
                     .active_subagents
                     .retain(|s| !s.finished || s.backgrounded);
+                // Auto-resume next pending todo when agent restarts after interrupt
+                // (reset_stuck_todos reverted InProgress→Pending; restore it now)
+                if let Some(ref mgr) = self.state.todo_manager
+                    && let Ok(mut mgr) = mgr.lock()
+                    && mgr.has_todos()
+                    && !mgr.all_completed()
+                    && mgr.in_progress_count() == 0
+                {
+                    if let Some(next) = mgr.next_pending() {
+                        let id = next.id;
+                        mgr.start(id);
+                    }
+                    self.state.todo_items = mgr
+                        .all()
+                        .iter()
+                        .map(|item| TodoDisplayItem {
+                            id: item.id,
+                            title: item.title.clone(),
+                            status: match item.status {
+                                opendev_runtime::TodoStatus::Pending => {
+                                    TodoDisplayStatus::Pending
+                                }
+                                opendev_runtime::TodoStatus::InProgress => {
+                                    TodoDisplayStatus::InProgress
+                                }
+                                opendev_runtime::TodoStatus::Completed => {
+                                    TodoDisplayStatus::Completed
+                                }
+                            },
+                            active_form: if item.active_form.is_empty() {
+                                None
+                            } else {
+                                Some(item.active_form.clone())
+                            },
+                        })
+                        .collect();
+                }
                 self.state.dirty = true;
             }
             AppEvent::AgentChunk(text) => {
