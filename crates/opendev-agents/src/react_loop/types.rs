@@ -2,6 +2,8 @@
 
 use serde_json::Value;
 
+use crate::traits::{AgentError, AgentResult};
+
 /// Metrics for a single tool call execution.
 #[derive(Debug, Clone)]
 pub struct ToolCallMetric {
@@ -81,4 +83,15 @@ pub enum TurnResult {
     MaxIterations,
     /// The run was interrupted by the user.
     Interrupted,
+}
+
+/// Control flow signal returned by extracted phase functions.
+///
+/// Used to propagate `continue` and `return` semantics from extracted
+/// functions back to the orchestrator loop in `run_inner`.
+pub(super) enum LoopAction {
+    /// Continue to the next iteration of the main loop.
+    Continue,
+    /// Return this result from `run_inner`.
+    Return(Result<AgentResult, AgentError>),
 }
