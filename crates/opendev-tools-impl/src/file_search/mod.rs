@@ -250,6 +250,12 @@ impl BaseTool for GrepTool {
             grep_args.fixed_string = true;
         }
 
+        // If pattern contains literal \n (newline escape), auto-enable multiline
+        // so ripgrep accepts it instead of erroring.
+        if !grep_args.fixed_string && grep_args.pattern.contains("\\n") {
+            grep_args.multiline = true;
+        }
+
         // Try ripgrep first, fall back to built-in grep
         match self.run_rg(&grep_args, &search_path).await {
             Ok(result) => result,
