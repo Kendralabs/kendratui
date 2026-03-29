@@ -269,6 +269,21 @@ If you're interested in contributing to OpenDev, please open an issue or submit 
 
 ---
 
+### Benchmarks
+
+Measured on macOS ARM64 (Apple Silicon). Startup via `--help` with [hyperfine](https://github.com/sharkdp/hyperfine) (20 runs). Memory via `/usr/bin/time -l` (avg of 5 runs).
+
+| Agent | Startup | Peak Memory | Install Size | Language |
+|-------|--------:|------------:|-------------:|----------|
+| **OpenDev** 0.1.4 | **3.3 ms** | **9.5 MB** | **18 MB** | Rust |
+| Codex 0.116.0 | 36.7 ms (11x) | 43.7 MB (4.6x) | 116 MB | Node.js |
+| Claude Code 2.1.87 | 96.6 ms (29x) | 215 MB (22.6x) | 188 MB | Native |
+| OpenCode 1.2.27 | 548.2 ms (168x) | 286 MB (30x) | 90 MB | Go |
+
+> Multipliers show how much slower/larger compared to OpenDev. Lower is better for all columns.
+
+---
+
 ### How OpenDev Compares
 
 - **vs. Claude Code / Codex CLI / Gemini CLI:** Closed-source tools that lock you into a single provider. OpenDev is fully open source and lets you mix models from any provider, independently bound per workflow (execution, thinking, critique, compaction, vision).
