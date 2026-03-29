@@ -32,16 +32,20 @@ Work is organized into concurrent sessions composed of specialized sub-agents. E
 
 Each workflow is a modular slot you can bind to any LLM of your choice: **Normal** (execution), **Thinking** (reasoning), **Compact** (context summarization), **Self-Critique** (output verification), and **VLM** (vision). For example, use Claude Opus for execution, GPT-o3 for thinking, and a lightweight Qwen model for compaction. Together, these combinations form a compound AI system where multiple models collaborate, each optimized for its role.
 
-OpenDev is written in **Rust** — it starts in **3.3 ms**, uses just **9.5 MB of memory**, and ships as a single **18 MB binary**. That makes it the **fastest and lightest coding agent** available today — up to **168x faster startup** and **30x less memory** than alternatives.
+OpenDev is written in **Rust** — it starts in **4.3 ms**, uses just **9.4 MB of memory**, and ships as a single **18 MB binary**. That makes it the **fastest and lightest coding agent** available today — up to **128x faster startup** and **30x less memory** than alternatives.
 
-| Agent | Startup | Peak Memory | Install Size |
+<div align="center">
+
+| Agent | Startup (mean ± σ) | Peak Memory (median) | Install Size |
 |-------|--------:|------------:|-------------:|
-| **OpenDev** 0.1.4 | **3.3 ms** | **9.5 MB** | **18 MB** |
-| Codex 0.116.0 | 36.7 ms (11x) | 43.7 MB (4.6x) | 116 MB |
-| Claude Code 2.1.87 | 96.6 ms (29x) | 215 MB (22.6x) | 188 MB |
-| OpenCode 1.2.27 | 548.2 ms (168x) | 286 MB (30x) | 90 MB |
+| **OpenDev** 0.1.4 | **4.3 ms ± 0.4 ms** | **9.4 MB** | **18 MB** |
+| Codex 0.116.0 | 37.8 ms ± 0.8 ms (9x) | 43.7 MB (4.6x) | 116 MB |
+| Claude Code 2.1.87 | 87.3 ms ± 2.0 ms (20x) | 214.6 MB (22.8x) | 188 MB |
+| OpenCode 1.2.27 | 557.4 ms ± 31.8 ms (128x) | 285.9 MB (30.4x) | 90 MB |
 
-<sub>Measured on macOS ARM64 (Apple Silicon). Startup via <code>--help</code> with <a href="https://github.com/sharkdp/hyperfine">hyperfine</a> (20 runs). Memory via <code>/usr/bin/time -l</code> (avg of 5 runs). Multipliers show how much slower/larger vs OpenDev.</sub>
+<sub>macOS ARM64 (Apple Silicon) · Startup: <a href="https://github.com/sharkdp/hyperfine">hyperfine</a> <code>--shell=none --warmup 10 --runs 100</code> · Memory: <code>/usr/bin/time -l</code> median of 20 runs · Multipliers relative to OpenDev</sub>
+
+</div>
 
 <p align="center">
   <img src="figures/top.png" alt="OpenDev Compound AI Architecture" width="700"/>
@@ -51,7 +55,7 @@ OpenDev is written in **Rust** — it starts in **3.3 ms**, uses just **9.5 MB o
 
 ### Why OpenDev?
 
-- **Blazing fast, ultra lightweight.** 3.3 ms startup, 9.5 MB RAM, 18 MB on disk. Written in Rust with zero interpreter overhead — it launches before other agents finish loading their runtime.
+- **Blazing fast, ultra lightweight.** 4.3 ms startup, 9.4 MB RAM, 18 MB on disk. Written in Rust with zero interpreter overhead — it launches before other agents finish loading their runtime.
 - **Proactive, not reactive.** OpenDev can plan, execute, and iterate autonomously. Kick off a refactoring, walk away, and come back to a PR ready for review.
 - **Multi-provider, multi-model.** Assign different models from different providers to every workflow and session, all running in parallel. Your models, your rules.
 - **TUI + Web UI.** A full terminal UI for power users and a Web UI for visual monitoring. The Web UI supports remote sessions, so you can start a task from your phone and let OpenDev work while you sleep.
