@@ -1,8 +1,10 @@
 [package]
 name = "opendev-docker"
+description = "Docker runtime support for OpenDev AI coding agent"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 serde = { workspace = true }
