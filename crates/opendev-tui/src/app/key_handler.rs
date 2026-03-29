@@ -98,6 +98,388 @@ impl App {
         }
     }
 
+    /// Handle model picker keys. Returns true if the key was consumed.
+    fn handle_key_model_picker(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        if let Some(ref mut picker) = self.model_picker_controller
+            && picker.active()
+        {
+            match key.code {
+                KeyCode::Up => picker.prev(),
+                KeyCode::Down => picker.next(),
+                KeyCode::Enter => {
+                    if let Some(selected) = picker.select() {
+                        self.state.model = selected.id.clone();
+                        self.push_slash_echo("/models");
+                        self.push_command_result(format!(
+                            "Model set to {} ({})",
+                            selected.name, selected.provider_display
+                        ));
+                        // Reset reasoning level — new model may have different support
+                        self.state.reasoning_level = super::enums::ReasoningLevel::Off;
+                        // Propagate to backend
+                        if let Some(ref tx) = self.user_message_tx {
+                            let _ = tx.send(format!("\x00__MODEL_CHANGE__{}", self.state.model));
+                        }
+                    }
+                    self.model_picker_controller = None;
+                }
+                KeyCode::Esc => {
+                    picker.cancel();
+                    self.model_picker_controller = None;
+                }
+                KeyCode::Backspace => picker.search_pop(),
+                KeyCode::Char(c) => picker.search_push(c),
+                _ => {}
+            }
+            self.state.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    /// Handle task watcher overlay keys. Returns true if the key was consumed.
+    fn handle_key_task_watcher(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        if !self.state.task_watcher_open {
+            return false;
+        }
+
+        // Compute covered bg task IDs (parent tasks with backgrounded subagents)
+        let covered_bg_task_ids: std::collections::HashSet<&String> = self
+            .state
+            .active_subagents
+            .iter()
+            .filter(|s| s.backgrounded && !s.finished)
+            .filter_map(|s| self.state.bg_subagent_map.get(&s.subagent_id))
+            .collect();
+        let filtered_bg_count = self
+            .state
+            .bg_agent_manager
+            .all_tasks()
+            .iter()
+            .filter(|t| !t.hidden && !covered_bg_task_ids.contains(&t.task_id))
+            .count();
+        let total_tasks = self.state.active_subagents.len() + filtered_bg_count;
+
+        match (key.modifiers, key.code) {
+            // Close
+            (_, KeyCode::Char('q'))
+            | (_, KeyCode::Esc)
+            | (KeyModifiers::ALT, KeyCode::Char('b')) => {
+                self.state.task_watcher_open = false;
+                self.state.force_clear = true;
+            }
+
+            // Focus navigation: left
+            (_, KeyCode::Char('h')) | (_, KeyCode::Left) => {
+                if self.state.task_watcher_focus > 0 {
+                    self.state.task_watcher_focus -= 1;
+                }
+            }
+            // Focus navigation: right
+            (_, KeyCode::Char('l')) | (_, KeyCode::Right) => {
+                if total_tasks > 0 {
+                    self.state.task_watcher_focus =
+                        (self.state.task_watcher_focus + 1).min(total_tasks - 1);
+                }
+            }
+            // Focus navigation: up (move by cols)
+            (_, KeyCode::Char('k')) | (_, KeyCode::Up) => {
+                let cols = crate::widgets::background_tasks::compute_grid_cols(
+                    total_tasks,
+                    self.state.terminal_width,
+                );
+                if self.state.task_watcher_focus >= cols {
+                    self.state.task_watcher_focus -= cols;
+                }
+            }
+            // Focus navigation: down (move by cols)
+            (_, KeyCode::Char('j')) | (_, KeyCode::Down) => {
+                let cols = crate::widgets::background_tasks::compute_grid_cols(
+                    total_tasks,
+                    self.state.terminal_width,
+                );
+                let new_focus = self.state.task_watcher_focus + cols;
+                if total_tasks > 0 {
+                    self.state.task_watcher_focus = new_focus.min(total_tasks - 1);
+                }
+            }
+
+            // Scroll within focused cell: up
+            (KeyModifiers::SHIFT, KeyCode::Char('K')) => {
+                let idx = self.state.task_watcher_focus;
+                while self.state.task_watcher_cell_scrolls.len() <= idx {
+                    self.state.task_watcher_cell_scrolls.push(0);
+                }
+                self.state.task_watcher_cell_scrolls[idx] += 1;
+            }
+            // Scroll within focused cell: down
+            (KeyModifiers::SHIFT, KeyCode::Char('J')) => {
+                let idx = self.state.task_watcher_focus;
+                if let Some(scroll) = self.state.task_watcher_cell_scrolls.get_mut(idx) {
+                    *scroll = scroll.saturating_sub(1);
+                }
+            }
+
+            // Kill focused background task
+            (_, KeyCode::Char('x')) => {
+                let sa_count = self.state.active_subagents.len();
+                let focus = self.state.task_watcher_focus;
+                if focus < sa_count {
+                    // Focused on a subagent cell — cancel just this subagent
+                    let subagent = &self.state.active_subagents[focus];
+                    if subagent.backgrounded
+                        && !subagent.finished
+                        && let Some(token) =
+                            self.state.subagent_cancel_tokens.get(&subagent.subagent_id)
+                    {
+                        token.cancel();
+                        // If this was the last active subagent for the parent bg task, kill the parent too
+                        if let Some(parent_bg_id) = self
+                            .state
+                            .bg_subagent_map
+                            .get(&subagent.subagent_id)
+                            .cloned()
+                        {
+                            let other_active = self.state.active_subagents.iter().any(|s| {
+                                s.backgrounded
+                                    && !s.finished
+                                    && s.subagent_id != subagent.subagent_id
+                                    && self.state.bg_subagent_map.get(&s.subagent_id)
+                                        == Some(&parent_bg_id)
+                            });
+                            if !other_active {
+                                self.state.bg_agent_manager.kill_task(&parent_bg_id);
+                                self.state.bg_agent_manager.hide_task(&parent_bg_id);
+                            }
+                        }
+                    }
+                } else {
+                    // Focused on a bg_agent_manager cell — use filtered list to match display order
+                    let bg_idx = focus - sa_count;
+                    let filtered: Vec<_> = self
+                        .state
+                        .bg_agent_manager
+                        .all_tasks()
+                        .into_iter()
+                        .filter(|t| !t.hidden && !covered_bg_task_ids.contains(&t.task_id))
+                        .collect();
+                    if bg_idx < filtered.len() {
+                        let task_id = filtered[bg_idx].task_id.clone();
+                        self.state.bg_agent_manager.kill_task(&task_id);
+                    }
+                }
+            }
+
+            // Page navigation: left
+            (KeyModifiers::SHIFT, KeyCode::Char('H')) => {
+                self.state.task_watcher_page = self.state.task_watcher_page.saturating_sub(1);
+            }
+            // Page navigation: right
+            (KeyModifiers::SHIFT, KeyCode::Char('L')) => {
+                self.state.task_watcher_page += 1; // clamped in render
+            }
+
+            _ => {}
+        }
+        self.state.dirty = true;
+        true
+    }
+
+    /// Handle ask-user dialog keys. Returns true if the key was consumed.
+    fn handle_key_ask_user(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        if !self.ask_user_controller.active() {
+            return false;
+        }
+
+        match key.code {
+            KeyCode::Up if self.ask_user_controller.has_options() => {
+                self.ask_user_controller.prev();
+            }
+            KeyCode::Down if self.ask_user_controller.has_options() => {
+                self.ask_user_controller.next();
+            }
+            KeyCode::Char(c) if !self.ask_user_controller.has_options() => {
+                self.ask_user_controller.push_char(c);
+            }
+            KeyCode::Backspace if !self.ask_user_controller.has_options() => {
+                self.ask_user_controller.pop_char();
+            }
+            KeyCode::Enter => {
+                if let Some(answer) = self.ask_user_controller.confirm()
+                    && let Some(tx) = self.ask_user_response_tx.take()
+                {
+                    let _ = tx.send(answer);
+                }
+            }
+            KeyCode::Esc => {
+                let fallback = self.ask_user_controller.default_value().unwrap_or_default();
+                self.ask_user_controller.cancel();
+                if let Some(tx) = self.ask_user_response_tx.take() {
+                    let _ = tx.send(fallback);
+                }
+                let _ = self.event_tx.send(AppEvent::Interrupt);
+            }
+            _ => {}
+        }
+        self.state.dirty = true;
+        true
+    }
+
+    /// Handle plan approval dialog keys. Returns true if the key was consumed.
+    fn handle_key_plan_approval(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        if !self.plan_approval_controller.active() {
+            return false;
+        }
+
+        match key.code {
+            KeyCode::Up => self.plan_approval_controller.prev(),
+            KeyCode::Down => self.plan_approval_controller.next(),
+            KeyCode::Enter => {
+                if let Some(decision) = self.plan_approval_controller.confirm() {
+                    // Switch mode based on decision
+                    match decision.action.as_str() {
+                        "approve_auto" | "approve" => {
+                            self.state.mode = OperationMode::Normal;
+                        }
+                        _ => {} // "modify" stays in Plan mode
+                    }
+                    // Forward decision back to the blocking tool
+                    if let Some(tx) = self.plan_approval_response_tx.take() {
+                        let _ = tx.send(decision);
+                    }
+                }
+            }
+            KeyCode::Esc => {
+                self.plan_approval_controller.cancel();
+                // cancel() internally confirms with "modify" via the controller's
+                // oneshot — but we also need to forward through our stored sender.
+                // The controller already sent via its own oneshot in cancel(),
+                // so just clean up our stored tx (it's already consumed by cancel).
+                self.plan_approval_response_tx.take();
+                let _ = self.event_tx.send(AppEvent::Interrupt);
+            }
+            _ => {}
+        }
+        self.state.dirty = true;
+        true
+    }
+
+    /// Handle tool approval dialog keys. Returns true if the key was consumed.
+    fn handle_key_tool_approval(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        if !self.approval_controller.active() {
+            return false;
+        }
+
+        match key.code {
+            KeyCode::Up => self.approval_controller.move_selection(-1),
+            KeyCode::Down => self.approval_controller.move_selection(1),
+            KeyCode::Enter => {
+                // Capture selected option before confirm() clears state
+                let idx = self.approval_controller.selected_index();
+                let option = self.approval_controller.options()[idx].clone();
+                let command = self.approval_controller.command().to_string();
+                self.approval_controller.confirm();
+                // Forward decision back to the react loop
+                if let Some(tx) = self.approval_response_tx.take() {
+                    let choice = if option.choice == "2" {
+                        "yes_remember".to_string()
+                    } else if option.approved {
+                        "yes".to_string()
+                    } else {
+                        "no".to_string()
+                    };
+                    let _ = tx.send(opendev_runtime::ToolApprovalDecision {
+                        approved: option.approved,
+                        choice,
+                        command,
+                    });
+                }
+            }
+            KeyCode::Esc => {
+                let command = self.approval_controller.command().to_string();
+                self.approval_controller.cancel();
+                // Send denial back to the react loop
+                if let Some(tx) = self.approval_response_tx.take() {
+                    let _ = tx.send(opendev_runtime::ToolApprovalDecision {
+                        approved: false,
+                        choice: "no".to_string(),
+                        command,
+                    });
+                }
+                let _ = self.event_tx.send(AppEvent::Interrupt);
+            }
+            _ => {}
+        }
+        self.state.dirty = true;
+        true
+    }
+
+    /// Handle leader key dispatch (Ctrl+X prefix). Returns true if the key was consumed.
+    fn handle_key_leader(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        if !self.state.leader_pending {
+            return false;
+        }
+
+        self.state.leader_pending = false;
+        self.state.leader_timestamp = None;
+        match key.code {
+            KeyCode::Char('u') => {
+                // Undo
+                self.execute_slash_command("/undo");
+            }
+            KeyCode::Char('r') => {
+                // Redo
+                self.execute_slash_command("/redo");
+            }
+            KeyCode::Char('s') => {
+                // Share
+                self.execute_slash_command("/share");
+            }
+            KeyCode::Char('m') => {
+                // Models
+                self.execute_slash_command("/models");
+            }
+            KeyCode::Char('p') => {
+                // Sessions
+                self.execute_slash_command("/sessions");
+            }
+            KeyCode::Char('d') => {
+                // Debug panel
+                self.state.debug_panel_open = !self.state.debug_panel_open;
+            }
+            KeyCode::Esc => {
+                // Cancel leader
+            }
+            _ => {
+                use crate::widgets::toast::{Toast, ToastLevel};
+                self.state.toasts.push(Toast::new(
+                    format!("C-x {:?} — unknown", key.code),
+                    ToastLevel::Warning,
+                ));
+            }
+        }
+        self.state.dirty = true;
+        true
+    }
+
+    /// Handle debug panel keys. Returns true if the key was consumed.
+    fn handle_key_debug_panel(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        if !self.state.debug_panel_open {
+            return false;
+        }
+
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.state.debug_panel_open = false;
+                self.state.dirty = true;
+                return true;
+            }
+            _ => {}
+        }
+        self.state.dirty = true;
+        false
+    }
+
     /// Handle a key press event.
     pub(super) fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
         // Only process key-press and repeat events (Kitty protocol also sends Release)
@@ -149,360 +531,18 @@ impl App {
             return;
         }
 
-        // Delegate to model picker controller when active
-        if let Some(ref mut picker) = self.model_picker_controller
-            && picker.active()
-        {
-            match key.code {
-                KeyCode::Up => picker.prev(),
-                KeyCode::Down => picker.next(),
-                KeyCode::Enter => {
-                    if let Some(selected) = picker.select() {
-                        self.state.model = selected.id.clone();
-                        self.push_slash_echo("/models");
-                        self.push_command_result(format!(
-                            "Model set to {} ({})",
-                            selected.name, selected.provider_display
-                        ));
-                        // Reset reasoning level — new model may have different support
-                        self.state.reasoning_level = super::enums::ReasoningLevel::Off;
-                        // Propagate to backend
-                        if let Some(ref tx) = self.user_message_tx {
-                            let _ = tx.send(format!("\x00__MODEL_CHANGE__{}", self.state.model));
-                        }
-                    }
-                    self.model_picker_controller = None;
-                }
-                KeyCode::Esc => {
-                    picker.cancel();
-                    self.model_picker_controller = None;
-                }
-                KeyCode::Backspace => picker.search_pop(),
-                KeyCode::Char(c) => picker.search_push(c),
-                _ => {}
-            }
-            self.state.dirty = true;
-            return;
-        }
+        // Modal delegates — consume all input when active
+        if self.handle_key_model_picker(key) { return; }
+        if self.handle_key_task_watcher(key) { return; }
+        if self.handle_key_ask_user(key) { return; }
+        if self.handle_key_plan_approval(key) { return; }
+        if self.handle_key_tool_approval(key) { return; }
 
-        // Delegate to task watcher overlay when open — consume all keys
-        if self.state.task_watcher_open {
-            // Compute covered bg task IDs (parent tasks with backgrounded subagents)
-            let covered_bg_task_ids: std::collections::HashSet<&String> = self
-                .state
-                .active_subagents
-                .iter()
-                .filter(|s| s.backgrounded && !s.finished)
-                .filter_map(|s| self.state.bg_subagent_map.get(&s.subagent_id))
-                .collect();
-            let filtered_bg_count = self
-                .state
-                .bg_agent_manager
-                .all_tasks()
-                .iter()
-                .filter(|t| !t.hidden && !covered_bg_task_ids.contains(&t.task_id))
-                .count();
-            let total_tasks = self.state.active_subagents.len() + filtered_bg_count;
+        // Leader key
+        if self.handle_key_leader(key) { return; }
 
-            match (key.modifiers, key.code) {
-                // Close
-                (_, KeyCode::Char('q'))
-                | (_, KeyCode::Esc)
-                | (KeyModifiers::ALT, KeyCode::Char('b')) => {
-                    self.state.task_watcher_open = false;
-                    self.state.force_clear = true;
-                }
-
-                // Focus navigation: left
-                (_, KeyCode::Char('h')) | (_, KeyCode::Left) => {
-                    if self.state.task_watcher_focus > 0 {
-                        self.state.task_watcher_focus -= 1;
-                    }
-                }
-                // Focus navigation: right
-                (_, KeyCode::Char('l')) | (_, KeyCode::Right) => {
-                    if total_tasks > 0 {
-                        self.state.task_watcher_focus =
-                            (self.state.task_watcher_focus + 1).min(total_tasks - 1);
-                    }
-                }
-                // Focus navigation: up (move by cols)
-                (_, KeyCode::Char('k')) | (_, KeyCode::Up) => {
-                    let cols = crate::widgets::background_tasks::compute_grid_cols(
-                        total_tasks,
-                        self.state.terminal_width,
-                    );
-                    if self.state.task_watcher_focus >= cols {
-                        self.state.task_watcher_focus -= cols;
-                    }
-                }
-                // Focus navigation: down (move by cols)
-                (_, KeyCode::Char('j')) | (_, KeyCode::Down) => {
-                    let cols = crate::widgets::background_tasks::compute_grid_cols(
-                        total_tasks,
-                        self.state.terminal_width,
-                    );
-                    let new_focus = self.state.task_watcher_focus + cols;
-                    if total_tasks > 0 {
-                        self.state.task_watcher_focus = new_focus.min(total_tasks - 1);
-                    }
-                }
-
-                // Scroll within focused cell: up
-                (KeyModifiers::SHIFT, KeyCode::Char('K')) => {
-                    let idx = self.state.task_watcher_focus;
-                    while self.state.task_watcher_cell_scrolls.len() <= idx {
-                        self.state.task_watcher_cell_scrolls.push(0);
-                    }
-                    self.state.task_watcher_cell_scrolls[idx] += 1;
-                }
-                // Scroll within focused cell: down
-                (KeyModifiers::SHIFT, KeyCode::Char('J')) => {
-                    let idx = self.state.task_watcher_focus;
-                    if let Some(scroll) = self.state.task_watcher_cell_scrolls.get_mut(idx) {
-                        *scroll = scroll.saturating_sub(1);
-                    }
-                }
-
-                // Kill focused background task
-                (_, KeyCode::Char('x')) => {
-                    let sa_count = self.state.active_subagents.len();
-                    let focus = self.state.task_watcher_focus;
-                    if focus < sa_count {
-                        // Focused on a subagent cell — cancel just this subagent
-                        let subagent = &self.state.active_subagents[focus];
-                        if subagent.backgrounded
-                            && !subagent.finished
-                            && let Some(token) =
-                                self.state.subagent_cancel_tokens.get(&subagent.subagent_id)
-                        {
-                            token.cancel();
-                            // If this was the last active subagent for the parent bg task, kill the parent too
-                            if let Some(parent_bg_id) = self
-                                .state
-                                .bg_subagent_map
-                                .get(&subagent.subagent_id)
-                                .cloned()
-                            {
-                                let other_active = self.state.active_subagents.iter().any(|s| {
-                                    s.backgrounded
-                                        && !s.finished
-                                        && s.subagent_id != subagent.subagent_id
-                                        && self.state.bg_subagent_map.get(&s.subagent_id)
-                                            == Some(&parent_bg_id)
-                                });
-                                if !other_active {
-                                    self.state.bg_agent_manager.kill_task(&parent_bg_id);
-                                    self.state.bg_agent_manager.hide_task(&parent_bg_id);
-                                }
-                            }
-                        }
-                    } else {
-                        // Focused on a bg_agent_manager cell — use filtered list to match display order
-                        let bg_idx = focus - sa_count;
-                        let filtered: Vec<_> = self
-                            .state
-                            .bg_agent_manager
-                            .all_tasks()
-                            .into_iter()
-                            .filter(|t| !t.hidden && !covered_bg_task_ids.contains(&t.task_id))
-                            .collect();
-                        if bg_idx < filtered.len() {
-                            let task_id = filtered[bg_idx].task_id.clone();
-                            self.state.bg_agent_manager.kill_task(&task_id);
-                        }
-                    }
-                }
-
-                // Page navigation: left
-                (KeyModifiers::SHIFT, KeyCode::Char('H')) => {
-                    self.state.task_watcher_page = self.state.task_watcher_page.saturating_sub(1);
-                }
-                // Page navigation: right
-                (KeyModifiers::SHIFT, KeyCode::Char('L')) => {
-                    self.state.task_watcher_page += 1; // clamped in render
-                }
-
-                _ => {}
-            }
-            self.state.dirty = true;
-            return;
-        }
-
-        // Delegate to ask-user controller when active
-        if self.ask_user_controller.active() {
-            match key.code {
-                KeyCode::Up if self.ask_user_controller.has_options() => {
-                    self.ask_user_controller.prev();
-                }
-                KeyCode::Down if self.ask_user_controller.has_options() => {
-                    self.ask_user_controller.next();
-                }
-                KeyCode::Char(c) if !self.ask_user_controller.has_options() => {
-                    self.ask_user_controller.push_char(c);
-                }
-                KeyCode::Backspace if !self.ask_user_controller.has_options() => {
-                    self.ask_user_controller.pop_char();
-                }
-                KeyCode::Enter => {
-                    if let Some(answer) = self.ask_user_controller.confirm()
-                        && let Some(tx) = self.ask_user_response_tx.take()
-                    {
-                        let _ = tx.send(answer);
-                    }
-                }
-                KeyCode::Esc => {
-                    let fallback = self.ask_user_controller.default_value().unwrap_or_default();
-                    self.ask_user_controller.cancel();
-                    if let Some(tx) = self.ask_user_response_tx.take() {
-                        let _ = tx.send(fallback);
-                    }
-                    let _ = self.event_tx.send(AppEvent::Interrupt);
-                }
-                _ => {}
-            }
-            self.state.dirty = true;
-            return;
-        }
-
-        // Delegate to plan approval controller when active
-        if self.plan_approval_controller.active() {
-            match key.code {
-                KeyCode::Up => self.plan_approval_controller.prev(),
-                KeyCode::Down => self.plan_approval_controller.next(),
-                KeyCode::Enter => {
-                    if let Some(decision) = self.plan_approval_controller.confirm() {
-                        // Switch mode based on decision
-                        match decision.action.as_str() {
-                            "approve_auto" | "approve" => {
-                                self.state.mode = OperationMode::Normal;
-                            }
-                            _ => {} // "modify" stays in Plan mode
-                        }
-                        // Forward decision back to the blocking tool
-                        if let Some(tx) = self.plan_approval_response_tx.take() {
-                            let _ = tx.send(decision);
-                        }
-                    }
-                }
-                KeyCode::Esc => {
-                    self.plan_approval_controller.cancel();
-                    // cancel() internally confirms with "modify" via the controller's
-                    // oneshot — but we also need to forward through our stored sender.
-                    // The controller already sent via its own oneshot in cancel(),
-                    // so just clean up our stored tx (it's already consumed by cancel).
-                    self.plan_approval_response_tx.take();
-                    let _ = self.event_tx.send(AppEvent::Interrupt);
-                }
-                _ => {}
-            }
-            self.state.dirty = true;
-            return;
-        }
-
-        // Delegate to approval controller when active
-        if self.approval_controller.active() {
-            match key.code {
-                KeyCode::Up => self.approval_controller.move_selection(-1),
-                KeyCode::Down => self.approval_controller.move_selection(1),
-                KeyCode::Enter => {
-                    // Capture selected option before confirm() clears state
-                    let idx = self.approval_controller.selected_index();
-                    let option = self.approval_controller.options()[idx].clone();
-                    let command = self.approval_controller.command().to_string();
-                    self.approval_controller.confirm();
-                    // Forward decision back to the react loop
-                    if let Some(tx) = self.approval_response_tx.take() {
-                        let choice = if option.choice == "2" {
-                            "yes_remember".to_string()
-                        } else if option.approved {
-                            "yes".to_string()
-                        } else {
-                            "no".to_string()
-                        };
-                        let _ = tx.send(opendev_runtime::ToolApprovalDecision {
-                            approved: option.approved,
-                            choice,
-                            command,
-                        });
-                    }
-                }
-                KeyCode::Esc => {
-                    let command = self.approval_controller.command().to_string();
-                    self.approval_controller.cancel();
-                    // Send denial back to the react loop
-                    if let Some(tx) = self.approval_response_tx.take() {
-                        let _ = tx.send(opendev_runtime::ToolApprovalDecision {
-                            approved: false,
-                            choice: "no".to_string(),
-                            command,
-                        });
-                    }
-                    let _ = self.event_tx.send(AppEvent::Interrupt);
-                }
-                _ => {}
-            }
-            self.state.dirty = true;
-            return;
-        }
-
-        // Leader key dispatch (Ctrl+X was pressed, waiting for second key)
-        if self.state.leader_pending {
-            self.state.leader_pending = false;
-            self.state.leader_timestamp = None;
-            match key.code {
-                KeyCode::Char('u') => {
-                    // Undo
-                    self.execute_slash_command("/undo");
-                }
-                KeyCode::Char('r') => {
-                    // Redo
-                    self.execute_slash_command("/redo");
-                }
-                KeyCode::Char('s') => {
-                    // Share
-                    self.execute_slash_command("/share");
-                }
-                KeyCode::Char('m') => {
-                    // Models
-                    self.execute_slash_command("/models");
-                }
-                KeyCode::Char('p') => {
-                    // Sessions
-                    self.execute_slash_command("/sessions");
-                }
-                KeyCode::Char('d') => {
-                    // Debug panel
-                    self.state.debug_panel_open = !self.state.debug_panel_open;
-                }
-                KeyCode::Esc => {
-                    // Cancel leader
-                }
-                _ => {
-                    use crate::widgets::toast::{Toast, ToastLevel};
-                    self.state.toasts.push(Toast::new(
-                        format!("C-x {:?} — unknown", key.code),
-                        ToastLevel::Warning,
-                    ));
-                }
-            }
-            self.state.dirty = true;
-            return;
-        }
-
-        // Debug panel key handler
-        if self.state.debug_panel_open {
-            match key.code {
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    self.state.debug_panel_open = false;
-                }
-                _ => {}
-            }
-            self.state.dirty = true;
-            if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
-                return;
-            }
-        }
+        // Debug panel
+        if self.handle_key_debug_panel(key) { return; }
 
         match (key.modifiers, key.code) {
             // Ctrl+C — quit or clear input
