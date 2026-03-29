@@ -480,83 +480,125 @@ impl App {
         false
     }
 
-    /// Handle a key press event.
-    pub(super) fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
-        // Only process key-press and repeat events (Kitty protocol also sends Release)
-        if !matches!(
-            key.kind,
-            crossterm::event::KeyEventKind::Press | crossterm::event::KeyEventKind::Repeat
-        ) {
-            return;
+    /// Handle Ctrl+C: quit, interrupt agent, or clear input.
+    fn handle_key_ctrl_c(&mut self) {
+        if self.state.input_buffer.is_empty() && !self.state.agent_active {
+            self.state.running = false;
+        } else if self.state.agent_active {
+            // Interrupt agent
+            let _ = self.event_tx.send(AppEvent::Interrupt);
+        } else {
+            self.state.input_buffer.clear();
+            self.state.input_cursor = 0;
         }
+    }
 
-        // Ctrl+B — background agent: handle before any modal can swallow it
-        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('b') {
-            // If task watcher is open, Ctrl+B closes it
-            if self.state.task_watcher_open {
-                self.state.task_watcher_open = false;
-                self.state.force_clear = true;
-                self.state.dirty = true;
-                return;
-            }
-            if self.try_background_agent() {
-                // Dismiss any active modal with a permissive response to unblock the react loop
-                self.dismiss_modals_for_background();
-            }
-            self.state.dirty = true;
-            return;
-        }
+    /// Handle Enter key: accept autocomplete, submit message, or execute slash command.
+    fn handle_key_enter(&mut self) {
+        if self.state.autocomplete.is_visible() {
+            // If the input is already a known slash command, dismiss autocomplete
+            // and submit it directly — don't let autocomplete replace it.
+            let is_exact_slash = self.state.input_buffer.starts_with('/')
+                && !self.state.input_buffer[1..].contains(' ')
+                && crate::controllers::is_command(&self.state.input_buffer[1..]);
 
-        // Ctrl+P — toggle task watcher panel: handle before any modal can swallow it
-        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('p') {
-            if self.state.task_watcher_open {
-                self.state.task_watcher_open = false;
-                self.state.force_clear = true;
+            if is_exact_slash {
+                self.state.autocomplete.dismiss();
+                // Fall through to submit below
             } else {
-                let has_bg_subagents = self.state.active_subagents.iter().any(|s| s.backgrounded);
-                let has_bg_agents = !self.state.bg_agent_manager.all_tasks().is_empty();
-                if has_bg_subagents || has_bg_agents {
-                    self.state.task_watcher_open = true;
-                    self.state.task_watcher_focus = 0;
-                    self.state.task_watcher_cell_scrolls.clear();
-                    self.state.task_watcher_page = 0;
-                } else {
-                    use crate::widgets::toast::{Toast, ToastLevel};
+                // Accept autocomplete selection
+                if let Some((insert_text, delete_count)) = self.state.autocomplete.accept() {
+                    let start = self.state.input_cursor.saturating_sub(delete_count);
                     self.state
-                        .toasts
-                        .push(Toast::new("No background tasks", ToastLevel::Info));
+                        .input_buffer
+                        .drain(start..self.state.input_cursor);
+                    self.state.input_cursor = start;
+                    self.state
+                        .input_buffer
+                        .insert_str(self.state.input_cursor, &insert_text);
+                    self.state.input_cursor += insert_text.len();
+                    // Add trailing space
+                    self.state.input_buffer.insert(self.state.input_cursor, ' ');
+                    self.state.input_cursor += 1;
                 }
             }
-            self.state.dirty = true;
-            return;
         }
+        if !self.state.autocomplete.is_visible() && !self.state.input_buffer.is_empty() {
+            let msg = self.state.input_buffer.clone();
+            self.state.input_buffer.clear();
+            self.state.input_cursor = 0;
+            self.state.autocomplete.dismiss();
+            self.state.command_history.record(&msg);
 
-        // Modal delegates — consume all input when active
-        if self.handle_key_model_picker(key) { return; }
-        if self.handle_key_task_watcher(key) { return; }
-        if self.handle_key_ask_user(key) { return; }
-        if self.handle_key_plan_approval(key) { return; }
-        if self.handle_key_tool_approval(key) { return; }
+            if self.state.agent_active {
+                // Queue silently — message will display when consumed
+                self.state
+                    .pending_queue
+                    .push_back(super::PendingItem::UserMessage(msg));
+                self.state.dirty = true;
+            } else {
+                // Start fading the welcome panel on first user message
+                if !self.state.welcome_panel.fade_complete
+                    && !self.state.welcome_panel.is_fading
+                {
+                    self.state.welcome_panel.start_fade();
+                }
 
-        // Leader key
-        if self.handle_key_leader(key) { return; }
+                if msg.starts_with('/') {
+                    self.execute_slash_command(&msg);
+                } else {
+                    self.message_controller
+                        .handle_user_submit(&mut self.state, &msg);
+                    self.state.message_generation += 1;
+                    let _ = self.event_tx.send(AppEvent::UserSubmit(msg));
+                }
+            }
+        }
+    }
 
-        // Debug panel
-        if self.handle_key_debug_panel(key) { return; }
+    /// Handle Up/Down arrow: autocomplete navigation, command history, or scroll.
+    fn handle_key_up_down(&mut self, is_up: bool) {
+        if is_up {
+            if self.state.autocomplete.is_visible() {
+                self.state.autocomplete.select_prev();
+            } else if !self.state.input_buffer.contains('\n') && !self.state.agent_active {
+                // Single-line input: navigate command history
+                if let Some(text) = self
+                    .state
+                    .command_history
+                    .navigate_up(&self.state.input_buffer)
+                {
+                    self.state.input_buffer = text.to_string();
+                    self.state.input_cursor = self.state.input_buffer.len();
+                }
+            } else {
+                let amount = self.accelerated_scroll(true);
+                self.state.scroll_offset = self.state.scroll_offset.saturating_add(amount);
+                self.state.user_scrolled = true;
+            }
+        } else {
+            if self.state.autocomplete.is_visible() {
+                self.state.autocomplete.select_next();
+            } else if self.state.command_history.is_navigating() {
+                // Navigate command history down
+                if let Some(text) = self.state.command_history.navigate_down() {
+                    self.state.input_buffer = text.to_string();
+                    self.state.input_cursor = self.state.input_buffer.len();
+                }
+            } else if self.state.scroll_offset > 0 {
+                let amount = self.accelerated_scroll(false);
+                self.state.scroll_offset = self.state.scroll_offset.saturating_sub(amount);
+            } else {
+                self.state.user_scrolled = false;
+            }
+        }
+    }
 
+    /// Handle main input keys (non-modal, non-leader context).
+    fn handle_key_input(&mut self, key: crossterm::event::KeyEvent) {
         match (key.modifiers, key.code) {
             // Ctrl+C — quit or clear input
-            (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
-                if self.state.input_buffer.is_empty() && !self.state.agent_active {
-                    self.state.running = false;
-                } else if self.state.agent_active {
-                    // Interrupt agent
-                    let _ = self.event_tx.send(AppEvent::Interrupt);
-                } else {
-                    self.state.input_buffer.clear();
-                    self.state.input_cursor = 0;
-                }
-            }
+            (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.handle_key_ctrl_c(),
             // Escape — dismiss autocomplete or interrupt agent
             (_, KeyCode::Esc) => {
                 if self.state.autocomplete.is_visible() {
@@ -587,68 +629,7 @@ impl App {
                 }
             }
             // Enter — accept autocomplete, submit message, or execute slash command
-            (_, KeyCode::Enter) => {
-                if self.state.autocomplete.is_visible() {
-                    // If the input is already a known slash command, dismiss autocomplete
-                    // and submit it directly — don't let autocomplete replace it.
-                    let is_exact_slash = self.state.input_buffer.starts_with('/')
-                        && !self.state.input_buffer[1..].contains(' ')
-                        && crate::controllers::is_command(&self.state.input_buffer[1..]);
-
-                    if is_exact_slash {
-                        self.state.autocomplete.dismiss();
-                        // Fall through to submit below
-                    } else {
-                        // Accept autocomplete selection
-                        if let Some((insert_text, delete_count)) = self.state.autocomplete.accept()
-                        {
-                            let start = self.state.input_cursor.saturating_sub(delete_count);
-                            self.state
-                                .input_buffer
-                                .drain(start..self.state.input_cursor);
-                            self.state.input_cursor = start;
-                            self.state
-                                .input_buffer
-                                .insert_str(self.state.input_cursor, &insert_text);
-                            self.state.input_cursor += insert_text.len();
-                            // Add trailing space
-                            self.state.input_buffer.insert(self.state.input_cursor, ' ');
-                            self.state.input_cursor += 1;
-                        }
-                    }
-                }
-                if !self.state.autocomplete.is_visible() && !self.state.input_buffer.is_empty() {
-                    let msg = self.state.input_buffer.clone();
-                    self.state.input_buffer.clear();
-                    self.state.input_cursor = 0;
-                    self.state.autocomplete.dismiss();
-                    self.state.command_history.record(&msg);
-
-                    if self.state.agent_active {
-                        // Queue silently — message will display when consumed
-                        self.state
-                            .pending_queue
-                            .push_back(super::PendingItem::UserMessage(msg));
-                        self.state.dirty = true;
-                    } else {
-                        // Start fading the welcome panel on first user message
-                        if !self.state.welcome_panel.fade_complete
-                            && !self.state.welcome_panel.is_fading
-                        {
-                            self.state.welcome_panel.start_fade();
-                        }
-
-                        if msg.starts_with('/') {
-                            self.execute_slash_command(&msg);
-                        } else {
-                            self.message_controller
-                                .handle_user_submit(&mut self.state, &msg);
-                            self.state.message_generation += 1;
-                            let _ = self.event_tx.send(AppEvent::UserSubmit(msg));
-                        }
-                    }
-                }
-            }
+            (_, KeyCode::Enter) => self.handle_key_enter(),
             // Backspace
             (_, KeyCode::Backspace) => {
                 if self.state.input_cursor > 0 {
@@ -775,41 +756,8 @@ impl App {
                 }
             }
             // Up/Down arrow — autocomplete > command history > scroll
-            (_, KeyCode::Up) => {
-                if self.state.autocomplete.is_visible() {
-                    self.state.autocomplete.select_prev();
-                } else if !self.state.input_buffer.contains('\n') && !self.state.agent_active {
-                    // Single-line input: navigate command history
-                    if let Some(text) = self
-                        .state
-                        .command_history
-                        .navigate_up(&self.state.input_buffer)
-                    {
-                        self.state.input_buffer = text.to_string();
-                        self.state.input_cursor = self.state.input_buffer.len();
-                    }
-                } else {
-                    let amount = self.accelerated_scroll(true);
-                    self.state.scroll_offset = self.state.scroll_offset.saturating_add(amount);
-                    self.state.user_scrolled = true;
-                }
-            }
-            (_, KeyCode::Down) => {
-                if self.state.autocomplete.is_visible() {
-                    self.state.autocomplete.select_next();
-                } else if self.state.command_history.is_navigating() {
-                    // Navigate command history down
-                    if let Some(text) = self.state.command_history.navigate_down() {
-                        self.state.input_buffer = text.to_string();
-                        self.state.input_cursor = self.state.input_buffer.len();
-                    }
-                } else if self.state.scroll_offset > 0 {
-                    let amount = self.accelerated_scroll(false);
-                    self.state.scroll_offset = self.state.scroll_offset.saturating_sub(amount);
-                } else {
-                    self.state.user_scrolled = false;
-                }
-            }
+            (_, KeyCode::Up) => self.handle_key_up_down(true),
+            (_, KeyCode::Down) => self.handle_key_up_down(false),
             // Ctrl+O — toggle collapsed state on the most recent collapsible tool result
             (KeyModifiers::CONTROL, KeyCode::Char('o')) => {
                 use crate::widgets::conversation::is_diff_tool;
@@ -902,6 +850,74 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// Handle a key press event.
+    pub(super) fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
+        // Only process key-press and repeat events (Kitty protocol also sends Release)
+        if !matches!(
+            key.kind,
+            crossterm::event::KeyEventKind::Press | crossterm::event::KeyEventKind::Repeat
+        ) {
+            return;
+        }
+
+        // Ctrl+B — background agent: handle before any modal can swallow it
+        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('b') {
+            // If task watcher is open, Ctrl+B closes it
+            if self.state.task_watcher_open {
+                self.state.task_watcher_open = false;
+                self.state.force_clear = true;
+                self.state.dirty = true;
+                return;
+            }
+            if self.try_background_agent() {
+                // Dismiss any active modal with a permissive response to unblock the react loop
+                self.dismiss_modals_for_background();
+            }
+            self.state.dirty = true;
+            return;
+        }
+
+        // Ctrl+P — toggle task watcher panel: handle before any modal can swallow it
+        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('p') {
+            if self.state.task_watcher_open {
+                self.state.task_watcher_open = false;
+                self.state.force_clear = true;
+            } else {
+                let has_bg_subagents = self.state.active_subagents.iter().any(|s| s.backgrounded);
+                let has_bg_agents = !self.state.bg_agent_manager.all_tasks().is_empty();
+                if has_bg_subagents || has_bg_agents {
+                    self.state.task_watcher_open = true;
+                    self.state.task_watcher_focus = 0;
+                    self.state.task_watcher_cell_scrolls.clear();
+                    self.state.task_watcher_page = 0;
+                } else {
+                    use crate::widgets::toast::{Toast, ToastLevel};
+                    self.state
+                        .toasts
+                        .push(Toast::new("No background tasks", ToastLevel::Info));
+                }
+            }
+            self.state.dirty = true;
+            return;
+        }
+
+        // Modal delegates — consume all input when active
+        if self.handle_key_model_picker(key) { return; }
+        if self.handle_key_task_watcher(key) { return; }
+        if self.handle_key_ask_user(key) { return; }
+        if self.handle_key_plan_approval(key) { return; }
+        if self.handle_key_tool_approval(key) { return; }
+
+        // Leader key
+        if self.handle_key_leader(key) { return; }
+
+        // Debug panel
+        if self.handle_key_debug_panel(key) { return; }
+
+        // Main input handling
+        self.handle_key_input(key);
     }
 }
 

@@ -5,7 +5,8 @@
 //! - [`types`] — DisplayMessage, DisplayRole, RoleStyle, DisplayToolCall, ToolState, ToolExecution
 //! - [`state`] — AppState struct and Default impl
 //! - [`cache`] — Conversation message caching and incremental rebuild
-//! - [`render`] — UI layout composition, popup panels, and modal dialogs
+//! - [`render`] — UI layout composition and main rendering orchestration
+//! - [`render_popups`] — Popup panels and modal dialog rendering
 //! - [`event_dispatch`] — Event routing and state mutations
 //! - [`key_handler`] — Keyboard input handling
 //! - [`slash_commands`] — Slash command execution
@@ -21,6 +22,7 @@ mod handle_tools;
 mod handle_ui;
 mod key_handler;
 mod render;
+mod render_popups;
 mod slash_commands;
 mod state;
 mod tick;
