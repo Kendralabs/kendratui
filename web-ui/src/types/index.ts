@@ -34,11 +34,12 @@ export interface Message {
 // Session types
 export interface Session {
   id: string;
-  working_dir: string;  // Backend returns this key even though model has working_directory
+  working_dir?: string;
+  working_directory?: string;  // Backend returns this field name
   created_at: string;
   updated_at: string;
   message_count: number;
-  token_usage: Record<string, number>;
+  token_usage?: Record<string, number>;
   title?: string;
   has_session_model?: boolean;
 }

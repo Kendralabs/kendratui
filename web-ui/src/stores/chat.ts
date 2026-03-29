@@ -458,6 +458,17 @@ wsClient.on('message_start', (message) => {
   }));
 });
 
+/** Finalize any active thinking block in the session (mark isActive: false). */
+function finalizeThinking(msgs: Message[]): Message[] {
+  const lastIdx = msgs.length - 1;
+  if (lastIdx >= 0 && msgs[lastIdx].role === 'thinking' && msgs[lastIdx].metadata?.isActive) {
+    const updated = [...msgs];
+    updated[lastIdx] = { ...msgs[lastIdx], metadata: { ...msgs[lastIdx].metadata, isActive: false } };
+    return updated;
+  }
+  return msgs;
+}
+
 wsClient.on('message_chunk', (message) => {
   const sid = resolveSessionId(message.data);
   if (!sid) return;
@@ -465,7 +476,7 @@ wsClient.on('message_chunk', (message) => {
 
   useChatStore.setState(state => {
     const sessionState = getSessionState(state.sessionStates, sid);
-    const msgs = sessionState.messages;
+    const msgs = finalizeThinking(sessionState.messages);
     const lastMessage = msgs[msgs.length - 1];
 
     let newMessages: Message[];
@@ -577,16 +588,46 @@ wsClient.on('tool_result', (message) => {
 wsClient.on('thinking_block', (message) => {
   const sid = resolveSessionId(message.data);
   if (!sid) return;
+  const content = message.data.content || '';
+  const isBlockStart = message.data.block_start === true;
 
   useChatStore.setState(state => {
     const sessionState = getSessionState(state.sessionStates, sid);
+    const msgs = sessionState.messages;
+
+    // If block_start, always create a new thinking message
+    if (isBlockStart) {
+      return patchSession(state, sid, {
+        messages: [
+          ...msgs,
+          {
+            role: 'thinking' as const,
+            content: '',
+            metadata: { level: message.data.level || 'Medium', isActive: true },
+          },
+        ],
+      });
+    }
+
+    // Otherwise, append to the last thinking message if it exists and is active
+    const lastIdx = msgs.length - 1;
+    if (lastIdx >= 0 && msgs[lastIdx].role === 'thinking' && msgs[lastIdx].metadata?.isActive) {
+      const updated = [...msgs];
+      updated[lastIdx] = {
+        ...msgs[lastIdx],
+        content: msgs[lastIdx].content + content,
+      };
+      return patchSession(state, sid, { messages: updated });
+    }
+
+    // No active thinking block — create one
     return patchSession(state, sid, {
       messages: [
-        ...sessionState.messages,
+        ...msgs,
         {
           role: 'thinking' as const,
-          content: message.data.content,
-          metadata: { level: message.data.level },
+          content,
+          metadata: { level: message.data.level || 'Medium', isActive: true },
         },
       ],
     });
@@ -623,14 +664,24 @@ wsClient.on('ask_user_resolved', (message) => {
 });
 
 wsClient.on('session_activity', (message) => {
-  const { session_id, status } = message.data;
+  const { session_id, status, running } = message.data;
+  // Support both formats: {status: "running"} and {running: true}
+  const isRunning = running === true || status === 'running';
   useChatStore.setState((state) => {
     const next = new Set(state.runningSessions);
-    if (status === 'running') next.add(session_id);
+    if (isRunning) next.add(session_id);
     else next.delete(session_id);
     return { runningSessions: next };
   });
   useChatStore.getState().bumpSessionList();
+
+  // Toast notification when a non-current session completes
+  if (!isRunning && session_id !== useChatStore.getState().currentSessionId) {
+    useToastStore.getState().addToast(
+      `Session ${session_id.slice(0, 8)} completed`,
+      'success',
+    );
+  }
 });
 
 // ─── Plan Approval Events ────────────────────────────────────────────────────

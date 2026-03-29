@@ -10,9 +10,10 @@ import { apiClient } from '../../api/client';
 
 interface Session {
   id: string;
-  working_dir: string;
+  working_dir?: string;
+  working_directory?: string;
   message_count: number;
-  token_usage: {
+  token_usage?: {
     prompt_tokens: number;
     completion_tokens: number;
   };
@@ -113,10 +114,11 @@ export function SessionsSidebar() {
 
     // Filter out sessions without a working directory
     sessions.forEach(session => {
-      if (!session.working_dir || session.working_dir.trim() === '') {
-        return; // Skip sessions without working_dir
+      const wd = session.working_dir || session.working_directory;
+      if (!wd || wd.trim() === '') {
+        return; // Skip sessions without working directory
       }
-      const path = session.working_dir;
+      const path = wd;
       if (!groups[path]) {
         groups[path] = [];
       }
@@ -185,8 +187,9 @@ export function SessionsSidebar() {
       await fetchSessions();
 
       // Load the new session
-      if (result.session && result.session.id) {
-        await loadSession(result.session.id);
+      const sessionId = result.session?.id || (result as any).id;
+      if (sessionId) {
+        await loadSession(sessionId);
       }
     } catch (error) {
       console.error('[SessionsSidebar] Failed to create session:', error);
