@@ -183,7 +183,7 @@ jobs:
 
           echo "Downloading microsandbox v${MSB_VERSION} for ${MSB_PLATFORM}..."
           curl -L --retry 3 \
-            "https://github.com/nicholasgasior/microsandbox/releases/download/v${MSB_VERSION}/microsandbox-${MSB_PLATFORM}.tar.gz" \
+            "https://github.com/superradcompany/microsandbox/releases/download/v${MSB_VERSION}/microsandbox-${MSB_PLATFORM}.tar.gz" \
             -o msb-release.tar.gz
           mkdir -p msb-extracted
           tar xzf msb-release.tar.gz -C msb-extracted
@@ -365,7 +365,7 @@ jobs:
           grep -q '^class Opendev < Formula$' "$FORMULA"
 
           # Add microsandbox runtime as a Homebrew resource (macOS ARM only)
-          MSB_URL="https://github.com/nicholasgasior/microsandbox/releases/download/v${MSB_VERSION}/microsandbox-darwin-aarch64.tar.gz"
+          MSB_URL="https://github.com/superradcompany/microsandbox/releases/download/v${MSB_VERSION}/microsandbox-darwin-aarch64.tar.gz"
           curl -sL "$MSB_URL" -o /tmp/msb-darwin.tar.gz
           MSB_SHA=$(sha256sum /tmp/msb-darwin.tar.gz | cut -d' ' -f1)
           rm -f /tmp/msb-darwin.tar.gz

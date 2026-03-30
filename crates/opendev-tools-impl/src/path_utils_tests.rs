@@ -80,8 +80,11 @@ fn test_external_path_traversal() {
 #[test]
 fn test_external_path_sibling_project() {
     let tmp = TempDir::new().unwrap();
-    let wd = tmp.path().canonicalize().unwrap();
-    // Another project in same parent directory
+    // Create a nested dir so `..` resolves inside `tmp` (not `/tmp` itself)
+    let nested = tmp.path().join("projects").join("my-project");
+    std::fs::create_dir_all(&nested).unwrap();
+    let wd = nested.canonicalize().unwrap();
+    // Sibling project: resolves to <tmp>/projects/other-project/main.rs — outside wd
     assert!(is_external_path(&wd.join("../other-project/main.rs"), &wd));
 }
 

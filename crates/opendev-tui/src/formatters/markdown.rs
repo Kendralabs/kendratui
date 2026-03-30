@@ -131,16 +131,11 @@ impl MarkdownRenderer {
             }
 
             if in_code_block {
-                let code: Cow<'static, str> = Cow::Owned(format!(
-                    "{}{}",
-                    style_tokens::CODE_LINE_SENTINEL,
-                    raw_line
-                ));
+                let code: Cow<'static, str> =
+                    Cow::Owned(format!("{}{}", style_tokens::CODE_LINE_SENTINEL, raw_line));
                 lines.push(Line::from(Span::styled(
                     code,
-                    Style::default()
-                        .fg(palette.code_fg)
-                        .add_modifier(base_mod),
+                    Style::default().fg(palette.code_fg).add_modifier(base_mod),
                 )));
                 continue;
             }
