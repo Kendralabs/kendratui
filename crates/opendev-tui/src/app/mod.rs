@@ -36,6 +36,7 @@ pub use state::AppState;
 pub struct ExitInfo {
     pub session_id: Option<String>,
     pub session_cost: f64,
+    pub message_count: usize,
 }
 pub use types::{
     DisplayMessage, DisplayRole, DisplayToolCall, PendingItem, RoleStyle, ToolExecution, ToolState,
@@ -215,6 +216,7 @@ impl App {
         Ok(ExitInfo {
             session_id: self.state.session_id.clone(),
             session_cost: self.state.session_cost,
+            message_count: self.state.messages.len(),
         })
     }
 

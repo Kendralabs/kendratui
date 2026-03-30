@@ -456,7 +456,11 @@ fn print_exit_message(exit_info: &opendev_tui::ExitInfo) {
         return;
     };
 
-    let short_id: String = session_id.chars().filter(|c| *c != '-').take(8).collect();
+    // Only show exit message if the session had activity
+    if exit_info.message_count == 0 {
+        return;
+    }
+
     let cost_str = if exit_info.session_cost > 0.0 {
         if exit_info.session_cost < 0.01 {
             format!(" | Cost ${:.4}", exit_info.session_cost)
@@ -468,10 +472,8 @@ fn print_exit_message(exit_info: &opendev_tui::ExitInfo) {
     };
 
     eprintln!();
-    eprintln!("Session {short_id}{cost_str}");
-    eprintln!(
-        "Resume this session: opendev --resume {session_id}"
-    );
+    eprintln!("Session {session_id}{cost_str}");
+    eprintln!("Resume this session: opendev -r {session_id}");
 }
 
 /// Replay recorded events from a JSONL file for debugging.

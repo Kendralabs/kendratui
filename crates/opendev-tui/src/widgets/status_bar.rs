@@ -151,16 +151,6 @@ impl Widget for StatusBarWidget<'_> {
                 .fg(style_tokens::CYAN)
                 .add_modifier(Modifier::BOLD),
         ));
-
-        // Session ID (short form, after model)
-        if let Some(sid) = self.session_id {
-            let short: String = sid.chars().filter(|c| *c != '-').take(8).collect();
-            spans.push(Span::styled(
-                format!(" [{short}]"),
-                Style::default().fg(style_tokens::GREY),
-            ));
-        }
-
         spans.push(Span::styled(
             "  \u{2502}  ",
             Style::default().fg(style_tokens::GREY),
@@ -346,6 +336,22 @@ impl Widget for StatusBarWidget<'_> {
 
         // Build right-side spans
         let mut right_spans: Vec<Span> = Vec::new();
+
+        // Session ID (right-aligned, dim)
+        if let Some(sid) = self.session_id {
+            let short: String = sid.chars().filter(|c| *c != '-').take(8).collect();
+            right_spans.push(Span::styled(
+                short,
+                Style::default()
+                    .fg(style_tokens::GREY)
+                    .add_modifier(Modifier::DIM),
+            ));
+            right_spans.push(Span::styled(
+                "  \u{2502}  ",
+                Style::default().fg(style_tokens::GREY),
+            ));
+        }
+
         if !cost_str.is_empty() {
             right_spans.push(Span::styled(
                 "Cost ",
