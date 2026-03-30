@@ -275,12 +275,31 @@ impl SubagentRunner for SimpleReactRunner {
 
             // Build payload and call LLM (streaming to get per-chunk idle timeout)
             let payload = ctx.caller.build_action_payload(messages, ctx.tool_schemas);
+
+            // Debug log: outgoing subagent LLM request
+            if let Some(logger) = ctx.debug_logger {
+                let model = payload["model"].as_str().unwrap_or("unknown");
+                let streaming = ctx.http_client.supports_streaming();
+                logger.log_full(
+                    "llm_request",
+                    "subagent",
+                    serde_json::json!({
+                        "iteration": iteration,
+                        "model": model,
+                        "streaming": streaming,
+                        "payload": payload,
+                    }),
+                );
+            }
+
+            let llm_start = std::time::Instant::now();
             let noop_cb = opendev_http::streaming::FnStreamCallback(|_| {});
             let http_result = ctx
                 .http_client
                 .post_json_streaming(&payload, ctx.cancel, &noop_cb)
                 .await
                 .map_err(|e| AgentError::LlmError(e.to_string()))?;
+            let llm_latency_ms = llm_start.elapsed().as_millis() as u64;
 
             if !http_result.success {
                 let status = http_result.status.unwrap_or(0);
@@ -290,6 +309,18 @@ impl SubagentRunner for SimpleReactRunner {
                     .map(|b| b.to_string())
                     .unwrap_or_default();
                 warn!(status, "SimpleReactRunner: LLM call failed");
+
+                if let Some(logger) = ctx.debug_logger {
+                    logger.log_full(
+                        "llm_error",
+                        "subagent",
+                        serde_json::json!({
+                            "iteration": iteration,
+                            "status": status,
+                            "error": body_text,
+                        }),
+                    );
+                }
 
                 // On rate limit or server error, retry (skip iteration)
                 if status == 429 || status >= 500 {
@@ -311,6 +342,21 @@ impl SubagentRunner for SimpleReactRunner {
 
             // Emit token usage
             let (input_tokens, output_tokens) = Self::parse_token_usage(&body);
+
+            // Debug log: incoming subagent LLM response
+            if let Some(logger) = ctx.debug_logger {
+                logger.log_full(
+                    "llm_response",
+                    "subagent",
+                    serde_json::json!({
+                        "iteration": iteration,
+                        "latency_ms": llm_latency_ms,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "body": body,
+                    }),
+                );
+            }
             if let Some(cb) = ctx.event_callback {
                 cb.on_token_usage(input_tokens, output_tokens);
             }

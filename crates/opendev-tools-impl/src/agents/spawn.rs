@@ -34,6 +34,8 @@ pub struct SpawnSubagentTool {
     parent_max_tokens: u64,
     /// Parent agent's reasoning effort (subagents inherit this).
     parent_reasoning_effort: Option<String>,
+    /// Debug logger for LLM interaction logging (None = disabled).
+    debug_logger: Option<Arc<opendev_runtime::SessionDebugLogger>>,
 }
 
 impl SpawnSubagentTool {
@@ -56,6 +58,7 @@ impl SpawnSubagentTool {
             event_tx: None,
             parent_max_tokens: 16384,
             parent_reasoning_effort: None,
+            debug_logger: None,
         }
     }
 
@@ -74,6 +77,12 @@ impl SpawnSubagentTool {
     /// Set the parent agent's reasoning effort (subagents inherit this).
     pub fn with_parent_reasoning_effort(mut self, effort: Option<String>) -> Self {
         self.parent_reasoning_effort = effort;
+        self
+    }
+
+    /// Set the debug logger for LLM interaction logging.
+    pub fn with_debug_logger(mut self, logger: Arc<opendev_runtime::SessionDebugLogger>) -> Self {
+        self.debug_logger = Some(logger);
         self
     }
 }
@@ -272,6 +281,7 @@ impl BaseTool for SpawnSubagentTool {
                 self.parent_max_tokens,
                 self.parent_reasoning_effort.clone(),
                 Some(subagent_cancel),
+                self.debug_logger.as_deref(),
             )
             .await;
 

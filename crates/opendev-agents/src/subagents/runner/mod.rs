@@ -17,7 +17,7 @@ use serde_json::Value;
 use crate::llm_calls::LlmCaller;
 use crate::traits::{AgentError, AgentEventCallback, AgentResult};
 use opendev_http::adapted_client::AdaptedClient;
-use opendev_runtime::ToolApprovalSender;
+use opendev_runtime::{SessionDebugLogger, ToolApprovalSender};
 use opendev_tools_core::{ToolContext, ToolRegistry};
 use tokio_util::sync::CancellationToken;
 
@@ -31,6 +31,7 @@ pub struct RunnerContext<'a> {
     pub event_callback: Option<&'a dyn AgentEventCallback>,
     pub cancel: Option<&'a CancellationToken>,
     pub tool_approval_tx: Option<&'a ToolApprovalSender>,
+    pub debug_logger: Option<&'a SessionDebugLogger>,
 }
 
 /// Trait for react loop strategies.

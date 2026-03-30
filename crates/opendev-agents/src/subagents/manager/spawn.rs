@@ -64,6 +64,7 @@ impl SubagentManager {
         parent_max_tokens: u64,
         parent_reasoning_effort: Option<String>,
         cancel_token: Option<CancellationToken>,
+        debug_logger: Option<&opendev_runtime::SessionDebugLogger>,
     ) -> Result<SubagentRunResult, AgentError> {
         let spec = self.get(subagent_name).ok_or_else(|| {
             AgentError::ConfigError(format!("Unknown subagent type: {subagent_name}"))
@@ -223,6 +224,7 @@ impl SubagentManager {
             event_callback: Some(bridge.as_ref() as &dyn crate::traits::AgentEventCallback),
             cancel: tool_context.cancel_token.as_ref(),
             tool_approval_tx,
+            debug_logger,
         };
 
         // Run the isolated ReAct loop via the selected runner

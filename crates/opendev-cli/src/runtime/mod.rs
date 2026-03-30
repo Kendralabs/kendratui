@@ -29,7 +29,7 @@ use opendev_mcp::McpManager;
 use opendev_models::AppConfig;
 use opendev_repl::HandlerRegistry;
 use opendev_repl::query_enhancer::QueryEnhancer;
-use opendev_runtime::CostTracker;
+use opendev_runtime::{CostTracker, SessionDebugLogger};
 use opendev_tools_core::{BaseTool, ToolRegistry};
 use opendev_tools_impl::*;
 
@@ -76,6 +76,8 @@ pub struct AgentRuntime {
     pub(super) topic_detector: TopicDetector,
     /// Shadow git snapshot manager for tracking file changes per query.
     pub(super) snapshot_manager: Mutex<opendev_history::SnapshotManager>,
+    /// Per-session debug logger for LLM interactions (noop when debug_logging is off).
+    pub debug_logger: Arc<SessionDebugLogger>,
 }
 
 /// Receivers returned from tool registration for TUI bridging.
@@ -348,6 +350,17 @@ impl AgentRuntime {
             (supports_temp, max_tok)
         };
 
+        // Create debug logger early so it can be shared with subagent tool
+        let debug_logger = Arc::new(if config.debug_logging {
+            let session_id = session_manager
+                .current_session()
+                .map(|s| s.id.as_str())
+                .unwrap_or("unknown");
+            SessionDebugLogger::new(session_manager.session_dir(), session_id)
+        } else {
+            SessionDebugLogger::noop()
+        });
+
         // Register SpawnSubagentTool now that we have Arc<ToolRegistry> and Arc<HttpClient>
         let session_dir = session_manager.session_dir().to_path_buf();
         let mut subagent_manager =
@@ -379,7 +392,8 @@ impl AgentRuntime {
                 None
             } else {
                 Some(config.reasoning_effort.clone())
-            }),
+            })
+            .with_debug_logger(Arc::clone(&debug_logger)),
         ));
         channel_receivers.subagent_event_rx = Some(subagent_event_rx);
         info!(
@@ -432,6 +446,7 @@ impl AgentRuntime {
             snapshot_manager: Mutex::new(opendev_history::SnapshotManager::new(
                 &working_dir.to_string_lossy(),
             )),
+            debug_logger,
         })
     }
 }

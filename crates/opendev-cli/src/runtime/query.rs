@@ -229,6 +229,7 @@ impl AgentRuntime {
                 Some(&self.todo_manager),
                 cancel_token.as_ref(),
                 self.tool_approval_tx.as_ref(),
+                Some(&*self.debug_logger),
             )
             .await?;
 

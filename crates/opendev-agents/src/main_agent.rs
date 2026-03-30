@@ -422,6 +422,7 @@ impl BaseAgent for MainAgent {
                 None, // todo_manager: subagents don't track todos
                 None, // cancel: subagent cancellation handled by task_monitor
                 None, // tool_approval_tx: subagents auto-approve
+                None, // debug_logger: not wired through MainAgent
             )
             .await
     }

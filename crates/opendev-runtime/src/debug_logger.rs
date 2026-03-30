@@ -82,13 +82,79 @@ impl SessionDebugLogger {
         self.inner.as_ref().map(|i| i.file_path.as_path())
     }
 
-    /// Log a structured event.
+    /// Log a structured event (string values truncated for readability).
     ///
     /// # Arguments
     /// - `event` — Event type (e.g., `"llm_call_start"`, `"tool_call_end"`)
     /// - `component` — Component name (e.g., `"react"`, `"tool"`, `"llm"`)
     /// - `data` — Arbitrary JSON data (string values truncated if too long)
     pub fn log(&self, event: &str, component: &str, data: Value) {
+        self.write_entry(event, component, truncate_value(&data));
+    }
+
+    /// Log a structured event WITHOUT truncating string values.
+    ///
+    /// Use for LLM request/response payloads where full content is needed.
+    pub fn log_full(&self, event: &str, component: &str, data: Value) {
+        self.write_entry(event, component, data);
+    }
+
+    /// Log an outgoing LLM request payload.
+    pub fn log_llm_request(
+        &self,
+        iteration: usize,
+        model: &str,
+        streaming: bool,
+        payload: &Value,
+    ) {
+        self.log_full(
+            "llm_request",
+            "react",
+            serde_json::json!({
+                "iteration": iteration,
+                "model": model,
+                "streaming": streaming,
+                "payload": payload,
+            }),
+        );
+    }
+
+    /// Log an incoming LLM response body.
+    pub fn log_llm_response(
+        &self,
+        iteration: usize,
+        latency_ms: u64,
+        input_tokens: u64,
+        output_tokens: u64,
+        body: &Value,
+    ) {
+        self.log_full(
+            "llm_response",
+            "react",
+            serde_json::json!({
+                "iteration": iteration,
+                "latency_ms": latency_ms,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "body": body,
+            }),
+        );
+    }
+
+    /// Log an LLM call error.
+    pub fn log_llm_error(&self, iteration: usize, error: &str) {
+        self.log_full(
+            "llm_error",
+            "react",
+            serde_json::json!({
+                "iteration": iteration,
+                "error": error,
+            }),
+        );
+    }
+
+    /// Internal: write a JSONL entry to the debug file.
+    fn write_entry(&self, event: &str, component: &str, data: Value) {
         let inner = match &self.inner {
             Some(i) => i,
             None => return,
@@ -97,14 +163,12 @@ impl SessionDebugLogger {
         let elapsed_ms = inner.start_time.elapsed().as_millis() as u64;
         let ts = chrono::Utc::now().to_rfc3339();
 
-        let truncated_data = truncate_value(&data);
-
         let entry = serde_json::json!({
             "ts": ts,
             "elapsed_ms": elapsed_ms,
             "event": event,
             "component": component,
-            "data": truncated_data,
+            "data": data,
         });
 
         let line = match serde_json::to_string(&entry) {

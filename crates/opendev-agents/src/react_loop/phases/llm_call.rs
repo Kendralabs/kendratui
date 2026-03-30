@@ -6,6 +6,7 @@ use tracing::{Instrument, debug, info, info_span, warn};
 use crate::llm_calls::LlmCaller;
 use crate::traits::{AgentError, AgentResult, TaskMonitor};
 use opendev_http::adapted_client::AdaptedClient;
+use opendev_runtime::SessionDebugLogger;
 use tokio_util::sync::CancellationToken;
 
 use super::super::emitter::IterationEmitter;
@@ -34,6 +35,7 @@ pub(in crate::react_loop) async fn execute_llm_call<M>(
     emitter: &IterationEmitter<'_>,
     task_monitor: Option<&M>,
     cancel: Option<&CancellationToken>,
+    debug_logger: Option<&SessionDebugLogger>,
 ) -> Result<LlmCallResult, LoopAction>
 where
     M: TaskMonitor + ?Sized,
@@ -49,6 +51,12 @@ where
     let llm_start = std::time::Instant::now();
     let streaming = http_client.supports_streaming();
     debug!(streaming, "LLM call mode");
+
+    // Debug log: outgoing LLM request
+    if let Some(logger) = debug_logger {
+        let model = payload["model"].as_str().unwrap_or("unknown");
+        logger.log_llm_request(state.iteration, model, streaming, &payload);
+    }
 
     let http_result = if streaming {
         let stream_cb = opendev_http::streaming::FnStreamCallback(|event| {
@@ -113,6 +121,9 @@ where
             .as_deref()
             .unwrap_or("HTTP request failed");
         warn!(error = err_msg, "LLM HTTP call failed");
+        if let Some(logger) = debug_logger {
+            logger.log_llm_error(state.iteration, err_msg);
+        }
         if http_result.retryable {
             return Err(LoopAction::Continue);
         }
@@ -132,9 +143,33 @@ where
             .get("message")
             .and_then(|m| m.as_str())
             .unwrap_or("Unknown API error");
+        if let Some(logger) = debug_logger {
+            logger.log_llm_error(state.iteration, msg);
+        }
         return Err(LoopAction::Return(Err(AgentError::LlmError(format!(
             "API error: {msg}"
         )))));
+    }
+
+    // Debug log: incoming LLM response
+    if let Some(logger) = debug_logger {
+        let input_tokens = body
+            .get("usage")
+            .and_then(|u| u.get("prompt_tokens"))
+            .and_then(|t| t.as_u64())
+            .unwrap_or(0);
+        let output_tokens = body
+            .get("usage")
+            .and_then(|u| u.get("completion_tokens"))
+            .and_then(|t| t.as_u64())
+            .unwrap_or(0);
+        logger.log_llm_response(
+            state.iteration,
+            llm_latency_ms,
+            input_tokens,
+            output_tokens,
+            &body,
+        );
     }
 
     Ok(LlmCallResult {

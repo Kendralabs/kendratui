@@ -13,7 +13,7 @@ use crate::prompts::reminders::{
 use crate::traits::{AgentError, AgentResult, TaskMonitor};
 use opendev_context::{ArtifactIndex, ContextCompactor};
 use opendev_http::adapted_client::AdaptedClient;
-use opendev_runtime::{CostTracker, TodoManager};
+use opendev_runtime::{CostTracker, SessionDebugLogger, TodoManager};
 use opendev_tools_core::{ToolContext, ToolRegistry};
 use tokio_util::sync::CancellationToken;
 
@@ -40,6 +40,7 @@ impl ReactLoop {
         todo_manager: Option<&Mutex<TodoManager>>,
         cancel: Option<&CancellationToken>,
         tool_approval_tx: Option<&opendev_runtime::ToolApprovalSender>,
+        debug_logger: Option<&SessionDebugLogger>,
     ) -> Result<AgentResult, AgentError>
     where
         M: TaskMonitor + ?Sized,
@@ -65,6 +66,7 @@ impl ReactLoop {
                 todo_manager,
                 cancel,
                 tool_approval_tx,
+                debug_logger,
             )
             .await;
 
@@ -99,6 +101,7 @@ impl ReactLoop {
         todo_manager: Option<&Mutex<TodoManager>>,
         cancel: Option<&CancellationToken>,
         tool_approval_tx: Option<&opendev_runtime::ToolApprovalSender>,
+        debug_logger: Option<&SessionDebugLogger>,
     ) -> Result<AgentResult, AgentError>
     where
         M: TaskMonitor + ?Sized,
@@ -135,6 +138,7 @@ impl ReactLoop {
                 &emitter,
                 task_monitor,
                 cancel,
+                debug_logger,
             )
             .await
             {

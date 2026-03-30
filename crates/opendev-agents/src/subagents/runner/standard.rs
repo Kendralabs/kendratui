@@ -47,6 +47,7 @@ impl SubagentRunner for StandardReactRunner {
                 None, // no todo_manager
                 ctx.cancel,
                 ctx.tool_approval_tx,
+                ctx.debug_logger,
             )
             .await
     }
