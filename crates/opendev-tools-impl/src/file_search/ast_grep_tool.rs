@@ -6,7 +6,7 @@ use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
 use super::types::AstGrepArgs;
 use crate::dir_hints::list_available_dirs;
-use crate::path_utils::{resolve_dir_path, validate_path_access};
+use crate::path_utils::resolve_dir_path;
 
 /// Tool for structural code search using ast-grep.
 #[derive(Debug)]
@@ -64,10 +64,6 @@ impl BaseTool for AstGrepTool {
             .as_deref()
             .map(|p| resolve_dir_path(p, &ctx.working_dir))
             .unwrap_or_else(|| ctx.working_dir.clone());
-
-        if let Err(msg) = validate_path_access(&search_path, &ctx.working_dir) {
-            return ToolResult::fail(msg);
-        }
 
         if !search_path.exists() {
             let available = list_available_dirs(&ctx.working_dir);

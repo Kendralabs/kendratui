@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::path_utils::{resolve_dir_path, validate_path_access};
+use crate::path_utils::resolve_dir_path;
 
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
@@ -109,10 +109,6 @@ impl BaseTool for FileListTool {
                     .collect()
             })
             .unwrap_or_default();
-
-        if let Err(msg) = validate_path_access(&base_dir, &ctx.working_dir) {
-            return ToolResult::fail(msg);
-        }
 
         if !base_dir.exists() {
             let available = list_available_dirs(&ctx.working_dir);

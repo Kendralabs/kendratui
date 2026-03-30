@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
-use crate::path_utils::{is_sensitive_file, resolve_file_path, validate_path_access};
+use crate::path_utils::{is_sensitive_file, resolve_file_path};
 
 use binary::is_binary_file;
 use suggestions::file_not_found_message;
@@ -138,10 +138,6 @@ impl BaseTool for FileReadTool {
             .unwrap_or(Self::DEFAULT_MAX_LINES);
 
         let path = resolve_file_path(file_path, &ctx.working_dir);
-
-        if let Err(msg) = validate_path_access(&path, &ctx.working_dir) {
-            return ToolResult::fail(msg);
-        }
 
         if !path.exists() {
             return ToolResult::fail(file_not_found_message(file_path, &path));

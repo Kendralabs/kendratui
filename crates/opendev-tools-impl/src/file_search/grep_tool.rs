@@ -9,7 +9,7 @@ use tokio::process::Command;
 use super::excludes::default_ignore_file;
 use super::types::{GrepArgs, OutputMode, RgError};
 use crate::dir_hints::list_available_dirs;
-use crate::path_utils::{resolve_dir_path, validate_path_access};
+use crate::path_utils::resolve_dir_path;
 
 /// Tool for searching file contents using ripgrep.
 #[derive(Debug)]
@@ -196,10 +196,6 @@ impl BaseTool for GrepTool {
             .as_deref()
             .map(|p| resolve_dir_path(p, &ctx.working_dir))
             .unwrap_or_else(|| ctx.working_dir.clone());
-
-        if let Err(msg) = validate_path_access(&search_path, &ctx.working_dir) {
-            return ToolResult::fail(msg);
-        }
 
         if !search_path.exists() {
             let available = list_available_dirs(&ctx.working_dir);

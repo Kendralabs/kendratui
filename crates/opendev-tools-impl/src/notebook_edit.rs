@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use crate::path_utils::{resolve_file_path, validate_path_access};
+use crate::path_utils::resolve_file_path;
 use std::path::PathBuf;
 
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
@@ -89,10 +89,6 @@ impl BaseTool for NotebookEditTool {
 
         // Resolve path
         let path = resolve_file_path(notebook_path, &ctx.working_dir);
-
-        if let Err(msg) = validate_path_access(&path, &ctx.working_dir) {
-            return ToolResult::fail(msg);
-        }
 
         // Validate
         if !path.exists() {

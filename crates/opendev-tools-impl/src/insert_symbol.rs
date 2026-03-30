@@ -8,7 +8,7 @@ use std::path::Path;
 
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
-use crate::path_utils::{resolve_file_path, validate_path_access};
+use crate::path_utils::resolve_file_path;
 
 /// Shared insertion logic used by both tools.
 ///
@@ -35,10 +35,6 @@ fn execute_insert(
     };
 
     let path = resolve_file_path(file_path_str, &ctx.working_dir);
-
-    if let Err(msg) = validate_path_access(&path, &ctx.working_dir) {
-        return ToolResult::fail(msg);
-    }
 
     if !path.exists() {
         return ToolResult::fail(format!("File not found: {file_path_str}"));

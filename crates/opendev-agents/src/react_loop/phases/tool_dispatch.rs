@@ -14,6 +14,7 @@ use opendev_context::ArtifactIndex;
 use opendev_runtime::{
     TodoManager, TodoStatus, extract_command_prefix, play_finish_sound, summarize_tool_result,
 };
+use opendev_tools_core::path::is_external_path;
 use opendev_tools_core::{ToolContext, ToolRegistry, ToolResult};
 use tokio_util::sync::CancellationToken;
 
@@ -297,6 +298,59 @@ where
                         }
                     }
                     Err(_) => {}
+                }
+            }
+        }
+
+        // External directory approval for file tools
+        if let Some(target_path) = extract_file_tool_path(tool_name, &args_map) {
+            let resolved = std::path::Path::new(target_path.as_str());
+            if is_external_path(resolved, &tool_context.working_dir)
+                && !state.auto_approved_patterns.contains("external_directory")
+                && let Some(approval_tx) = tool_approval_tx
+            {
+                let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+                let req = opendev_runtime::ToolApprovalRequest {
+                    tool_name: format!("{tool_name} (external path)"),
+                    command: target_path,
+                    working_dir: tool_context.working_dir.display().to_string(),
+                    response_tx: resp_tx,
+                };
+                if approval_tx.send(req).is_ok() {
+                    match resp_rx.await {
+                        Ok(d) if !d.approved => {
+                            let result_content = ReactLoop::format_tool_result(
+                                tool_name,
+                                &serde_json::json!({
+                                    "success": false,
+                                    "error": format!(
+                                        "Access denied: path '{}' is outside the project directory",
+                                        d.command
+                                    )
+                                }),
+                            );
+                            messages.push(serde_json::json!({
+                                "role": "tool",
+                                "tool_call_id": tool_call_id_str,
+                                "name": tool_name,
+                                "content": result_content,
+                            }));
+                            emitter.emit_tool_result(
+                                tool_call_id_str,
+                                tool_name,
+                                "External directory access denied by user",
+                                false,
+                            );
+                            emitter.emit_tool_finished(tool_call_id_str, false);
+                            continue;
+                        }
+                        Ok(d) if d.choice == "yes_remember" => {
+                            state
+                                .auto_approved_patterns
+                                .insert("external_directory".to_string());
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
@@ -592,4 +646,33 @@ where
     }
 
     None
+}
+
+/// Extract the primary file/directory path from a file tool's arguments.
+fn extract_file_tool_path(
+    tool_name: &str,
+    args: &std::collections::HashMap<String, Value>,
+) -> Option<String> {
+    match tool_name {
+        "read_file" | "edit_file" | "write_file" | "multi_edit" | "insert_symbol" => args
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        "notebook_edit" => args
+            .get("notebook_path")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        "vlm" => args
+            .get("image_path")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        "web_screenshot" => args
+            .get("output_path")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        "grep" | "ast_grep" | "list_files" => {
+            args.get("path").and_then(|v| v.as_str()).map(String::from)
+        }
+        _ => None,
+    }
 }

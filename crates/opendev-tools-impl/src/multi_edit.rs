@@ -13,7 +13,7 @@ use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 use crate::diagnostics_helper;
 use crate::edit_replacers;
 use crate::formatter;
-use crate::path_utils::{is_sensitive_file, resolve_file_path, validate_path_access};
+use crate::path_utils::{is_sensitive_file, resolve_file_path};
 
 // ---------------------------------------------------------------------------
 // Per-file locking: serialize concurrent edits to the same file.
@@ -145,10 +145,6 @@ impl BaseTool for MultiEditTool {
 
         // --- Resolve path and check existence ---
         let path = resolve_file_path(file_path, &ctx.working_dir);
-
-        if let Err(msg) = validate_path_access(&path, &ctx.working_dir) {
-            return ToolResult::fail(msg);
-        }
 
         if !path.exists() {
             return ToolResult::fail(format!("File not found: {file_path}"));

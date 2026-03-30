@@ -8,8 +8,6 @@ use std::path::PathBuf;
 
 use opendev_tools_core::{BaseTool, ToolContext, ToolDisplayMeta, ToolResult};
 
-use crate::path_utils::validate_path_access;
-
 /// Supported image file extensions and their MIME types.
 const IMAGE_MIME_TYPES: &[(&str, &str)] = &[
     ("jpg", "image/jpeg"),
@@ -114,10 +112,6 @@ impl BaseTool for VlmTool {
                     ctx.working_dir.join(p)
                 }
             };
-
-            if let Err(msg) = validate_path_access(&path, &ctx.working_dir) {
-                return ToolResult::fail(msg);
-            }
 
             if !path.exists() {
                 return ToolResult::fail(format!("Image file not found: {path_str}"));

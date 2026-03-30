@@ -244,6 +244,44 @@ pub fn resolve_dir_path(user_path: &str, working_dir: &Path) -> PathBuf {
     }
 }
 
+/// Check if a path is outside the project working directory.
+///
+/// Returns `true` for paths outside the working directory that are also
+/// not in well-known config locations (`~/.opendev/`, `~/.config/opendev/`, `/tmp/`).
+/// Used by the react loop to prompt for user approval on external directory access.
+pub fn is_external_path(resolved: &Path, working_dir: &Path) -> bool {
+    let normalized = normalize_path(resolved);
+
+    // Within working directory
+    if normalized.starts_with(working_dir) {
+        return false;
+    }
+
+    // Canonical forms for symlinks
+    if let (Ok(canon_path), Ok(canon_wd)) = (normalized.canonicalize(), working_dir.canonicalize())
+        && canon_path.starts_with(&canon_wd)
+    {
+        return false;
+    }
+
+    // Well-known config dirs
+    if let Some(home) = dirs::home_dir() {
+        let allowed = [home.join(".opendev"), home.join(".config").join("opendev")];
+        for prefix in &allowed {
+            if normalized.starts_with(prefix) {
+                return false;
+            }
+        }
+    }
+
+    // /tmp is always allowed
+    if normalized.starts_with("/tmp") || normalized.starts_with("/var/tmp") {
+        return false;
+    }
+
+    true
+}
+
 #[cfg(test)]
 #[path = "path_tests.rs"]
 mod tests;

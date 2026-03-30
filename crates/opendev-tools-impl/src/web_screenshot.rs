@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::path_utils::{resolve_file_path, validate_path_access};
+use crate::path_utils::resolve_file_path;
 
 use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
 
@@ -170,13 +170,7 @@ async fn capture_screenshot(
 
     // Determine output path
     let dest = match output_path {
-        Some(p) => {
-            let resolved = resolve_file_path(p, &ctx.working_dir);
-            if let Err(msg) = validate_path_access(&resolved, &ctx.working_dir) {
-                return ToolResult::fail(msg);
-            }
-            resolved
-        }
+        Some(p) => resolve_file_path(p, &ctx.working_dir),
         None => generate_output_path(&url),
     };
 
