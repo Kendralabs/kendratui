@@ -21,12 +21,24 @@ impl App {
         // This avoids the race where SubagentStarted (forwarded by the bridge task)
         // arrives after ToolResult (sent directly), causing stats to be lost.
         if tool_name == "spawn_subagent" {
-            // If all existing subagents are finished, this is a new batch — clear stale entries
-            let all_finished = !self.state.active_subagents.is_empty()
-                && self.state.active_subagents.iter().all(|s| s.finished);
-            if all_finished {
-                self.state.active_subagents.retain(|s| s.backgrounded);
-            }
+            // Clear stale subagent entries before adding new ones:
+            // - All finished non-backgrounded subagents (previous batch completed)
+            // - Orphaned unfinished subagents whose parent tool is gone (race condition)
+            let active_tool_ids: std::collections::HashSet<&str> =
+                self.state.active_tools.iter().map(|t| t.id.as_str()).collect();
+            self.state.active_subagents.retain(|s| {
+                if s.backgrounded {
+                    return true;
+                }
+                if s.finished {
+                    return false;
+                }
+                // Keep unfinished subagents only if their parent tool is still active
+                match &s.parent_tool_id {
+                    Some(ptid) => active_tool_ids.contains(ptid.as_str()),
+                    None => true,
+                }
+            });
 
             let agent_name = args
                 .get("agent_type")

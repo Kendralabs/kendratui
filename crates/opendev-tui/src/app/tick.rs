@@ -54,6 +54,7 @@ impl App {
         // Advance spinner animation
         if self.state.agent_active
             || !self.state.active_tools.is_empty()
+            || !self.state.active_subagents.is_empty()
             || self.state.background_task_count > 0
         {
             self.state.spinner.tick();
@@ -127,6 +128,21 @@ impl App {
             // No matching tool — extended grace period when task watcher is open
             let grace = if task_watcher_open { 60 } else { 1 };
             s.finished_at.is_some_and(|t| t.elapsed().as_secs() < grace)
+        });
+
+        // Orphan cleanup: remove unfinished subagents whose parent tool has been removed.
+        // This handles the race where SubagentStarted's fallback creates a new entry between
+        // ToolResult (which removed the original entry) and ToolFinished (which removes the
+        // parent tool), leaving an orphan that would otherwise persist indefinitely.
+        let active_tools = &self.state.active_tools;
+        self.state.active_subagents.retain(|s| {
+            if s.finished || s.backgrounded {
+                return true; // handled by the block above
+            }
+            match &s.parent_tool_id {
+                Some(ptid) => active_tools.iter().any(|t| t.id == *ptid),
+                None => s.started_at.elapsed().as_secs() < 30, // safety timeout
+            }
         });
 
         // Update task progress elapsed time from wall clock
