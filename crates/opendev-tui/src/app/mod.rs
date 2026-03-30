@@ -105,7 +105,10 @@ impl App {
     fn should_render_before_draining(event: &AppEvent) -> bool {
         matches!(
             event,
-            AppEvent::ReasoningContent(_)
+            AppEvent::AgentStarted
+                | AppEvent::AgentFinished
+                | AppEvent::AgentInterrupted
+                | AppEvent::ReasoningContent(_)
                 | AppEvent::AgentChunk(_)
                 | AppEvent::AgentMessage(_)
                 | AppEvent::ToolStarted { .. }

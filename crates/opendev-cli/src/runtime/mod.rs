@@ -75,7 +75,7 @@ pub struct AgentRuntime {
     /// LLM-based topic detector for auto-generating session titles.
     pub(super) topic_detector: TopicDetector,
     /// Shadow git snapshot manager for tracking file changes per query.
-    pub(super) snapshot_manager: Mutex<opendev_history::SnapshotManager>,
+    pub(super) snapshot_manager: Arc<Mutex<opendev_history::SnapshotManager>>,
     /// Per-session debug logger for LLM interactions (noop when debug_logging is off).
     pub debug_logger: Arc<SessionDebugLogger>,
 }
@@ -438,9 +438,9 @@ impl AgentRuntime {
             mcp_manager: None,
             skill_loader,
             topic_detector,
-            snapshot_manager: Mutex::new(opendev_history::SnapshotManager::new(
+            snapshot_manager: Arc::new(Mutex::new(opendev_history::SnapshotManager::new(
                 &working_dir.to_string_lossy(),
-            )),
+            ))),
             debug_logger,
         })
     }
