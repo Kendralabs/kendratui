@@ -585,37 +585,66 @@ fn test_simulated_conversation_small_context() {
     // Turn 1: API reports 2,000 total tokens (input + output)
     compactor.update_from_api_usage(2_000, 3);
     assert!((compactor.usage_pct() - 20.0).abs() < 0.1);
-    assert_eq!(compactor.check_usage(&[make_msg("user", "hi")], ""), OptimizationLevel::None);
+    assert_eq!(
+        compactor.check_usage(&[make_msg("user", "hi")], ""),
+        OptimizationLevel::None
+    );
 
     // Turn 2: conversation grows to 5,500 tokens
     compactor.update_from_api_usage(5_500, 8);
     assert!((compactor.usage_pct() - 55.0).abs() < 0.1);
-    assert_eq!(compactor.check_usage(&[make_msg("user", "hi")], ""), OptimizationLevel::None);
+    assert_eq!(
+        compactor.check_usage(&[make_msg("user", "hi")], ""),
+        OptimizationLevel::None
+    );
 
     // Turn 3: hits 72% — warning threshold
     compactor.update_from_api_usage(7_200, 12);
     assert!((compactor.usage_pct() - 72.0).abs() < 0.1);
-    let messages: Vec<_> = (0..12).map(|i| make_msg("user", &format!("msg {i}"))).collect();
-    assert_eq!(compactor.check_usage(&messages, ""), OptimizationLevel::Warning);
+    let messages: Vec<_> = (0..12)
+        .map(|i| make_msg("user", &format!("msg {i}")))
+        .collect();
+    assert_eq!(
+        compactor.check_usage(&messages, ""),
+        OptimizationLevel::Warning
+    );
 
     // Turn 4: hits 82% — mask threshold
     compactor.update_from_api_usage(8_200, 15);
-    let messages: Vec<_> = (0..15).map(|i| make_msg("user", &format!("msg {i}"))).collect();
-    assert_eq!(compactor.check_usage(&messages, ""), OptimizationLevel::Mask);
+    let messages: Vec<_> = (0..15)
+        .map(|i| make_msg("user", &format!("msg {i}")))
+        .collect();
+    assert_eq!(
+        compactor.check_usage(&messages, ""),
+        OptimizationLevel::Mask
+    );
 
     // Turn 5: hits 92% — aggressive threshold
     compactor.update_from_api_usage(9_200, 18);
-    let messages: Vec<_> = (0..18).map(|i| make_msg("user", &format!("msg {i}"))).collect();
-    assert_eq!(compactor.check_usage(&messages, ""), OptimizationLevel::Aggressive);
+    let messages: Vec<_> = (0..18)
+        .map(|i| make_msg("user", &format!("msg {i}")))
+        .collect();
+    assert_eq!(
+        compactor.check_usage(&messages, ""),
+        OptimizationLevel::Aggressive
+    );
 
     // Simulate staged compaction: content is masked, calibration invalidated
     compactor.invalidate_calibration();
     // Recount from actual (small) messages — should show much lower usage
-    let small_messages: Vec<_> = (0..18).map(|i| make_msg("user", &format!("m{i}"))).collect();
+    let small_messages: Vec<_> = (0..18)
+        .map(|i| make_msg("user", &format!("m{i}")))
+        .collect();
     let level = compactor.check_usage(&small_messages, "sys");
     // Recounted from tiny messages — usage should be well under 70%
-    assert!(compactor.usage_pct() < 70.0, "After invalidation, usage should recount from actual messages");
-    assert!(matches!(level, OptimizationLevel::None | OptimizationLevel::Warning));
+    assert!(
+        compactor.usage_pct() < 70.0,
+        "After invalidation, usage should recount from actual messages"
+    );
+    assert!(matches!(
+        level,
+        OptimizationLevel::None | OptimizationLevel::Warning
+    ));
 }
 
 /// Verify that with the correct model context_length (e.g. 400k for GPT-5.2),
@@ -625,14 +654,24 @@ fn test_no_premature_compaction_with_correct_context_length() {
     // Before fix: max_context defaulted to 100k, 93k tokens = 93% → Aggressive
     let mut compactor_wrong = ContextCompactor::new(100_000);
     compactor_wrong.update_from_api_usage(93_224, 39);
-    let msgs: Vec<_> = (0..39).map(|i| make_msg("user", &format!("msg {i}"))).collect();
-    assert_eq!(compactor_wrong.check_usage(&msgs, ""), OptimizationLevel::Aggressive);
+    let msgs: Vec<_> = (0..39)
+        .map(|i| make_msg("user", &format!("msg {i}")))
+        .collect();
+    assert_eq!(
+        compactor_wrong.check_usage(&msgs, ""),
+        OptimizationLevel::Aggressive
+    );
 
     // After fix: max_context = 400k (GPT-5.2 actual), 93k tokens = 23.3% → None
     let mut compactor_fixed = ContextCompactor::new(400_000);
     compactor_fixed.update_from_api_usage(93_224, 39);
-    let msgs: Vec<_> = (0..39).map(|i| make_msg("user", &format!("msg {i}"))).collect();
-    assert_eq!(compactor_fixed.check_usage(&msgs, ""), OptimizationLevel::None);
+    let msgs: Vec<_> = (0..39)
+        .map(|i| make_msg("user", &format!("msg {i}")))
+        .collect();
+    assert_eq!(
+        compactor_fixed.check_usage(&msgs, ""),
+        OptimizationLevel::None
+    );
     assert!((compactor_fixed.usage_pct() - 23.3).abs() < 0.1);
 }
 
@@ -650,7 +689,9 @@ fn test_model_switch_updates_context_percentage() {
     assert!((compactor.usage_pct() - 40.0).abs() < 0.1);
 
     // Compaction check should reflect new limit
-    let msgs: Vec<_> = (0..20).map(|i| make_msg("user", &format!("msg {i}"))).collect();
+    let msgs: Vec<_> = (0..20)
+        .map(|i| make_msg("user", &format!("msg {i}")))
+        .collect();
     assert_eq!(compactor.check_usage(&msgs, ""), OptimizationLevel::None);
 }
 
