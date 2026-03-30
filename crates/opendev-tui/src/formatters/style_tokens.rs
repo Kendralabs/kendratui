@@ -315,6 +315,10 @@ pub const HEADING_2: Color = Color::Rgb(208, 212, 220);
 pub const HEADING_3: Color = Color::Rgb(208, 212, 220);
 pub const CODE_FG: Color = Color::Rgb(120, 190, 180);
 pub const CODE_BG: Color = Color::Rgb(30, 30, 30);
+
+/// Zero-width space used as a sentinel to mark code block lines.
+/// The wrap module checks for this to skip word-wrapping code.
+pub const CODE_LINE_SENTINEL: char = '\u{200B}';
 pub const BULLET: Color = Color::Rgb(208, 212, 220);
 pub const BOLD_FG: Color = Color::Rgb(208, 212, 220);
 

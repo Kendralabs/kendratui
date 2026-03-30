@@ -131,26 +131,23 @@ impl MarkdownRenderer {
             }
 
             if in_code_block {
-                let code: Cow<'static, str> = Cow::Owned(raw_line.to_string());
+                let code: Cow<'static, str> = Cow::Owned(format!(
+                    "{}{}",
+                    style_tokens::CODE_LINE_SENTINEL,
+                    raw_line
+                ));
                 lines.push(Line::from(Span::styled(
                     code,
                     Style::default()
                         .fg(palette.code_fg)
-                        .bg(palette.code_bg)
                         .add_modifier(base_mod),
                 )));
                 continue;
             }
 
-            // Horizontal rules (---, ***, ___)
+            // Horizontal rules (---, ***, ___) — treat as paragraph separator
             if is_horizontal_rule(raw_line) {
-                let rule: Cow<'static, str> = Cow::Borrowed("────────────────────────────────");
-                lines.push(Line::from(Span::styled(
-                    rule,
-                    Style::default()
-                        .fg(style_tokens::GREY)
-                        .add_modifier(base_mod),
-                )));
+                push_blank_if_needed(&mut lines);
                 continue;
             }
 
@@ -235,7 +232,7 @@ impl MarkdownRenderer {
                 spans.extend(parse_inline_spans_with_palette(content, palette));
                 lines.push(Line::from(spans));
             } else if raw_line.is_empty() {
-                // Empty line — collapse consecutive blanks
+                // Empty line — single blank line between components
                 push_blank_if_needed(&mut lines);
             } else {
                 // Regular text with inline formatting

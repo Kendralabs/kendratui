@@ -52,12 +52,10 @@ fn test_blank_lines_preserved() {
 
 #[test]
 fn test_code_line_not_wrapped() {
-    let code_style = Style::default().bg(CODE_BG);
-    let long_code = "x".repeat(200);
-    let md_lines = vec![Line::from(vec![Span::styled(
-        long_code.clone(),
-        code_style,
-    )])];
+    use super::super::style_tokens::{CODE_FG, CODE_LINE_SENTINEL};
+    let code_style = Style::default().fg(CODE_FG);
+    let long_code = format!("{}{}", CODE_LINE_SENTINEL, "x".repeat(200));
+    let md_lines = vec![Line::from(vec![Span::styled(long_code, code_style)])];
     let first = vec![Span::raw("* ")];
     let cont = vec![Span::raw("  ")];
 

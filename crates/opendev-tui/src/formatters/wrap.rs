@@ -9,14 +9,14 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthChar;
 
-use super::style_tokens::CODE_BG;
+use super::style_tokens::CODE_LINE_SENTINEL;
 
-/// Returns true if any span in `line` has a background color matching `CODE_BG`,
+/// Returns true if any span in `line` starts with the code-block sentinel character,
 /// indicating this line is inside a code block and should not be word-wrapped.
 fn is_code_line(line: &Line<'_>) -> bool {
     line.spans
         .iter()
-        .any(|s| s.style.bg.is_some_and(|bg| bg == CODE_BG))
+        .any(|s| s.content.starts_with(CODE_LINE_SENTINEL))
 }
 
 /// Compute the display width of a span's content using unicode widths.
