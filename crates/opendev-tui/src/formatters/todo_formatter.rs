@@ -101,7 +101,7 @@ pub fn summarize_todo_result(tool_name: &str, output: &str) -> String {
             if first_line.len() <= 60 {
                 first_line.to_string()
             } else {
-                format!("{}...", &first_line[..57])
+                format!("{}...", &first_line[..first_line.floor_char_boundary(57)])
             }
         }
     }

@@ -102,7 +102,8 @@ impl Widget for NestedToolWidget<'_> {
             let elapsed = subagent.elapsed_secs();
             let task_text = shortener.shorten_text(&subagent.task);
             let task_preview = if task_text.len() > 60 {
-                format!("{}...", &task_text[..60])
+                let end = task_text.floor_char_boundary(60);
+                format!("{}...", &task_text[..end])
             } else {
                 task_text
             };

@@ -48,7 +48,8 @@ impl HandoffMessage {
 
                 if !content.starts_with("Error") && !content.is_empty() {
                     let finding = if content.len() > 200 {
-                        format!("{tool_name}: {}...", &content[..200])
+                        let end = content.floor_char_boundary(200);
+                        format!("{tool_name}: {}...", &content[..end])
                     } else {
                         format!("{tool_name}: {content}")
                     };

@@ -350,7 +350,7 @@ impl AgentRuntime {
                                     return None;
                                 }
                                 let truncated = if m.content.len() > 500 {
-                                    m.content[..500].to_string()
+                                    m.content[..m.content.floor_char_boundary(500)].to_string()
                                 } else {
                                     m.content.clone()
                                 };

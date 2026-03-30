@@ -137,7 +137,7 @@ impl AstGrepTool {
 
             // Truncate very long matches
             let display_text = if text.len() > 200 {
-                format!("{}...", &text[..200])
+                format!("{}...", &text[..text.floor_char_boundary(200)])
             } else {
                 text.to_string()
             };
@@ -318,7 +318,7 @@ impl GrepTool {
                 for m in &matches {
                     let rel = m.path.strip_prefix(search_path).unwrap_or(&m.path);
                     let line = if m.line.len() > 2000 {
-                        format!("{}...", &m.line[..2000])
+                        format!("{}...", &m.line[..m.line.floor_char_boundary(2000)])
                     } else {
                         m.line.clone()
                     };

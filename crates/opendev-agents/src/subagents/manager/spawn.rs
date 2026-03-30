@@ -249,7 +249,8 @@ impl SubagentManager {
                 }
 
                 let summary = if agent_result.content.len() > 200 {
-                    format!("{}...", &agent_result.content[..200])
+                    let end = agent_result.content.floor_char_boundary(200);
+                    format!("{}...", &agent_result.content[..end])
                 } else {
                     agent_result.content.clone()
                 };

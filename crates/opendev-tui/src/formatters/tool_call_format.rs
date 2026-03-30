@@ -79,7 +79,7 @@ pub fn format_tool_call_parts_short(
     let (verb, arg) = format_parts_inner(tool_name, args, shortener);
     let shortened = shortener.shorten_text(&arg);
     let truncated = if shortened.len() > 80 {
-        format!("{}...", &shortened[..77])
+        format!("{}...", &shortened[..shortened.floor_char_boundary(77)])
     } else {
         shortened
     };
@@ -152,7 +152,7 @@ fn format_parts_inner(
             .and_then(|v| v.as_str())
             .unwrap_or("...");
         let pattern_display = if pattern.len() > 40 {
-            format!("\"{}...\"", &pattern[..37])
+            format!("\"{}...\"", &pattern[..pattern.floor_char_boundary(37)])
         } else {
             format!("\"{pattern}\"")
         };
@@ -170,7 +170,7 @@ fn format_parts_inner(
             .and_then(|v| v.as_str())
             .unwrap_or("...");
         let pattern_display = if pattern.len() > 40 {
-            format!("\"{}...\"", &pattern[..37])
+            format!("\"{}...\"", &pattern[..pattern.floor_char_boundary(37)])
         } else {
             format!("\"{pattern}\"")
         };
@@ -187,7 +187,7 @@ fn format_parts_inner(
     if matches!(tool_name, "list_files" | "Glob") {
         let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
         let pattern_display = if pattern.len() > 40 {
-            format!("{}...", &pattern[..37])
+            format!("{}...", &pattern[..pattern.floor_char_boundary(37)])
         } else {
             pattern.to_string()
         };

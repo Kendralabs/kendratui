@@ -107,7 +107,8 @@ impl<'a> ConversationWidget<'a> {
 
                     let task_desc = shortener.shorten_text(&task_desc);
                     let task_short = if task_desc.len() > 60 {
-                        format!("{}...", &task_desc[..60])
+                        let end = task_desc.floor_char_boundary(60);
+                        format!("{}...", &task_desc[..end])
                     } else {
                         task_desc
                     };

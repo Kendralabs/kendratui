@@ -431,7 +431,7 @@ pub fn classify_api_error(
                     .to_string(),
             };
             let truncated = if error_message.len() > 500 {
-                &error_message[..500]
+                &error_message[..error_message.floor_char_boundary(500)]
             } else {
                 error_message
             };

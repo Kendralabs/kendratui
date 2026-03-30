@@ -611,7 +611,7 @@ fn build_bg_agent_cell(
     {
         let clean: String = summary.split_whitespace().collect::<Vec<_>>().join(" ");
         let truncated = if clean.len() > 200 {
-            format!("{}...", &clean[..197])
+            format!("{}...", &clean[..clean.floor_char_boundary(197)])
         } else {
             clean
         };

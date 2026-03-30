@@ -202,7 +202,7 @@ impl Session {
         let slug = re.replace_all(&lowered, "-");
         let slug = slug.trim_matches('-');
         let slug = if slug.len() > 50 {
-            slug[..50].trim_end_matches('-')
+            slug[..slug.floor_char_boundary(50)].trim_end_matches('-')
         } else {
             slug
         };

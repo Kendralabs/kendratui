@@ -263,7 +263,7 @@ pub fn handle_session(action: SessionAction, working_dir: &std::path::Path) {
                 let updated = s.updated_at.format("%Y-%m-%d %H:%M");
                 let title = s.title.as_deref().unwrap_or("-");
                 let title_display = if title.len() > 30 {
-                    format!("{}...", &title[..27])
+                    format!("{}...", &title[..title.floor_char_boundary(27)])
                 } else {
                     title.to_string()
                 };

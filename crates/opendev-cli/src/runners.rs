@@ -217,7 +217,7 @@ pub async fn run_interactive(
                     for (i, meta) in sessions.iter().enumerate().take(20) {
                         let title = meta.title.as_deref().unwrap_or("(untitled)");
                         let display_title: String = if title.len() > 38 {
-                            format!("{}...", &title[..35])
+                            format!("{}...", &title[..title.floor_char_boundary(35)])
                         } else {
                             title.to_string()
                         };

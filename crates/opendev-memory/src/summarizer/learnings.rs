@@ -36,7 +36,7 @@ pub fn consolidate_learnings(messages: &[Value]) -> Vec<String> {
                 // Extract a short summary of the error
                 let error_summary = content.lines().next().unwrap_or(content);
                 let truncated = if error_summary.len() > 120 {
-                    &error_summary[..120]
+                    &error_summary[..error_summary.floor_char_boundary(120)]
                 } else {
                     error_summary
                 };
@@ -56,7 +56,7 @@ pub fn consolidate_learnings(messages: &[Value]) -> Vec<String> {
                 if let Some(ref err) = last_error {
                     let fix_summary = content.lines().next().unwrap_or(content);
                     let truncated_fix = if fix_summary.len() > 120 {
-                        &fix_summary[..120]
+                        &fix_summary[..fix_summary.floor_char_boundary(120)]
                     } else {
                         fix_summary
                     };
@@ -84,7 +84,7 @@ pub fn consolidate_learnings(messages: &[Value]) -> Vec<String> {
                 if lower.contains(keyword) {
                     let config_line = content.lines().next().unwrap_or(content);
                     let truncated = if config_line.len() > 150 {
-                        &config_line[..150]
+                        &config_line[..config_line.floor_char_boundary(150)]
                     } else {
                         config_line
                     };

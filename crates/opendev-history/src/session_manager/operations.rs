@@ -14,7 +14,7 @@ impl SessionManager {
     /// If it's the current session, updates in-memory; otherwise loads from disk.
     pub fn set_title(&mut self, session_id: &str, title: &str) -> std::io::Result<()> {
         let title = if title.len() > 50 {
-            &title[..50]
+            &title[..title.floor_char_boundary(50)]
         } else {
             title
         };
