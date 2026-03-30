@@ -19,6 +19,7 @@ impl App {
                     collapsed: false,
                     result_lines: vec!["Sent to background".to_string()],
                     nested_calls: Vec::new(),
+                    error_text: None,
                 }),
                 collapsed: false,
                 thinking_started_at: None,

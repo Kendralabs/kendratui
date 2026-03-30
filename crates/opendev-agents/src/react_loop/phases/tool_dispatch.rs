@@ -515,7 +515,7 @@ where
                     "role": "tool",
                     "tool_call_id": tc_id,
                     "name": tc_name,
-                    "content": "[Interrupted by user]",
+                    "content": "Error: Interrupted by user",
                 }));
             }
 

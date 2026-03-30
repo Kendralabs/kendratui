@@ -13,14 +13,13 @@ use crate::widgets::spinner::{COMPLETED_CHAR, CONTINUATION_CHAR};
 
 /// Format a tool call as a styled line with category color coding.
 pub(crate) fn format_tool_call(tc: &DisplayToolCall, working_dir: Option<&str>) -> Line<'static> {
-    let (icon, icon_color) = if tc.success {
-        (COMPLETED_CHAR, style_tokens::GREEN_BRIGHT)
-    } else {
-        (COMPLETED_CHAR, style_tokens::ERROR)
-    };
-
     // For ask_user, display as "⏺ User answered Claude's questions:"
     if tc.name == "ask_user" {
+        let (icon, icon_color) = if tc.success {
+            (COMPLETED_CHAR, style_tokens::GREEN_BRIGHT)
+        } else {
+            (COMPLETED_CHAR, style_tokens::ERROR)
+        };
         return Line::from(vec![
             Span::styled(format!("{icon} "), Style::default().fg(icon_color)),
             Span::styled(

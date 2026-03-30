@@ -252,6 +252,10 @@ pub fn api_values_to_chatmessages(values: &[Value]) -> Vec<ChatMessage> {
                     if let Some(tc) = tool_calls.iter_mut().find(|tc| tc.id == tool_call_id) {
                         if tool_content.starts_with("Error: ") {
                             tc.error = Some(tool_content.trim_start_matches("Error: ").to_string());
+                        } else if tool_content.starts_with("Error in ")
+                            || tool_content.starts_with("[Interrupted")
+                        {
+                            tc.error = Some(tool_content.to_string());
                         } else {
                             tc.result = Some(Value::String(tool_content));
                         }

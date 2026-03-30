@@ -289,7 +289,7 @@ fn format_tool_result_success() {
 fn format_tool_result_failure() {
     let result = serde_json::json!({"success": false, "error": "file not found"});
     let formatted = ReactLoop::format_tool_result("read_file", &result);
-    assert_eq!(formatted, "Error in read_file: file not found");
+    assert_eq!(formatted, "Error: file not found");
 }
 
 /// format_tool_result with completion_status.

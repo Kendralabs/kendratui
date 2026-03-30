@@ -477,6 +477,16 @@ impl<'a> ConversationWidget<'a> {
         } else if effective_collapsed {
             if is_bash {
                 lines.extend(build_bash_preview(&tc.result_lines));
+            } else if !tc.success && tc.result_lines.is_empty() {
+                // Failed/interrupted tool with no result — show error text
+                if let Some(ref err) = tc.error_text {
+                    let display_err = if err.is_empty() { "failed" } else { err };
+                    let label = format!("  {}  {display_err}", CONTINUATION_CHAR);
+                    lines.push(Line::from(Span::styled(
+                        label,
+                        Style::default().fg(style_tokens::ERROR),
+                    )));
+                }
             } else if !tc.result_lines.is_empty() {
                 let count = tc.result_lines.len();
                 let verb = crate::formatters::tool_registry::lookup_tool(&tc.name).verb;

@@ -121,6 +121,8 @@ pub struct DisplayToolCall {
     pub result_lines: Vec<String>,
     /// Nested tool calls (from subagent execution).
     pub nested_calls: Vec<DisplayToolCall>,
+    /// Error text for failed tools (shown in collapsed view).
+    pub error_text: Option<String>,
 }
 
 impl DisplayToolCall {
@@ -164,6 +166,7 @@ impl DisplayToolCall {
             collapsed,
             result_lines,
             nested_calls,
+            error_text: tc.error.clone(),
         }
     }
 }
