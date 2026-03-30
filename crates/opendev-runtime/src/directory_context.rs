@@ -16,7 +16,7 @@ use tracing::{debug, info};
 
 use opendev_history::SessionManager;
 
-use crate::event_bus::{EventBus, now_ms};
+use crate::event_bus::{EventBus, GlobalEventBus, now_ms};
 
 #[cfg(test)]
 mod tests;
@@ -116,6 +116,8 @@ pub struct DirectoryRegistry {
     sessions_base_dir: PathBuf,
     /// Maximum idle duration before cleanup (default: 30 minutes).
     max_idle: Duration,
+    /// Optional global bus that receives events from all directories.
+    global_bus: Option<Arc<GlobalEventBus>>,
 }
 
 impl DirectoryRegistry {
@@ -125,7 +127,14 @@ impl DirectoryRegistry {
             contexts: RwLock::new(HashMap::new()),
             sessions_base_dir,
             max_idle,
+            global_bus: None,
         }
+    }
+
+    /// Builder method: attach a global event bus that receives events from all directories.
+    pub fn with_global_bus(mut self, bus: Arc<GlobalEventBus>) -> Self {
+        self.global_bus = Some(bus);
+        self
     }
 
     /// Look up or create a context for the given working directory.
@@ -162,12 +171,31 @@ impl DirectoryRegistry {
         let session_manager = SessionManager::new(session_dir)?;
         let event_bus = EventBus::new();
 
+        // Subscribe to the bus *before* passing it to DirectoryContext so
+        // that no events are missed by the forwarder.
+        if let Some(global_bus) = &self.global_bus {
+            let mut rx = event_bus.subscribe();
+            let global = Arc::clone(global_bus);
+            tokio::spawn(async move {
+                loop {
+                    match rx.recv().await {
+                        Ok(event) => global.forward(event),
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            debug!(n, "Global bus forwarder lagged, skipping events");
+                        }
+                    }
+                }
+            });
+        }
+
         let ctx = Arc::new(DirectoryContext::new(
             working_dir.to_path_buf(),
             session_manager,
             event_bus,
         ));
         info!(?working_dir, "Created new DirectoryContext");
+
         contexts.insert(working_dir.to_path_buf(), Arc::clone(&ctx));
         Ok(ctx)
     }
