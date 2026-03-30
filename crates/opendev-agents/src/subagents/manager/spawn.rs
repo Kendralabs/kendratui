@@ -26,8 +26,11 @@ fn select_runner(
 
     match SubagentType::from_name(&spec.name) {
         SubagentType::CodeExplorer => {
-            let max_iterations = spec.max_steps.unwrap_or(200) as usize;
-            Box::new(SimpleReactRunner::new(max_iterations))
+            let max_iterations = spec.max_steps.unwrap_or(100) as usize;
+            Box::new(SimpleReactRunner::new(
+                max_iterations,
+                std::time::Duration::from_secs(600),
+            ))
         }
         _ => {
             // Default to 25 iterations for non-Explorer agents (matches old behavior)

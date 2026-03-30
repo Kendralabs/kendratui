@@ -209,6 +209,6 @@ fn test_exploration_summary_metadata_footer_caps_at_30() {
 
 #[test]
 fn test_simple_runner_name() {
-    let runner = SimpleReactRunner::new(50);
+    let runner = SimpleReactRunner::new(50, std::time::Duration::from_secs(600));
     assert_eq!(runner.name(), "SimpleReactRunner");
 }
