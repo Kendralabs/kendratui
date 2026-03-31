@@ -5,7 +5,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 use super::DirectoryRegistry;
-use crate::event_bus::now_ms;
+use crate::event_bus::{GlobalEventBus, RuntimeEvent, now_ms};
 
 fn tmp_dir() -> TempDir {
     TempDir::new().unwrap()
@@ -107,4 +107,50 @@ async fn test_active_count() {
 
     registry.dispose(&canon(&p1)).await;
     assert_eq!(registry.active_count().await, 1);
+}
+
+#[tokio::test]
+async fn test_directory_events_forwarded_to_global() {
+    let base = tmp_dir();
+    let global_bus = Arc::new(GlobalEventBus::new());
+    let mut global_rx = global_bus.subscribe();
+
+    let registry = DirectoryRegistry::new(canon(&base), Duration::from_secs(1800))
+        .with_global_bus(Arc::clone(&global_bus));
+
+    let project = tmp_dir();
+    let ctx = registry.get_or_create(&canon(&project)).await.unwrap();
+
+    // Publish an event on the directory-scoped bus.
+    let event = RuntimeEvent::ToolCallStart {
+        tool_name: "bash".into(),
+        call_id: "c1".into(),
+        timestamp_ms: now_ms(),
+    };
+    ctx.event_bus().publish(event);
+
+    // The forwarding task should deliver it to the global bus.
+    let received = tokio::time::timeout(Duration::from_secs(2), global_rx.recv())
+        .await
+        .expect("timed out waiting for forwarded event")
+        .expect("recv failed");
+
+    assert!(matches!(received, RuntimeEvent::ToolCallStart { .. }));
+    if let RuntimeEvent::ToolCallStart { tool_name, .. } = received {
+        assert_eq!(tool_name, "bash");
+    }
+}
+
+#[tokio::test]
+async fn test_registry_without_global_bus_works() {
+    let base = tmp_dir();
+    let registry = DirectoryRegistry::new(canon(&base), Duration::from_secs(1800));
+
+    let project = tmp_dir();
+    let ctx = registry.get_or_create(&canon(&project)).await.unwrap();
+
+    // Publishing without a global bus should not panic.
+    ctx.event_bus().publish(RuntimeEvent::ConfigReloaded {
+        timestamp_ms: now_ms(),
+    });
 }
