@@ -2,7 +2,14 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
+use crate::attachments::CollectorRunner;
+use crate::attachments::collectors::{
+    CompactionCollector, DateChangeCollector, GitStatusCollector, PlanModeCollector,
+    TodoStateCollector,
+};
 use crate::doom_loop::DoomLoopDetector;
 use crate::prompts::reminders::{
     MessageClass, ProactiveReminderConfig, ProactiveReminderScheduler,
@@ -35,6 +42,11 @@ pub(super) struct LoopState {
     pub completion_nudge_sent: bool,
     pub consecutive_reads: usize,
     pub proactive_reminders: ProactiveReminderScheduler,
+
+    /// Per-turn context attachment collectors.
+    pub collector_runner: CollectorRunner,
+    /// Shared flag set by safety phase after compaction.
+    pub compaction_flag: Arc<AtomicBool>,
 }
 
 impl LoopState {
@@ -49,6 +61,16 @@ impl LoopState {
             &startup_paths,
         );
 
+        // Build compaction flag shared between collector and LoopState
+        let compaction_flag = Arc::new(AtomicBool::new(false));
+        let collectors: Vec<Box<dyn crate::attachments::ContextCollector>> = vec![
+            Box::new(TodoStateCollector::new(10)),
+            Box::new(PlanModeCollector::new(5)),
+            Box::new(DateChangeCollector::new()),
+            Box::new(GitStatusCollector::new(5)),
+            Box::new(CompactionCollector::new(Arc::clone(&compaction_flag))),
+        ];
+
         Self {
             iteration: 0,
             consecutive_no_tool_calls: 0,
@@ -62,13 +84,11 @@ impl LoopState {
             all_todos_complete_nudged: false,
             completion_nudge_sent: false,
             consecutive_reads: 0,
+            collector_runner: CollectorRunner::new(collectors),
+            compaction_flag,
+            // Note: todo reminders are handled by TodoStateCollector (live data).
+            // Only task_proactive_reminder remains here as a static template nudge.
             proactive_reminders: ProactiveReminderScheduler::new(vec![
-                ProactiveReminderConfig {
-                    name: "todo_proactive_reminder",
-                    turns_since_reset: 10,
-                    turns_between: 10,
-                    class: MessageClass::Nudge,
-                },
                 ProactiveReminderConfig {
                     name: "task_proactive_reminder",
                     turns_since_reset: 10,

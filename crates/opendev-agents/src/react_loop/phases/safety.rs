@@ -125,6 +125,11 @@ where
             state
                 .subdir_tracker
                 .reset_after_compaction(&state.startup_paths, messages);
+            // Signal compaction to collectors and reset their cadence
+            state
+                .compaction_flag
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            state.collector_runner.reset_all();
             info!(
                 injected_remaining = state.subdir_tracker.injected_count(),
                 "Reset instruction tracker after LLM compaction"

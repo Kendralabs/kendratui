@@ -122,6 +122,20 @@ impl ReactLoop {
                 }
             }
 
+            // Run per-turn context collectors (live data: todos, git, plan mode, etc.)
+            {
+                let turn_ctx = crate::attachments::TurnContext {
+                    turn_number: state.iteration,
+                    working_dir: &tool_context.working_dir,
+                    todo_manager,
+                    shared_state: tool_context
+                        .shared_state
+                        .as_ref()
+                        .map(|arc| arc.as_ref()),
+                };
+                state.collector_runner.run(&turn_ctx, messages).await;
+            }
+
             if let Some(result) = super::phases::check_safety(
                 self,
                 caller,

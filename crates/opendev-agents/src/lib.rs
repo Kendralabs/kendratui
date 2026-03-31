@@ -12,6 +12,7 @@
 //! - [`agent_types`] — Agent definitions, handoff protocol, parallel tool grouping
 
 pub mod agent_types;
+pub mod attachments;
 pub mod doom_loop;
 pub mod llm_calls;
 pub mod main_agent;
