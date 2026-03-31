@@ -55,10 +55,6 @@ pub struct SubagentDisplayState {
     pub backgrounded: bool,
     /// Whether spawned with `run_in_background` (async from start).
     pub run_in_background: bool,
-    /// Whether the "Ctrl+B to background" hint has been shown.
-    pub background_hint_shown: bool,
-    /// When foreground execution started (for hint timing).
-    pub foreground_start: Option<Instant>,
     /// Cumulative cost in USD.
     pub cost_usd: f64,
 }
@@ -85,8 +81,6 @@ impl SubagentDisplayState {
             description: None,
             backgrounded: false,
             run_in_background: false,
-            background_hint_shown: false,
-            foreground_start: Some(Instant::now()),
             cost_usd: 0.0,
         }
     }

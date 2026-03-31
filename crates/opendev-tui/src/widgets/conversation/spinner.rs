@@ -139,7 +139,7 @@ impl<'a> ConversationWidget<'a> {
                         task_desc
                     };
 
-                    let mut spans = vec![
+                    let spans = vec![
                         Span::styled(
                             format!("{spinner} "),
                             Style::default().fg(stall_color(self.stalled_secs)),
@@ -155,19 +155,6 @@ impl<'a> ConversationWidget<'a> {
                             Style::default().fg(style_tokens::SUBTLE),
                         ),
                     ];
-
-                    // Ctrl+B hint: show after 2s of foreground subagent execution
-                    if let Some(sa) = subagent
-                        && sa.background_hint_shown
-                        && !sa.backgrounded
-                    {
-                        spans.push(Span::styled(
-                            "  Ctrl+B to background",
-                            Style::default()
-                                .fg(style_tokens::DIM_GREY)
-                                .add_modifier(Modifier::ITALIC),
-                        ));
-                    }
 
                     lines.push(Line::from(spans));
 
