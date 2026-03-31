@@ -325,10 +325,15 @@ pub async fn handle_run(action: RunAction, working_dir: &std::path::Path) {
             let paths = opendev_config::Paths::new(Some(working_dir.to_path_buf()));
             let config = load_app_config(working_dir);
 
-            // Initialize session manager for web server
+            // Initialize session manager for web server (with event store sidecar)
             let session_dir = paths.project_sessions_dir(working_dir);
+            let event_bus = opendev_runtime::event_bus::EventBus::new();
+            let bridge = opendev_runtime::event_bus::create_event_bus_bridge(event_bus);
+            let event_store =
+                opendev_history::event_store::EventStore::new(session_dir.clone())
+                    .with_post_append(bridge);
             let session_manager = match opendev_history::SessionManager::new(session_dir) {
-                Ok(sm) => sm,
+                Ok(sm) => sm.with_event_store(event_store),
                 Err(e) => {
                     eprintln!("Failed to initialize session manager: {e}");
                     std::process::exit(1);
@@ -354,11 +359,17 @@ pub async fn handle_run(action: RunAction, working_dir: &std::path::Path) {
                 model_registry,
             );
 
-            // Initialize agent runtime for executing queries
+            // Initialize agent runtime for executing queries (with event store sidecar)
             let runtime_session_dir = paths.project_sessions_dir(working_dir);
+            let runtime_event_bus = opendev_runtime::event_bus::EventBus::new();
+            let runtime_bridge =
+                opendev_runtime::event_bus::create_event_bus_bridge(runtime_event_bus);
+            let runtime_event_store =
+                opendev_history::event_store::EventStore::new(runtime_session_dir.clone())
+                    .with_post_append(runtime_bridge);
             let runtime_session_manager =
                 match opendev_history::SessionManager::new(runtime_session_dir) {
-                    Ok(sm) => sm,
+                    Ok(sm) => sm.with_event_store(runtime_event_store),
                     Err(e) => {
                         eprintln!("Failed to initialize runtime session manager: {e}");
                         std::process::exit(1);

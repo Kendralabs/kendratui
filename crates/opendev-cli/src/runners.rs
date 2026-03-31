@@ -5,6 +5,16 @@ use tracing::info;
 use crate::helpers::*;
 use crate::runtime;
 
+/// Create an EventStore wired to an EventBus for audit trail.
+fn create_event_store(
+    session_dir: &std::path::Path,
+) -> opendev_history::event_store::EventStore {
+    let event_bus = opendev_runtime::event_bus::EventBus::new();
+    let bridge = opendev_runtime::event_bus::create_event_bus_bridge(event_bus);
+    opendev_history::event_store::EventStore::new(session_dir.to_path_buf())
+        .with_post_append(bridge)
+}
+
 /// Run non-interactive mode: execute a single prompt and exit.
 pub async fn run_non_interactive(
     working_dir: &std::path::Path,
@@ -50,7 +60,7 @@ pub async fn run_non_interactive(
     });
 
     let mut session_manager = match SessionManager::new(session_dir.clone()) {
-        Ok(sm) => sm,
+        Ok(sm) => sm.with_event_store(create_event_store(&session_dir)),
         Err(e) => {
             eprintln!("Failed to initialize session manager: {e}");
             std::process::exit(1);
@@ -169,7 +179,7 @@ pub async fn run_interactive(
     }
 
     let mut session_manager = match SessionManager::new(session_dir.clone()) {
-        Ok(sm) => sm,
+        Ok(sm) => sm.with_event_store(create_event_store(&session_dir)),
         Err(e) => {
             eprintln!("Failed to initialize session manager: {}", e);
             std::process::exit(1);
