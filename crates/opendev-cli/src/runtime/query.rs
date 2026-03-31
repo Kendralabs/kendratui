@@ -559,6 +559,76 @@ impl AgentRuntime {
         Ok(result)
     }
 
+    /// Resume an agent from existing message history.
+    #[allow(dead_code)] // API for future team member resume from sidechain
+    ///
+    /// Used for mid-execution backgrounding (Ctrl+B): the agent's accumulated
+    /// messages are passed in and the react loop continues from where it left off.
+    /// No new user message is injected — the loop picks up from the last state.
+    pub async fn resume_with_messages(
+        &mut self,
+        mut messages: Vec<serde_json::Value>,
+        system_prompt: &str,
+        event_callback: Option<&dyn AgentEventCallback>,
+        interrupt_token: Option<&opendev_runtime::InterruptToken>,
+    ) -> Result<AgentResult, AgentError> {
+        info!(
+            message_count = messages.len(),
+            "Resuming agent from existing message history"
+        );
+
+        // Prepend system prompt if not already present
+        if messages
+            .first()
+            .and_then(|m| m.get("role"))
+            .and_then(|r| r.as_str())
+            != Some("system")
+        {
+            messages.insert(
+                0,
+                serde_json::json!({"role": "system", "content": system_prompt}),
+            );
+        }
+
+        let tool_schemas = self.tool_registry.get_schemas();
+        let tool_context = ToolContext {
+            working_dir: self.working_dir.clone(),
+            is_subagent: false,
+            session_id: self.session_manager.current_session().map(|s| s.id.clone()),
+            values: HashMap::new(),
+            timeout_config: None,
+            cancel_token: interrupt_token.map(|t| t.child_token()),
+            diagnostic_provider: None,
+            shared_state: None,
+        };
+
+        self.react_loop.set_original_task(None);
+
+        let cancel_token = interrupt_token.map(|t| t.child_token());
+        let result = self
+            .react_loop
+            .run(
+                &self.llm_caller,
+                &self.http_client,
+                &mut messages,
+                &tool_schemas,
+                &self.tool_registry,
+                &tool_context,
+                interrupt_token,
+                event_callback,
+                None, // no cost tracking for background agents
+                None, // no artifact index
+                None, // no compaction
+                None, // no todo manager
+                cancel_token.as_ref(),
+                None, // no tool approval (background agents auto-deny)
+                Some(&*self.debug_logger),
+            )
+            .await?;
+
+        Ok(result)
+    }
+
     /// Run manual compaction on the current session's messages.
     ///
     /// Forces LLM-powered compaction regardless of context usage level.
