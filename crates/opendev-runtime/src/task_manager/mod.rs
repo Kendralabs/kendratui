@@ -21,13 +21,7 @@ use tokio::sync::mpsc;
 use tracing::warn;
 
 use crate::InterruptToken;
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
+use crate::now_ms;
 
 /// Manages the lifecycle of background agent tasks.
 ///

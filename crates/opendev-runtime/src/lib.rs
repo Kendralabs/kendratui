@@ -39,6 +39,7 @@ pub mod sound;
 pub mod state_snapshot;
 pub mod task_manager;
 pub mod task_scheduler;
+pub mod team_manager;
 pub mod todo;
 pub mod tool_approval_channel;
 pub mod tool_summarizer;
@@ -86,6 +87,15 @@ pub use task_manager::{
     EVICT_GRACE_MS, MAX_ACTIVITY_LOG, MAX_RECENT_ACTIVITIES, PendingMessage, TaskInfo, TaskManager,
     TaskManagerEvent, TaskState, ToolActivity,
 };
+pub use team_manager::{TeamConfig, TeamManager, TeamMember, TeamMemberStatus};
+
+/// Current time in milliseconds since epoch (convenience re-export).
+pub fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
 pub use task_scheduler::TaskScheduler;
 pub use tool_approval_channel::{
     ToolApprovalDecision, ToolApprovalReceiver, ToolApprovalRequest, ToolApprovalSender,
