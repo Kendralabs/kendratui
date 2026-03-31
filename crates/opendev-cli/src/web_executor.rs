@@ -310,6 +310,26 @@ pub fn spawn_channel_bridges(receivers: crate::runtime::ToolChannelReceivers, st
                             "line": line,
                         }),
                     ),
+                    SubagentEvent::TeamCreated {
+                        team_id, members, ..
+                    } => (
+                        "team_created",
+                        serde_json::json!({
+                            "team_id": team_id,
+                            "member_count": members.len(),
+                        }),
+                    ),
+                    SubagentEvent::TeamMessageSent { from, to, preview } => (
+                        "team_message",
+                        serde_json::json!({
+                            "from": from,
+                            "to": to,
+                            "preview": preview,
+                        }),
+                    ),
+                    SubagentEvent::TeamDeleted { team_id } => {
+                        ("team_deleted", serde_json::json!({ "team_id": team_id }))
+                    }
                 };
                 st.broadcast(WsBroadcast::new(msg_type, data));
             }

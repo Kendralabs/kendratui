@@ -72,6 +72,22 @@ pub enum SubagentEvent {
     },
     /// Activity line from a background agent.
     BackgroundActivity { task_id: String, line: String },
+
+    // -- Team events --
+    /// A team was created.
+    TeamCreated {
+        team_id: String,
+        leader: String,
+        members: Vec<String>,
+    },
+    /// An inter-agent message was sent.
+    TeamMessageSent {
+        from: String,
+        to: String,
+        preview: String,
+    },
+    /// A team was deleted.
+    TeamDeleted { team_id: String },
 }
 
 /// Progress callback that sends events through an mpsc channel.
