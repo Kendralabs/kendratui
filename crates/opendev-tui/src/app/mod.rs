@@ -18,6 +18,7 @@ mod event_dispatch;
 mod handle_agent;
 mod handle_background;
 mod handle_subagent;
+mod handle_team;
 mod handle_tools;
 mod handle_ui;
 mod key_handler;

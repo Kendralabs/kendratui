@@ -315,6 +315,26 @@ impl RecordedEvent {
                 "SessionTitleUpdated".to_string(),
                 serde_json::json!({"title": title}),
             ),
+            AppEvent::TeamCreated {
+                team_id,
+                member_names,
+                ..
+            } => (
+                "TeamCreated".to_string(),
+                serde_json::json!({"team_id": team_id, "members": member_names}),
+            ),
+            AppEvent::TeamMessageSent {
+                from,
+                to,
+                content_preview,
+            } => (
+                "TeamMessageSent".to_string(),
+                serde_json::json!({"from": from, "to": to, "preview": content_preview}),
+            ),
+            AppEvent::TeamDeleted { team_id } => (
+                "TeamDeleted".to_string(),
+                serde_json::json!({"team_id": team_id}),
+            ),
         };
 
         RecordedEvent {

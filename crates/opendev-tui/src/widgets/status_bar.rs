@@ -41,6 +41,8 @@ pub struct StatusBarWidget<'a> {
     spinner_char: Option<char>,
     last_completion: Option<String>,
     session_id: Option<&'a str>,
+    /// Team status: (busy_count, total_count). None if no active team.
+    team_status: Option<(usize, usize)>,
 }
 
 impl<'a> StatusBarWidget<'a> {
@@ -70,6 +72,7 @@ impl<'a> StatusBarWidget<'a> {
             spinner_char: None,
             last_completion: None,
             session_id: None,
+            team_status: None,
         }
     }
 
@@ -106,6 +109,11 @@ impl<'a> StatusBarWidget<'a> {
 
     pub fn reasoning_level(mut self, level: ReasoningLevel) -> Self {
         self.reasoning_level = Some(level);
+        self
+    }
+
+    pub fn team_status(mut self, status: Option<(usize, usize)>) -> Self {
+        self.team_status = status;
         self
     }
 
@@ -260,6 +268,20 @@ impl Widget for StatusBarWidget<'_> {
             spans.push(Span::styled(
                 " (Ctrl+P)",
                 Style::default().fg(style_tokens::GREY),
+            ));
+        }
+
+        // Team status
+        if let Some((busy, total)) = self.team_status {
+            spans.push(Span::styled(
+                "  \u{2502}  ",
+                Style::default().fg(style_tokens::GREY),
+            ));
+            spans.push(Span::styled(
+                format!("Team:{busy}/{total}"),
+                Style::default()
+                    .fg(style_tokens::CYAN)
+                    .add_modifier(Modifier::BOLD),
             ));
         }
 

@@ -91,10 +91,7 @@ impl App {
                     // message and creates a NEW assistant message for the LLM's
                     // synthesized response — matching the foreground subagent flow.
                     let mut arguments = std::collections::HashMap::new();
-                    arguments.insert(
-                        "task_id".to_string(),
-                        serde_json::json!(&task_id),
-                    );
+                    arguments.insert("task_id".to_string(), serde_json::json!(&task_id));
                     self.state.messages.push(super::DisplayMessage {
                         role: super::DisplayRole::Assistant,
                         content: String::new(),
@@ -394,6 +391,19 @@ impl App {
             } => {
                 self.handle_set_background_agent_token(task_id, query, session_id, interrupt_token)
             }
+
+            // Team events
+            AppEvent::TeamCreated {
+                team_id,
+                leader_name,
+                member_names,
+            } => self.handle_team_created(team_id, leader_name, member_names),
+            AppEvent::TeamMessageSent {
+                from,
+                to,
+                content_preview,
+            } => self.handle_team_message(from, to, content_preview),
+            AppEvent::TeamDeleted { team_id } => self.handle_team_deleted(team_id),
 
             // Undo/Redo/Share events
             AppEvent::SnapshotTaken { hash } => self.handle_snapshot_taken(hash),

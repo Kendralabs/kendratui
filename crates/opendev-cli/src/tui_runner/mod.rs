@@ -386,12 +386,25 @@ impl TuiRunner {
                                 AppEvent::BackgroundAgentActivity { task_id, line }
                             }
 
-                            // Team events — pass through as-is (TUI handles display)
-                            SubagentEvent::TeamCreated { .. }
-                            | SubagentEvent::TeamMessageSent { .. }
-                            | SubagentEvent::TeamDeleted { .. } => {
-                                // TODO: map to team-specific AppEvents when TUI team display is wired
-                                continue;
+                            // Team events
+                            SubagentEvent::TeamCreated {
+                                team_id,
+                                leader,
+                                members,
+                            } => AppEvent::TeamCreated {
+                                team_id,
+                                leader_name: leader,
+                                member_names: members,
+                            },
+                            SubagentEvent::TeamMessageSent { from, to, preview } => {
+                                AppEvent::TeamMessageSent {
+                                    from,
+                                    to,
+                                    content_preview: preview,
+                                }
+                            }
+                            SubagentEvent::TeamDeleted { team_id } => {
+                                AppEvent::TeamDeleted { team_id }
                             }
                         };
                         if sa_tx.send(app_event).is_err() {

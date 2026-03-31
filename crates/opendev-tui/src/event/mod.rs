@@ -226,6 +226,22 @@ pub enum AppEvent {
         interrupt_token: InterruptToken,
     },
 
+    // -- Team events --
+    /// A team was created.
+    TeamCreated {
+        team_id: String,
+        leader_name: String,
+        member_names: Vec<String>,
+    },
+    /// An inter-agent message was sent.
+    TeamMessageSent {
+        from: String,
+        to: String,
+        content_preview: String,
+    },
+    /// A team was deleted.
+    TeamDeleted { team_id: String },
+
     // -- Undo/Redo events --
     /// Snapshot was taken (stores tree hash for undo stack).
     SnapshotTaken { hash: String },
