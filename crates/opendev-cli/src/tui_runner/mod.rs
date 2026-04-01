@@ -174,7 +174,6 @@ impl AgentEventCallback for BackgroundEventCallback {
 /// Bridges the TUI event loop with the AgentRuntime.
 pub struct TuiRunner {
     runtime: AgentRuntime,
-    system_prompt: String,
     initial_message: Option<String>,
     /// Remote event sender for Telegram remote control.
     remote_event_tx: Option<RemoteEventSender>,
@@ -186,10 +185,9 @@ pub struct TuiRunner {
 
 impl TuiRunner {
     /// Create a new TUI runner.
-    pub fn new(runtime: AgentRuntime, system_prompt: String) -> Self {
+    pub fn new(runtime: AgentRuntime) -> Self {
         Self {
             runtime,
-            system_prompt,
             initial_message: None,
             remote_event_tx: None,
             remote_command_rx: None,
@@ -432,7 +430,6 @@ impl TuiRunner {
         }
 
         // Spawn the agent listener task
-        let system_prompt = self.system_prompt;
         let mut runtime = self.runtime;
 
         let remote_tx_for_agent = remote_event_tx.clone();
@@ -549,6 +546,8 @@ impl TuiRunner {
 
                     match runtime.run_compaction().await {
                         Ok(summary) => {
+                            // Clear cached dynamic prompt sections so they refresh
+                            runtime.clear_prompt_cache();
                             let _ = event_tx.send(AppEvent::CompactionFinished {
                                 success: true,
                                 message: summary,
@@ -584,6 +583,10 @@ impl TuiRunner {
                         let _ = event_tx.send(AppEvent::TaskProgressStarted {
                             description: "Thinking".to_string(),
                         });
+
+                        // Compose system prompt per-turn
+                        runtime.resolve_mcp_instructions().await;
+                        let system_prompt = runtime.compose_system_prompt();
 
                         match runtime
                             .inject_background_result(
@@ -637,6 +640,10 @@ impl TuiRunner {
                 if let Some(ref rtx) = remote_tx_for_agent {
                     let _ = rtx.send(RemoteEvent::AgentStarted);
                 }
+
+                // Compose system prompt per-turn (resolves MCP, uses section cache)
+                runtime.resolve_mcp_instructions().await;
+                let system_prompt = runtime.compose_system_prompt();
 
                 // Run the query through the agent pipeline with event callback
                 match runtime
@@ -864,7 +871,11 @@ impl TuiRunner {
                                     let bg_tx = event_tx.clone();
                                     let bg_task_id = task_id.clone();
                                     let bg_msg = msg.clone();
-                                    let bg_system_prompt = system_prompt.clone();
+
+                                    // Compose system prompt from foreground runtime
+                                    // (background runtime doesn't own the composer)
+                                    runtime.resolve_mcp_instructions().await;
+                                    let bg_system_prompt = runtime.compose_system_prompt();
 
                                     // Register in the manager via event
                                     let _ = event_tx.send(AppEvent::AgentBackgrounded {

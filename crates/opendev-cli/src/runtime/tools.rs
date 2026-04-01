@@ -78,10 +78,71 @@ pub(super) fn register_default_tools(
     )
 }
 
-/// Build the system prompt from embedded templates.
-pub fn build_system_prompt(working_dir: &Path, config: &opendev_models::AppConfig) -> String {
-    // Use a dummy path — templates are resolved from the embedded store first
-    let composer = create_default_composer("/dev/null");
+/// Create a configured [`PromptComposer`] and [`PromptContext`] for
+/// per-turn system prompt composition.
+///
+/// The composer includes all default sections plus a `Cached` dynamic
+/// section for environment context (working directory, git status,
+/// instruction files). MCP instructions should be registered separately
+/// by the caller via [`PromptComposer::set_section_override`].
+pub fn create_prompt_composer(
+    working_dir: &Path,
+    config: &opendev_models::AppConfig,
+) -> (
+    opendev_agents::prompts::PromptComposer,
+    opendev_agents::prompts::PromptContext,
+) {
+    let mut composer = create_default_composer("/dev/null");
+
+    // Register environment context as a Cached dynamic section.
+    // This captures working dir, git status, instruction files, and model name.
+    // Refreshed on /clear and /compact.
+    let wd = working_dir.to_path_buf();
+    let model_name = config.model.clone();
+    let instructions = config.instructions.clone();
+    composer.register_dynamic_section(
+        "environment_context",
+        opendev_agents::prompts::CachePolicy::Cached,
+        92, // after code_references (90), before reminders_note (95)
+        None,
+        Box::new(move || {
+            let mut env_ctx = opendev_context::EnvironmentContext::collect(&wd);
+            env_ctx.model_name = Some(model_name.clone());
+
+            // Resolve config-level instruction paths
+            if !instructions.is_empty() {
+                let config_instructions =
+                    opendev_context::resolve_instruction_paths(&instructions, &wd);
+                let existing: std::collections::HashSet<_> = env_ctx
+                    .instruction_files
+                    .iter()
+                    .filter_map(|f| f.path.canonicalize().ok())
+                    .collect();
+                for instr in config_instructions {
+                    if let Ok(canonical) = instr.path.canonicalize()
+                        && !existing.contains(&canonical)
+                    {
+                        env_ctx.instruction_files.push(instr);
+                    }
+                }
+            }
+
+            let block = env_ctx.format_prompt_block();
+            if block.is_empty() { None } else { Some(block) }
+        }),
+    );
+
+    // Register MCP instructions as an Uncached section.
+    // Content is injected via set_section_override() before each compose()
+    // because MCP schema resolution is async. The section itself is a no-op
+    // provider — the override mechanism supplies the actual content.
+    composer.register_dynamic_section(
+        "mcp_instructions",
+        opendev_agents::prompts::CachePolicy::Uncached,
+        78, // after task_tracking (75), before provider-specific (80)
+        None,
+        Box::new(|| None), // Content comes from set_section_override
+    );
 
     let mut context = HashMap::new();
     context.insert(
@@ -106,36 +167,15 @@ pub fn build_system_prompt(working_dir: &Path, config: &opendev_models::AppConfi
         serde_json::Value::String(config.model_provider.clone()),
     );
 
-    let base_prompt = composer.compose(&context);
+    (composer, context)
+}
 
-    // Collect and append dynamic environment context
-    let mut env_ctx = opendev_context::EnvironmentContext::collect(working_dir);
-    env_ctx.model_name = Some(config.model.clone());
-
-    // Resolve config-level instruction paths (file paths, globs, ~/paths)
-    if !config.instructions.is_empty() {
-        let config_instructions =
-            opendev_context::resolve_instruction_paths(&config.instructions, working_dir);
-        // Deduplicate against already-discovered files
-        let existing: std::collections::HashSet<_> = env_ctx
-            .instruction_files
-            .iter()
-            .filter_map(|f| f.path.canonicalize().ok())
-            .collect();
-        for instr in config_instructions {
-            if let Ok(canonical) = instr.path.canonicalize()
-                && !existing.contains(&canonical)
-            {
-                env_ctx.instruction_files.push(instr);
-            }
-        }
-    }
-
-    let env_block = env_ctx.format_prompt_block();
-
-    if env_block.is_empty() {
-        base_prompt
-    } else {
-        format!("{base_prompt}\n\n{env_block}")
-    }
+/// Build the system prompt from embedded templates (convenience wrapper).
+///
+/// This composes once and returns a frozen string. For per-turn composition,
+/// use [`create_prompt_composer`] instead.
+#[cfg(test)]
+pub fn build_system_prompt(working_dir: &Path, config: &opendev_models::AppConfig) -> String {
+    let (mut composer, context) = create_prompt_composer(working_dir, config);
+    composer.compose(&context)
 }

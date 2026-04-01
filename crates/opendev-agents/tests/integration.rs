@@ -735,7 +735,7 @@ fn two_part_cache_splitting() {
     use opendev_agents::prompts::composer::create_default_composer;
 
     let tmp = tempfile::TempDir::new().unwrap();
-    let composer = create_default_composer(tmp.path());
+    let mut composer = create_default_composer(tmp.path());
 
     let (stable, dynamic) = composer.compose_two_part(&HashMap::new());
 

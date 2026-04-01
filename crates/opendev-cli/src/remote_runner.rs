@@ -72,7 +72,6 @@ impl AgentEventCallback for RemoteEventCallback {
 /// Blocks until Ctrl+C. Telegram is the only interface — no TUI.
 pub async fn run_remote(
     mut runtime: AgentRuntime,
-    system_prompt: String,
     event_tx: RemoteEventSender,
     mut command_rx: RemoteCommandReceiver,
     bridge: Arc<RemoteSessionBridge>,
@@ -246,6 +245,10 @@ pub async fn run_remote(
 
                     let _ = event_tx_for_agent.send(RemoteEvent::AgentStarted);
 
+                    // Compose system prompt per-turn
+                    runtime.resolve_mcp_instructions().await;
+                    let system_prompt = runtime.compose_system_prompt();
+
                     match runtime
                         .run_query(
                             &msg,
@@ -311,6 +314,7 @@ pub async fn run_remote(
                 }
                 AgentCmd::Compact => match runtime.run_compaction().await {
                     Ok(summary) => {
+                        runtime.clear_prompt_cache();
                         let _ = event_tx_for_agent.send(RemoteEvent::AgentError(summary));
                     }
                     Err(e) => {

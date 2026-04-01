@@ -375,18 +375,9 @@ pub async fn handle_run(action: RunAction, working_dir: &std::path::Path) {
                     }
                 };
 
-            let prompt_config = config.clone();
-            let prompt_wd = working_dir.to_path_buf();
-            let system_prompt_handle = tokio::task::spawn_blocking(move || {
-                crate::runtime::build_system_prompt(&prompt_wd, &prompt_config)
-            });
-
             match crate::runtime::AgentRuntime::new(config, working_dir, runtime_session_manager) {
                 Ok(mut agent_runtime) => {
                     agent_runtime.start_mcp_connections();
-                    let system_prompt = system_prompt_handle
-                        .await
-                        .expect("system prompt thread panicked");
 
                     // Take channel receivers and spawn bridge tasks for
                     // subagent events, approvals, ask-user, plan-approval
@@ -394,8 +385,7 @@ pub async fn handle_run(action: RunAction, working_dir: &std::path::Path) {
                         crate::web_executor::spawn_channel_bridges(receivers, state.clone());
                     }
 
-                    let executor =
-                        crate::web_executor::WebAgentExecutor::new(agent_runtime, system_prompt);
+                    let executor = crate::web_executor::WebAgentExecutor::new(agent_runtime);
                     state
                         .set_agent_executor(std::sync::Arc::new(executor))
                         .await;

@@ -1,5 +1,6 @@
 use super::*;
 use std::fs;
+use std::sync::Arc;
 
 fn setup_templates(dir: &std::path::Path) {
     let main_dir = dir.join("system/main");
@@ -221,7 +222,7 @@ fn test_compose_two_part_with_vars() {
 fn test_embedded_templates_used_by_default_composer() {
     // Use a temp dir that has NO files — embedded should still resolve
     let dir = tempfile::TempDir::new().unwrap();
-    let composer = create_default_composer(dir.path());
+    let mut composer = create_default_composer(dir.path());
 
     // Compose without any conditions to get the always-included sections
     let result = composer.compose(&HashMap::new());
@@ -232,4 +233,211 @@ fn test_embedded_templates_used_by_default_composer() {
         result.contains("Security Policy"),
         "Expected embedded security policy template"
     );
+}
+
+// ─── Section Cache Tests ─────────────────────────────────────────────
+
+#[test]
+fn test_static_section_cached_across_composes() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let call_count = Arc::new(AtomicUsize::new(0));
+    let cc = Arc::clone(&call_count);
+
+    let mut composer = PromptComposer::new("/dev/null");
+    composer.register_dynamic_section(
+        "counter",
+        CachePolicy::Static,
+        10,
+        None,
+        Box::new(move || {
+            cc.fetch_add(1, Ordering::SeqCst);
+            Some("static content".to_string())
+        }),
+    );
+
+    let ctx = HashMap::new();
+    let r1 = composer.compose(&ctx);
+    let r2 = composer.compose(&ctx);
+
+    assert_eq!(r1, "static content");
+    assert_eq!(r2, "static content");
+    // Provider should only be called once — second compose uses cache
+    assert_eq!(call_count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_cached_section_survives_compose_but_cleared_by_clear_cache() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let call_count = Arc::new(AtomicUsize::new(0));
+    let cc = Arc::clone(&call_count);
+
+    let mut composer = PromptComposer::new("/dev/null");
+    composer.register_dynamic_section(
+        "dynamic",
+        CachePolicy::Cached,
+        10,
+        None,
+        Box::new(move || {
+            let n = cc.fetch_add(1, Ordering::SeqCst);
+            Some(format!("call-{n}"))
+        }),
+    );
+
+    let ctx = HashMap::new();
+    let r1 = composer.compose(&ctx);
+    assert_eq!(r1, "call-0");
+
+    // Second compose should use cache
+    let r2 = composer.compose(&ctx);
+    assert_eq!(r2, "call-0");
+    assert_eq!(call_count.load(Ordering::SeqCst), 1);
+
+    // After clear_cache(), Cached sections recompute
+    composer.clear_cache();
+    let r3 = composer.compose(&ctx);
+    assert_eq!(r3, "call-1");
+    assert_eq!(call_count.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn test_uncached_section_recomputes_every_turn() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let call_count = Arc::new(AtomicUsize::new(0));
+    let cc = Arc::clone(&call_count);
+
+    let mut composer = PromptComposer::new("/dev/null");
+    composer.register_dynamic_section(
+        "volatile",
+        CachePolicy::Uncached,
+        10,
+        None,
+        Box::new(move || {
+            let n = cc.fetch_add(1, Ordering::SeqCst);
+            Some(format!("turn-{n}"))
+        }),
+    );
+
+    let ctx = HashMap::new();
+    assert_eq!(composer.compose(&ctx), "turn-0");
+    assert_eq!(composer.compose(&ctx), "turn-1");
+    assert_eq!(composer.compose(&ctx), "turn-2");
+    assert_eq!(call_count.load(Ordering::SeqCst), 3);
+}
+
+#[test]
+fn test_static_survives_clear_cache_but_not_clear_all() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let static_count = Arc::new(AtomicUsize::new(0));
+    let sc = Arc::clone(&static_count);
+
+    let mut composer = PromptComposer::new("/dev/null");
+    composer.register_dynamic_section(
+        "stable",
+        CachePolicy::Static,
+        10,
+        None,
+        Box::new(move || {
+            sc.fetch_add(1, Ordering::SeqCst);
+            Some("stable".to_string())
+        }),
+    );
+
+    let ctx = HashMap::new();
+    composer.compose(&ctx);
+    assert_eq!(static_count.load(Ordering::SeqCst), 1);
+
+    // clear_cache only clears Cached, not Static
+    composer.clear_cache();
+    composer.compose(&ctx);
+    assert_eq!(static_count.load(Ordering::SeqCst), 1);
+
+    // clear_all_cache clears everything
+    composer.clear_all_cache();
+    composer.compose(&ctx);
+    assert_eq!(static_count.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn test_section_override_takes_precedence() {
+    let mut composer = PromptComposer::new("/dev/null");
+    composer.register_dynamic_section(
+        "mcp",
+        CachePolicy::Uncached,
+        10,
+        None,
+        Box::new(|| None), // No-op provider
+    );
+
+    let ctx = HashMap::new();
+
+    // Without override, section produces nothing
+    assert_eq!(composer.compose(&ctx), "");
+
+    // With override, section produces the override content
+    composer.set_section_override("mcp", Some("MCP tools available".to_string()));
+    assert_eq!(composer.compose(&ctx), "MCP tools available");
+
+    // Override is consumed — next compose goes back to provider
+    assert_eq!(composer.compose(&ctx), "");
+}
+
+#[test]
+fn test_content_provider_takes_precedence_over_template() {
+    let dir = tempfile::TempDir::new().unwrap();
+    setup_templates(dir.path());
+
+    let mut composer = PromptComposer::new(dir.path());
+    // Register with a template path that exists, but also a content provider
+    composer.register_dynamic_section(
+        "override",
+        CachePolicy::Static,
+        10,
+        None,
+        Box::new(|| Some("from provider".to_string())),
+    );
+
+    let result = composer.compose(&HashMap::new());
+    assert_eq!(result, "from provider");
+}
+
+#[test]
+fn test_two_part_with_cache_policies() {
+    let mut composer = PromptComposer::new("/dev/null");
+    composer.register_dynamic_section(
+        "static_sec",
+        CachePolicy::Static,
+        10,
+        None,
+        Box::new(|| Some("static-part".to_string())),
+    );
+    composer.register_dynamic_section(
+        "cached_sec",
+        CachePolicy::Cached,
+        20,
+        None,
+        Box::new(|| Some("cached-part".to_string())),
+    );
+    composer.register_dynamic_section(
+        "uncached_sec",
+        CachePolicy::Uncached,
+        30,
+        None,
+        Box::new(|| Some("uncached-part".to_string())),
+    );
+
+    let ctx = HashMap::new();
+    let (stable, dynamic) = composer.compose_two_part(&ctx);
+
+    // Static and Cached go to stable
+    assert!(stable.contains("static-part"));
+    assert!(stable.contains("cached-part"));
+    assert!(!stable.contains("uncached-part"));
+
+    // Uncached goes to dynamic
+    assert!(dynamic.contains("uncached-part"));
+    assert!(!dynamic.contains("static-part"));
 }

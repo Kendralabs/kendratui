@@ -491,14 +491,12 @@ pub fn spawn_channel_bridges(receivers: crate::runtime::ToolChannelReceivers, st
 /// Agent executor that runs queries through the AgentRuntime and broadcasts events.
 pub struct WebAgentExecutor {
     runtime: Arc<tokio::sync::Mutex<crate::runtime::AgentRuntime>>,
-    system_prompt: String,
 }
 
 impl WebAgentExecutor {
-    pub fn new(runtime: crate::runtime::AgentRuntime, system_prompt: String) -> Self {
+    pub fn new(runtime: crate::runtime::AgentRuntime) -> Self {
         Self {
             runtime: Arc::new(tokio::sync::Mutex::new(runtime)),
-            system_prompt,
         }
     }
 }
@@ -563,9 +561,12 @@ impl opendev_web::state::AgentExecutor for WebAgentExecutor {
         // Run the query
         let result = {
             let mut rt = self.runtime.lock().await;
+            // Compose system prompt per-turn
+            rt.resolve_mcp_instructions().await;
+            let system_prompt = rt.compose_system_prompt();
             rt.run_query(
                 &message,
-                &self.system_prompt,
+                &system_prompt,
                 Some(&callback),
                 Some(&interrupt_token),
                 plan_requested,

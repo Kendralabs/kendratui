@@ -22,16 +22,14 @@ use super::AgentRuntime;
 pub struct ChannelAgentExecutor {
     config: AppConfig,
     working_dir: PathBuf,
-    system_prompt: String,
     sessions: Mutex<HashMap<String, Arc<Mutex<AgentRuntime>>>>,
 }
 
 impl ChannelAgentExecutor {
-    pub fn new(config: AppConfig, working_dir: &Path, system_prompt: String) -> Self {
+    pub fn new(config: AppConfig, working_dir: &Path) -> Self {
         Self {
             config,
             working_dir: working_dir.to_path_buf(),
-            system_prompt,
             sessions: Mutex::new(HashMap::new()),
         }
     }
@@ -72,8 +70,12 @@ impl AgentExecutor for ChannelAgentExecutor {
         let runtime = self.get_or_create_runtime(session_id).await?;
         let mut runtime = runtime.lock().await;
 
+        // Compose system prompt per-turn (resolves MCP, uses section cache)
+        runtime.resolve_mcp_instructions().await;
+        let system_prompt = runtime.compose_system_prompt();
+
         match runtime
-            .run_query(message_text, &self.system_prompt, None, None, false)
+            .run_query(message_text, &system_prompt, None, None, false)
             .await
         {
             Ok(result) => Ok(result.content),

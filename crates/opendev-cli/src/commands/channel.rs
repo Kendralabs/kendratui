@@ -212,12 +212,10 @@ async fn run_telegram_serve(working_dir: &std::path::Path) {
     let config = load_app_config(working_dir);
     let tg = require_telegram(&config);
 
-    let system_prompt = crate::runtime::build_system_prompt(working_dir, &config);
     let router = std::sync::Arc::new(opendev_channels::MessageRouter::new());
     let executor = std::sync::Arc::new(crate::runtime::ChannelAgentExecutor::new(
         config.clone(),
         working_dir,
-        system_prompt,
     ));
     router.set_executor(executor).await;
 
@@ -271,7 +269,6 @@ pub async fn handle_remote(
 
     let tg = require_telegram(&config);
 
-    let system_prompt = crate::runtime::build_system_prompt(working_dir, &config);
     let paths = opendev_config::Paths::new(Some(working_dir.to_path_buf()));
     let session_dir = paths.project_sessions_dir(working_dir);
 
@@ -342,14 +339,7 @@ pub async fn handle_remote(
                 config.model,
             );
 
-            crate::remote_runner::run_remote(
-                agent_runtime,
-                system_prompt,
-                event_tx,
-                command_rx,
-                bridge,
-            )
-            .await;
+            crate::remote_runner::run_remote(agent_runtime, event_tx, command_rx, bridge).await;
         }
         Err(e) => {
             eprintln!("Error starting Telegram remote: {e}");

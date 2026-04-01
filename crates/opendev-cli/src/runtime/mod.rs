@@ -9,6 +9,8 @@ mod query;
 mod tools;
 
 pub use channel_executor::ChannelAgentExecutor;
+// Re-export for backward compat (used in tests)
+#[cfg(test)]
 pub use tools::build_system_prompt;
 
 use std::path::{Path, PathBuf};
@@ -78,6 +80,10 @@ pub struct AgentRuntime {
     pub(super) snapshot_manager: Arc<Mutex<opendev_history::SnapshotManager>>,
     /// Per-session debug logger for LLM interactions (noop when debug_logging is off).
     pub debug_logger: Arc<SessionDebugLogger>,
+    /// Prompt composer for per-turn system prompt composition with section caching.
+    pub prompt_composer: Mutex<opendev_agents::prompts::PromptComposer>,
+    /// Prompt context (runtime values for conditional section inclusion).
+    pub prompt_context: Mutex<opendev_agents::prompts::PromptContext>,
 }
 
 /// Receivers returned from tool registration for TUI bridging.
@@ -423,6 +429,9 @@ impl AgentRuntime {
         let compactor = Mutex::new(ContextCompactor::new(model_context_length));
         let topic_detector = TopicDetector::new(&provider);
 
+        // Create per-turn prompt composer with section caching
+        let (prompt_composer, prompt_context) = tools::create_prompt_composer(working_dir, &config);
+
         Ok(Self {
             config,
             working_dir: working_dir.to_path_buf(),
@@ -446,11 +455,67 @@ impl AgentRuntime {
                 &working_dir.to_string_lossy(),
             ))),
             debug_logger,
+            prompt_composer: Mutex::new(prompt_composer),
+            prompt_context: Mutex::new(prompt_context),
         })
     }
 }
 
 impl AgentRuntime {
+    /// Compose the system prompt for the current turn.
+    ///
+    /// Uses the section cache: `Static` sections are resolved once per session,
+    /// `Cached` sections are resolved once until `/clear` or `/compact`,
+    /// `Uncached` sections are resolved fresh every call.
+    pub fn compose_system_prompt(&self) -> String {
+        let mut composer = self.prompt_composer.lock().expect("prompt_composer lock");
+        let context = self.prompt_context.lock().expect("prompt_context lock");
+        composer.compose(&context)
+    }
+
+    /// Pre-resolve MCP instructions and inject as an override before composing.
+    ///
+    /// Call this before `compose_system_prompt()` when MCP servers may have
+    /// connected or disconnected since the last turn.
+    pub async fn resolve_mcp_instructions(&self) {
+        let mcp_instructions = if let Some(ref mgr) = self.mcp_manager {
+            let schemas = mgr.get_all_tool_schemas().await;
+            if schemas.is_empty() {
+                None
+            } else {
+                let mut parts = vec![
+                    "# MCP Server Instructions\n\nThe following tools are provided by MCP servers:"
+                        .to_string(),
+                ];
+                for schema in &schemas {
+                    parts.push(format!("- **{}**: {}", schema.name, schema.description));
+                }
+                Some(parts.join("\n"))
+            }
+        } else {
+            None
+        };
+
+        if let Ok(mut composer) = self.prompt_composer.lock() {
+            composer.set_section_override("mcp_instructions", mcp_instructions);
+        }
+    }
+
+    /// Clear `Cached` section entries. Called on `/compact` and `/clear`.
+    pub fn clear_prompt_cache(&self) {
+        if let Ok(mut composer) = self.prompt_composer.lock() {
+            composer.clear_cache();
+        }
+    }
+
+    /// Clear all cache entries including `Static`. Called on session switch.
+    #[allow(dead_code)]
+    pub fn clear_all_prompt_cache(&self) {
+        if let Ok(mut composer) = self.prompt_composer.lock() {
+            composer.clear_all_cache();
+        }
+    }
+
     /// Switch to a new model, rebuilding the HTTP client if the provider changes.
     ///
     /// Returns the new model name for confirmation, or an error message.

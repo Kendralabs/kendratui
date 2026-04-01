@@ -229,7 +229,7 @@ impl MainAgent {
     /// Set the system prompt using a PromptComposer.
     pub fn set_system_prompt_from_composer(
         &mut self,
-        composer: &PromptComposer,
+        composer: &mut PromptComposer,
         context: &std::collections::HashMap<String, serde_json::Value>,
     ) {
         self.system_prompt = composer.compose(context);

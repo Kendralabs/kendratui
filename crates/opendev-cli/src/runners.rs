@@ -49,14 +49,6 @@ pub async fn run_non_interactive(
         opendev_config::apply_profile(&mut config, &profile);
     }
 
-    // Build system prompt in a background thread while we set up the session
-    // and agent runtime — these are independent and can overlap.
-    let prompt_config = config.clone();
-    let prompt_wd = working_dir.to_path_buf();
-    let system_prompt_handle = tokio::task::spawn_blocking(move || {
-        runtime::build_system_prompt(&prompt_wd, &prompt_config)
-    });
-
     let mut session_manager = match SessionManager::new(session_dir.clone()) {
         Ok(sm) => sm.with_event_store(create_event_store(&session_dir)),
         Err(e) => {
@@ -111,10 +103,9 @@ pub async fn run_non_interactive(
     // Connect MCP servers (best-effort, failures are logged)
     agent_runtime.start_mcp_connections();
 
-    // Await system prompt (should already be done by now)
-    let system_prompt = system_prompt_handle
-        .await
-        .expect("system prompt thread panicked");
+    // Compose system prompt per-turn (resolves MCP instructions if available)
+    agent_runtime.resolve_mcp_instructions().await;
+    let system_prompt = agent_runtime.compose_system_prompt();
 
     match agent_runtime
         .run_query(prompt, &system_prompt, None, None, false)
@@ -285,15 +276,7 @@ pub async fn run_interactive(
 
     let _ = dangerously_skip_permissions; // Will be wired to approval system
 
-    // Build system prompt in a background thread while we set up the agent runtime
-    // — these are independent and can overlap.
-    let prompt_config = config.clone();
-    let prompt_wd = working_dir.to_path_buf();
-    let system_prompt_handle = tokio::task::spawn_blocking(move || {
-        runtime::build_system_prompt(&prompt_wd, &prompt_config)
-    });
-
-    // Create agent runtime (overlaps with system prompt building)
+    // Create agent runtime (prompt composer is initialized inside)
     let mut agent_runtime =
         match runtime::AgentRuntime::new(config.clone(), working_dir, session_manager) {
             Ok(rt) => rt,
@@ -305,11 +288,6 @@ pub async fn run_interactive(
 
     // Connect MCP servers (best-effort, failures are logged)
     agent_runtime.start_mcp_connections();
-
-    // Await system prompt (should already be done by now)
-    let system_prompt = system_prompt_handle
-        .await
-        .expect("system prompt thread panicked");
 
     // Resolve theme: CLI flag > auto-detect from terminal background
     let resolved_theme = theme_name
@@ -426,8 +404,8 @@ pub async fn run_interactive(
 
     // Start Telegram channel in remote-control mode if configured
     let _telegram_shutdown;
-    let mut tui_runner = crate::tui_runner::TuiRunner::new(agent_runtime, system_prompt)
-        .with_initial_message(initial_message);
+    let mut tui_runner =
+        crate::tui_runner::TuiRunner::new(agent_runtime).with_initial_message(initial_message);
 
     {
         let tg_config = &config.channels.telegram;
