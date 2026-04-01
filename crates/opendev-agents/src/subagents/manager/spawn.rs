@@ -194,6 +194,20 @@ impl SubagentManager {
             allowed_tools.as_deref(),
         );
 
+        if tool_schemas.is_empty() {
+            warn!(
+                subagent = %spec.name,
+                allowed_tools = ?allowed_tools,
+                "Tool schemas are EMPTY — subagent has no tools available"
+            );
+        } else {
+            debug!(
+                subagent = %spec.name,
+                schema_count = tool_schemas.len(),
+                "Built tool schemas for subagent"
+            );
+        }
+
         // Build tool context
         let mut tool_context = opendev_tools_core::ToolContext::new(working_dir);
         tool_context.is_subagent = true;

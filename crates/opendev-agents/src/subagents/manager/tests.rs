@@ -699,3 +699,16 @@ fn test_verification_agent_is_background() {
     );
     assert!(spec.has_tool_restriction());
 }
+
+#[test]
+fn test_builtin_specs_no_html_comment_in_system_prompt() {
+    let mgr = SubagentManager::with_builtins();
+    for name in mgr.all_names() {
+        let spec = mgr.get(name).unwrap();
+        assert!(
+            !spec.system_prompt.trim_start().starts_with("<!--"),
+            "Builtin agent '{}' has HTML comment in system_prompt",
+            name
+        );
+    }
+}

@@ -1,9 +1,3 @@
-<!--
-name: 'Tool: Agent (Spawn Subagent)'
-description: Tool description for the Agent spawn tool shown to the LLM
-version: 1.0.0
--->
-
 Launch a new agent to handle complex, multi-step tasks autonomously.
 
 {agent_listing}

@@ -148,14 +148,8 @@ impl LlmCaller {
 
     /// Merge `source` message content and tool_calls into `target`.
     fn merge_into(target: &mut Value, source: &Value) {
-        let target_content = target
-            .get("content")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let source_content = source
-            .get("content")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let target_content = target.get("content").and_then(|v| v.as_str()).unwrap_or("");
+        let source_content = source.get("content").and_then(|v| v.as_str()).unwrap_or("");
 
         let merged_content = match (target_content.is_empty(), source_content.is_empty()) {
             (_, true) => target_content.to_string(),

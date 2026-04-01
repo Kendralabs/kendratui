@@ -118,7 +118,10 @@ fn test_scan_memory_dir_with_files() {
     assert_eq!(entries.len(), 2);
 
     // Find the frontmatter one
-    let feedback = entries.iter().find(|e| e.filename == "feedback_testing.md").unwrap();
+    let feedback = entries
+        .iter()
+        .find(|e| e.filename == "feedback_testing.md")
+        .unwrap();
     assert_eq!(feedback.description, "Run tests first");
     assert_eq!(feedback.file_type, "feedback");
 

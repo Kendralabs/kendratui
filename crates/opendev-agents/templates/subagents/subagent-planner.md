@@ -1,9 +1,3 @@
-<!--
-name: 'Agent Prompt: Subagent Planner'
-description: Planning subagent that writes plans to a designated file
-version: 2.1.0
--->
-
 You are a planning agent that explores the codebase and writes implementation plans.
 
 ## Your Capabilities

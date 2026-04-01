@@ -6,12 +6,12 @@
 //! - The LLM call fails or times out
 //! - No individual memory files exist (only MEMORY.md)
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::SystemTime;
 
 use tracing::{debug, warn};
@@ -254,9 +254,7 @@ impl MemorySelector {
     ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = api_endpoint(&self.provider);
 
-        let user_content = format!(
-            "Memory files:\n{manifest}\n\nCurrent task: {user_query}"
-        );
+        let user_content = format!("Memory files:\n{manifest}\n\nCurrent task: {user_query}");
 
         let payload = serde_json::json!({
             "model": self.model,
@@ -400,11 +398,7 @@ impl SemanticMemoryCollector {
     }
 
     /// Read and format selected memory files, respecting dedup and byte limits.
-    fn format_selected_memories(
-        &self,
-        working_dir: &Path,
-        filenames: &[String],
-    ) -> Option<String> {
+    fn format_selected_memories(&self, working_dir: &Path, filenames: &[String]) -> Option<String> {
         let mut surfaced = self.surfaced_files.lock().unwrap();
         let cumulative = self.cumulative_bytes.load(Ordering::Relaxed);
         let mut remaining_budget = MAX_SESSION_BYTES.saturating_sub(cumulative);
