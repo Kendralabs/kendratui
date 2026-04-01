@@ -158,20 +158,27 @@ impl App {
                     crate::formatters::todo_formatter::summarize_todo_result(&tool_name, &output);
                 (vec![summary], false)
             } else if matches!(tool_name.as_str(), "EnterPlanMode" | "present_plan") {
-                // Plan content is already displayed via PlanApprovalRequested → DisplayRole::Plan.
-                // Show brief approval confirmation instead of full plan content.
-                let step_count = output
-                    .split_once(" steps)")
-                    .and_then(|(before, _)| before.rsplit(", ").next())
-                    .and_then(|s| s.parse::<usize>().ok())
-                    .unwrap_or(0);
-                if step_count > 0 {
-                    (
-                        vec![format!("Plan approved · {step_count} todos created")],
-                        false,
-                    )
+                if success {
+                    // Plan content is already displayed via PlanApprovalRequested → DisplayRole::Plan.
+                    // Show brief approval confirmation instead of full plan content.
+                    let step_count = output
+                        .split_once(" steps)")
+                        .and_then(|(before, _)| before.rsplit(", ").next())
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if step_count > 0 {
+                        (
+                            vec![format!("Plan approved · {step_count} todos created")],
+                            false,
+                        )
+                    } else {
+                        (vec!["Plan approved".to_string()], false)
+                    }
                 } else {
-                    (vec!["Plan approved".to_string()], false)
+                    // Show actual error when plan validation fails
+                    let error_lines: Vec<String> =
+                        output.lines().take(3).map(|l| l.to_string()).collect();
+                    (error_lines, false)
                 }
             } else {
                 use crate::widgets::conversation::is_diff_tool;

@@ -552,8 +552,8 @@ where
             }
         }
 
-        // Inject plan_approved_signal after successful ExitPlanMode / present_plan
-        if matches!(tool_name, "ExitPlanMode" | "present_plan") && tool_result.success {
+        // Inject plan_approved_signal after successful present_plan / EnterPlanMode
+        if matches!(tool_name, "EnterPlanMode" | "present_plan") && tool_result.success {
             let plan_content = tool_result
                 .metadata
                 .get("plan_content")
@@ -572,14 +572,6 @@ where
                 .and_then(|v| v.as_bool())
             {
                 state.plan_edit_review_mode = !auto_approve;
-            }
-        }
-
-        // Inject plan_mode_entered directive after successful EnterPlanMode
-        if tool_name == "EnterPlanMode" && tool_result.success {
-            let reminder = get_reminder("plan_mode_entered", &[]);
-            if !reminder.is_empty() {
-                append_directive(messages, &reminder);
             }
         }
 
@@ -728,18 +720,14 @@ fn extract_file_tool_path(
     }
 }
 
+/// Maximum lines shown in the edit approval popup preview.
+const PREVIEW_MAX_LINES: usize = 20;
+
 /// Build a short preview string for a file-edit tool call (for the approval popup).
 fn format_edit_preview(tool_name: &str, args: &std::collections::HashMap<String, Value>) -> String {
     match tool_name {
         "Write" | "write_file" => {
-            let content = args.get("content").and_then(|v| v.as_str()).unwrap_or("");
-            let lines: Vec<&str> = content.lines().take(20).collect();
-            let total = content.lines().count();
-            if total > 20 {
-                format!("{}\n... ({} more lines)", lines.join("\n"), total - 20)
-            } else {
-                lines.join("\n")
-            }
+            truncate_preview(args.get("content").and_then(|v| v.as_str()).unwrap_or(""))
         }
         "Edit" | "edit_file" => {
             let old = args
@@ -752,9 +740,34 @@ fn format_edit_preview(tool_name: &str, args: &std::collections::HashMap<String,
                 .or_else(|| args.get("new_content"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            format!("--- old\n{old}\n+++ new\n{new}")
+            format!(
+                "--- old\n{}\n+++ new\n{}",
+                truncate_preview(old),
+                truncate_preview(new)
+            )
+        }
+        "multi_edit" => {
+            let edits = args.get("edits").and_then(|v| v.as_array());
+            match edits {
+                Some(arr) => format!("{} edit(s) in file", arr.len()),
+                None => String::new(),
+            }
         }
         _ => String::new(),
+    }
+}
+
+/// Truncate text to `PREVIEW_MAX_LINES`, appending a count of remaining lines.
+fn truncate_preview(text: &str) -> String {
+    let all_lines: Vec<&str> = text.lines().collect();
+    if all_lines.len() > PREVIEW_MAX_LINES {
+        let shown = all_lines[..PREVIEW_MAX_LINES].join("\n");
+        format!(
+            "{shown}\n... ({} more lines)",
+            all_lines.len() - PREVIEW_MAX_LINES
+        )
+    } else {
+        all_lines.join("\n")
     }
 }
 

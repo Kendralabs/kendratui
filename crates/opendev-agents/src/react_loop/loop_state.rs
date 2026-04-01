@@ -36,6 +36,10 @@ pub(super) struct LoopState {
     /// Session-level auto-approved command prefixes / MCP tool names.
     pub auto_approved_patterns: HashSet<String>,
 
+    /// When true, Write/Edit tool calls require user approval during plan
+    /// implementation ("review edits" mode selected at plan approval).
+    pub plan_edit_review_mode: bool,
+
     // Nudge/reminder state
     pub todo_nudge_count: usize,
     pub all_todos_complete_nudged: bool,
@@ -81,6 +85,7 @@ impl LoopState {
             startup_paths,
             skill_model_override: None,
             auto_approved_patterns: HashSet::new(),
+            plan_edit_review_mode: false,
             todo_nudge_count: 0,
             all_todos_complete_nudged: false,
             completion_nudge_sent: false,

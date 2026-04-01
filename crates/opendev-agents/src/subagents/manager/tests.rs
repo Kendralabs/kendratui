@@ -636,8 +636,11 @@ fn test_resolve_default_agent_no_primary_capable() {
 fn test_build_agent_listing_format() {
     let mut mgr = SubagentManager::new();
     mgr.register(
-        SubAgentSpec::new("Explore", "Deep codebase exploration", "prompt")
-            .with_tools(vec!["Read".into(), "Grep".into(), "Glob".into()]),
+        SubAgentSpec::new("Explore", "Deep codebase exploration", "prompt").with_tools(vec![
+            "Read".into(),
+            "Grep".into(),
+            "Glob".into(),
+        ]),
     );
     let listing = mgr.build_agent_listing();
     assert!(listing.contains("- Explore:"));
@@ -690,6 +693,9 @@ fn test_build_agent_listing_sorted() {
 fn test_verification_agent_is_background() {
     let mgr = SubagentManager::with_builtins();
     let spec = mgr.get("Verification").unwrap();
-    assert!(spec.background, "Verification agent should have background=true");
+    assert!(
+        spec.background,
+        "Verification agent should have background=true"
+    );
     assert!(spec.has_tool_restriction());
 }

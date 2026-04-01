@@ -206,6 +206,42 @@ impl AgentRuntime {
             }
         }
 
+        // Inject plan file reference on session resume when a plan exists for this session
+        if !plan_requested
+            && let Some(session) = self.session_manager.current_session()
+            && session.messages.len() > 1
+        {
+            // Resumed session — check PlanIndex for an active plan
+            let plans_dir =
+                dirs_next::home_dir().map(|h: std::path::PathBuf| h.join(".opendev").join("plans"));
+            if let Some(ref plans_dir) = plans_dir {
+                let plan_index = opendev_runtime::PlanIndex::new(plans_dir);
+                if let Some(entry) = plan_index.get_by_session(&session.id) {
+                    let plan_path = plans_dir.join(format!("{}.md", entry.name));
+                    if plan_path.exists() {
+                        let path_str = plan_path.to_string_lossy();
+                        let reminder = opendev_agents::prompts::reminders::get_reminder(
+                            "plan_file_reference",
+                            &[("plan_file_path", &path_str)],
+                        );
+                        if !reminder.is_empty() {
+                            messages.push(serde_json::json!({
+                                "role": "user",
+                                "content": format!(
+                                    "<system-reminder>{}</system-reminder>",
+                                    reminder
+                                )
+                            }));
+                            info!(
+                                plan_name = %entry.name,
+                                "Injected plan file reference for resumed session"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         // Step 6: Set original task for completion nudge context
         self.react_loop.set_original_task(Some(query.to_string()));
 
