@@ -44,26 +44,10 @@ pub fn ask_user(system_prompt: &str) -> SubAgentSpec {
     // No tools — UI-only interaction
 }
 
-/// Tools available to the General subagent (broad access for multi-step tasks).
-pub const GENERAL_TOOLS: &[&str] = &[
-    "Read",
-    "Grep",
-    "Glob",
-    "Write",
-    "Edit",
-    "multi_edit",
-    "Bash",
-    "WebFetch",
-    "WebSearch",
-    "patch",
-    "git",
-];
-
 /// Create the General subagent spec.
 ///
-/// This is the most versatile subagent type, with access to file operations,
-/// shell commands, web tools, and git. Use for multi-step tasks that require
-/// both reading and modifying code.
+/// This is the most versatile subagent type with access to all parent tools.
+/// Use for multi-step tasks that require broad tool access.
 pub fn general(system_prompt: &str) -> SubAgentSpec {
     SubAgentSpec::new(
         "General",
@@ -73,7 +57,7 @@ pub fn general(system_prompt: &str) -> SubAgentSpec {
          and any task requiring broad tool access.",
         system_prompt,
     )
-    .with_tools(GENERAL_TOOLS.iter().map(|s| s.to_string()).collect())
+    // No .with_tools() — inherits all parent tools
 }
 
 /// Tools available to the Build/Test subagent.
@@ -91,6 +75,26 @@ pub fn build(system_prompt: &str) -> SubAgentSpec {
         system_prompt,
     )
     .with_tools(BUILD_TOOLS.iter().map(|s| s.to_string()).collect())
+}
+
+/// Tools available to the Verification subagent (read-only).
+pub const VERIFICATION_TOOLS: &[&str] = &["Read", "Grep", "Glob", "Bash"];
+
+/// Create the Verification subagent spec.
+///
+/// Adversarial code review agent that runs in background to find bugs,
+/// edge cases, and regressions in recent changes.
+pub fn verification(system_prompt: &str) -> SubAgentSpec {
+    SubAgentSpec::new(
+        "Verification",
+        "Adversarial code review agent. Finds bugs, edge cases, and regressions \
+         in recent changes. Always runs in background. USE FOR: After making 3+ file \
+         edits, backend/API changes, or infrastructure changes, spawn this agent \
+         to independently verify your work.",
+        system_prompt,
+    )
+    .with_tools(VERIFICATION_TOOLS.iter().map(|s| s.to_string()).collect())
+    .with_background(true)
 }
 
 /// Tools available to the Project Init subagent.

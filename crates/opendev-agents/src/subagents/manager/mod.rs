@@ -46,15 +46,10 @@ impl SubagentManager {
             embedded::SUBAGENTS_SUBAGENT_CODE_EXPLORER,
         ));
         mgr.register(builtins::planner(embedded::SUBAGENTS_SUBAGENT_PLANNER));
-        mgr.register(builtins::general(
-            "You are a versatile coding assistant. Complete the task using all tools available to you. \
-             Read files, search code, edit files, run commands, and use web tools as needed. \
-             Be thorough and methodical.",
-        ));
-        mgr.register(builtins::build(
-            "You are a build and test runner. Your job is to run builds, analyze errors, \
-             fix compilation failures, and ensure tests pass. Focus on the build output \
-             and fix issues systematically.",
+        mgr.register(builtins::general(embedded::SUBAGENTS_SUBAGENT_GENERAL));
+        mgr.register(builtins::build(embedded::SUBAGENTS_SUBAGENT_BUILD));
+        mgr.register(builtins::verification(
+            embedded::SUBAGENTS_SUBAGENT_VERIFICATION,
         ));
         mgr.register(builtins::project_init(
             embedded::SUBAGENTS_SUBAGENT_PROJECT_INIT,
@@ -285,6 +280,33 @@ impl SubagentManager {
             .filter(|s| !s.hidden && !s.disable)
             .map(|s| (s.name.clone(), s.description.clone()))
             .collect()
+    }
+
+    /// Build a human-readable agent listing for the LLM.
+    ///
+    /// Generates `- AgentName: description (Tools: tool1, tool2)` lines
+    /// from live spec data. Sorted alphabetically for deterministic output.
+    /// Excludes hidden and disabled agents.
+    pub fn build_agent_listing(&self) -> String {
+        let mut specs: Vec<&SubAgentSpec> = self
+            .specs
+            .values()
+            .filter(|s| !s.hidden && !s.disable)
+            .collect();
+        specs.sort_by_key(|s| &s.name);
+
+        let lines: Vec<String> = specs
+            .iter()
+            .map(|spec| {
+                let tools_str = if spec.tools.is_empty() {
+                    "all tools".to_string()
+                } else {
+                    spec.tools.join(", ")
+                };
+                format!("- {}: {} (Tools: {})", spec.name, spec.description, tools_str)
+            })
+            .collect();
+        lines.join("\n")
     }
 }
 

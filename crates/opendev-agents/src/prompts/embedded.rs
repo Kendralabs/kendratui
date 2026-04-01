@@ -22,12 +22,18 @@ pub const REMINDERS: &str = include_str!("../../templates/reminders.md");
 // subagents/
 pub const SUBAGENTS_SUBAGENT_ASK_USER: &str =
     include_str!("../../templates/subagents/subagent-ask-user.md");
+pub const SUBAGENTS_SUBAGENT_BUILD: &str =
+    include_str!("../../templates/subagents/subagent-build.md");
 pub const SUBAGENTS_SUBAGENT_CODE_EXPLORER: &str =
     include_str!("../../templates/subagents/subagent-code-explorer.md");
+pub const SUBAGENTS_SUBAGENT_GENERAL: &str =
+    include_str!("../../templates/subagents/subagent-general.md");
 pub const SUBAGENTS_SUBAGENT_PLANNER: &str =
     include_str!("../../templates/subagents/subagent-planner.md");
 pub const SUBAGENTS_SUBAGENT_PROJECT_INIT: &str =
     include_str!("../../templates/subagents/subagent-project-init.md");
+pub const SUBAGENTS_SUBAGENT_VERIFICATION: &str =
+    include_str!("../../templates/subagents/subagent-verification.md");
 
 // system/
 pub const SYSTEM_COMPACTION: &str = include_str!("../../templates/system/compaction.md");
@@ -139,6 +145,8 @@ pub const TOOLS_TOOL_GREP: &str = include_str!("../../templates/tools/tool-grep.
 pub const TOOLS_TOOL_AST_GREP: &str = include_str!("../../templates/tools/tool-ast-grep.md");
 pub const TOOLS_TOOL_SEND_MESSAGE: &str =
     include_str!("../../templates/tools/tool-send-message.md");
+pub const TOOLS_TOOL_SPAWN_AGENT: &str =
+    include_str!("../../templates/tools/tool-spawn-agent.md");
 pub const TOOLS_TOOL_TASK_COMPLETE: &str =
     include_str!("../../templates/tools/tool-task-complete.md");
 pub const TOOLS_TOOL_UPDATE_TODO: &str = include_str!("../../templates/tools/tool-update-todo.md");
@@ -151,7 +159,7 @@ pub const TOOLS_TOOL_WRITE_TODOS: &str = include_str!("../../templates/tools/too
 // ---------------------------------------------------------------------------
 
 /// Total number of embedded templates.
-pub const TEMPLATE_COUNT: usize = 75;
+pub const TEMPLATE_COUNT: usize = 79;
 
 /// All embedded templates indexed by their relative path.
 ///
@@ -172,14 +180,20 @@ pub static TEMPLATES: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::
         "subagents/subagent-ask-user.md",
         SUBAGENTS_SUBAGENT_ASK_USER,
     );
+    m.insert("subagents/subagent-build.md", SUBAGENTS_SUBAGENT_BUILD);
     m.insert(
         "subagents/subagent-code-explorer.md",
         SUBAGENTS_SUBAGENT_CODE_EXPLORER,
     );
+    m.insert("subagents/subagent-general.md", SUBAGENTS_SUBAGENT_GENERAL);
     m.insert("subagents/subagent-planner.md", SUBAGENTS_SUBAGENT_PLANNER);
     m.insert(
         "subagents/subagent-project-init.md",
         SUBAGENTS_SUBAGENT_PROJECT_INIT,
+    );
+    m.insert(
+        "subagents/subagent-verification.md",
+        SUBAGENTS_SUBAGENT_VERIFICATION,
     );
 
     // system
@@ -337,6 +351,7 @@ pub static TEMPLATES: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::
     m.insert("tools/tool-grep.md", TOOLS_TOOL_GREP);
     m.insert("tools/tool-ast-grep.md", TOOLS_TOOL_AST_GREP);
     m.insert("tools/tool-send-message.md", TOOLS_TOOL_SEND_MESSAGE);
+    m.insert("tools/tool-spawn-agent.md", TOOLS_TOOL_SPAWN_AGENT);
     m.insert("tools/tool-task-complete.md", TOOLS_TOOL_TASK_COMPLETE);
     m.insert("tools/tool-update-todo.md", TOOLS_TOOL_UPDATE_TODO);
     m.insert("tools/tool-web-search.md", TOOLS_TOOL_WEB_SEARCH);

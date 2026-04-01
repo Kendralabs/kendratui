@@ -36,6 +36,8 @@ pub struct SpawnSubagentTool {
     parent_reasoning_effort: Option<String>,
     /// Debug logger for LLM interaction logging (None = disabled).
     debug_logger: Option<Arc<opendev_runtime::SessionDebugLogger>>,
+    /// Pre-computed tool description including dynamic agent listing.
+    cached_description: String,
 }
 
 impl SpawnSubagentTool {
@@ -48,6 +50,12 @@ impl SpawnSubagentTool {
         parent_model: impl Into<String>,
         working_dir: impl Into<String>,
     ) -> Self {
+        let agent_listing = manager.build_agent_listing();
+        let listing_section = format!(
+            "Available agent types and the tools they have access to:\n{agent_listing}"
+        );
+        let cached_description = opendev_agents::prompts::embedded::TOOLS_TOOL_SPAWN_AGENT
+            .replace("{agent_listing}", &listing_section);
         Self {
             manager,
             tool_registry,
@@ -59,6 +67,7 @@ impl SpawnSubagentTool {
             parent_max_tokens: 16384,
             parent_reasoning_effort: None,
             debug_logger: None,
+            cached_description,
         }
     }
 
@@ -94,14 +103,7 @@ impl BaseTool for SpawnSubagentTool {
     }
 
     fn description(&self) -> &str {
-        "Spawn a subagent to handle an isolated task. The subagent runs its own \
-         ReAct loop with restricted tools and returns the result. Use for tasks \
-         that require multiple tool calls and benefit from isolated context \
-         (code exploration, summarization, codebase analysis, planning, web cloning, etc.). \
-         Set run_in_background=true for long-running tasks — returns a task_id \
-         immediately and notifies you when complete. \
-         Do NOT spawn a subagent for tasks that only need 1-2 tool calls — \
-         use the tools directly instead."
+        &self.cached_description
     }
 
     fn parameter_schema(&self) -> serde_json::Value {
@@ -139,6 +141,11 @@ impl BaseTool for SpawnSubagentTool {
                     "type": "string",
                     "description": "A short (3-8 word) summary of the task for display. \
                                     Examples: 'Trace tool_call_count updates', 'Find auth middleware chain'."
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Override the model for this subagent. If omitted, uses the \
+                                    agent's configured model or inherits from parent."
                 },
                 "run_in_background": {
                     "type": "boolean",
@@ -200,11 +207,13 @@ impl BaseTool for SpawnSubagentTool {
         }
 
         let task_id = args.get("task_id").and_then(|v| v.as_str());
+        let model_override = args.get("model").and_then(|v| v.as_str());
 
         info!(
             agent_type = %agent_type,
             task_len = task.len(),
             resume = task_id.is_some(),
+            model_override = ?model_override,
             "spawn_subagent called"
         );
 
@@ -294,6 +303,7 @@ impl BaseTool for SpawnSubagentTool {
                         .get("description")
                         .and_then(|v| v.as_str())
                         .unwrap_or(agent_type),
+                    model_override,
                 })
                 .await;
         }
@@ -327,6 +337,7 @@ impl BaseTool for SpawnSubagentTool {
                 self.parent_reasoning_effort.clone(),
                 Some(subagent_cancel),
                 self.debug_logger.as_deref(),
+                model_override,
             )
             .await;
 
@@ -458,6 +469,7 @@ struct BackgroundSpawnParams<'a> {
     subagent_id: &'a str,
     cancel_token: CancellationToken,
     description: &'a str,
+    model_override: Option<&'a str>,
 }
 
 impl SpawnSubagentTool {
@@ -501,6 +513,7 @@ impl SpawnSubagentTool {
         let wd_owned = params.wd.to_string();
         let child_session_id_owned = params.child_session_id.to_string();
         let task_id_clone = task_id.clone();
+        let model_override_owned = params.model_override.map(|s| s.to_string());
 
         tokio::spawn(async move {
             // Create background-specific progress callback
@@ -529,6 +542,7 @@ impl SpawnSubagentTool {
                     reasoning_effort,
                     Some(cancel_token),
                     debug_logger_arc.as_deref(),
+                    model_override_owned.as_deref(),
                 )
                 .await;
 

@@ -30,15 +30,9 @@ fn test_ask_user_builtin() {
 fn test_general_builtin() {
     let spec = general("You are versatile.");
     assert_eq!(spec.name, "General");
-    assert!(spec.has_tool_restriction());
-    // General has broad tool access
-    assert!(spec.tools.contains(&"Read".to_string()));
-    assert!(spec.tools.contains(&"Write".to_string()));
-    assert!(spec.tools.contains(&"Edit".to_string()));
-    assert!(spec.tools.contains(&"Bash".to_string()));
-    assert!(spec.tools.contains(&"WebFetch".to_string()));
-    assert!(spec.tools.contains(&"git".to_string()));
-    assert_eq!(spec.tools.len(), GENERAL_TOOLS.len());
+    // General inherits all parent tools (no restriction)
+    assert!(!spec.has_tool_restriction());
+    assert!(spec.tools.is_empty());
 }
 
 #[test]
@@ -50,6 +44,19 @@ fn test_build_builtin() {
     assert!(spec.tools.contains(&"Edit".to_string()));
     assert!(spec.tools.contains(&"Read".to_string()));
     assert_eq!(spec.tools.len(), BUILD_TOOLS.len());
+}
+
+#[test]
+fn test_verification_builtin() {
+    let spec = verification("You verify changes.");
+    assert_eq!(spec.name, "Verification");
+    assert!(spec.background);
+    assert!(spec.has_tool_restriction());
+    assert!(spec.tools.contains(&"Read".to_string()));
+    assert!(spec.tools.contains(&"Grep".to_string()));
+    assert!(spec.tools.contains(&"Glob".to_string()));
+    assert!(spec.tools.contains(&"Bash".to_string()));
+    assert_eq!(spec.tools.len(), VERIFICATION_TOOLS.len());
 }
 
 #[test]

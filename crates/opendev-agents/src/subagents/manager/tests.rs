@@ -58,11 +58,12 @@ fn test_build_enum_description() {
 #[test]
 fn test_with_builtins() {
     let mgr = SubagentManager::with_builtins();
-    assert_eq!(mgr.len(), 5);
+    assert_eq!(mgr.len(), 6);
     assert!(mgr.get("Explore").is_some());
     assert!(mgr.get("Planner").is_some());
     assert!(mgr.get("General").is_some());
     assert!(mgr.get("Build").is_some());
+    assert!(mgr.get("Verification").is_some());
     assert!(mgr.get("project_init").is_some());
 }
 
@@ -627,4 +628,68 @@ fn test_resolve_default_agent_no_primary_capable() {
 
     let result = mgr.resolve_default_agent(None);
     assert_eq!(result, None, "No primary-capable agents → None");
+}
+
+// ---- build_agent_listing tests ----
+
+#[test]
+fn test_build_agent_listing_format() {
+    let mut mgr = SubagentManager::new();
+    mgr.register(
+        SubAgentSpec::new("Explore", "Deep codebase exploration", "prompt")
+            .with_tools(vec!["Read".into(), "Grep".into(), "Glob".into()]),
+    );
+    let listing = mgr.build_agent_listing();
+    assert!(listing.contains("- Explore:"));
+    assert!(listing.contains("(Tools: Read, Grep, Glob)"));
+}
+
+#[test]
+fn test_build_agent_listing_excludes_hidden() {
+    let mut mgr = SubagentManager::new();
+    mgr.register(make_spec("visible"));
+    mgr.register(SubAgentSpec::new("hidden-agent", "Hidden", "prompt").with_hidden(true));
+    let listing = mgr.build_agent_listing();
+    assert!(listing.contains("visible"));
+    assert!(!listing.contains("hidden-agent"));
+}
+
+#[test]
+fn test_build_agent_listing_excludes_disabled() {
+    let mut mgr = SubagentManager::new();
+    mgr.register(make_spec("active"));
+    mgr.register(SubAgentSpec::new("disabled-agent", "Disabled", "prompt").with_disable(true));
+    let listing = mgr.build_agent_listing();
+    assert!(listing.contains("active"));
+    assert!(!listing.contains("disabled-agent"));
+}
+
+#[test]
+fn test_build_agent_listing_all_tools_label() {
+    let mut mgr = SubagentManager::new();
+    mgr.register(SubAgentSpec::new("General", "Versatile", "prompt"));
+    // No .with_tools() — empty tools vec
+    let listing = mgr.build_agent_listing();
+    assert!(listing.contains("(Tools: all tools)"));
+}
+
+#[test]
+fn test_build_agent_listing_sorted() {
+    let mut mgr = SubagentManager::new();
+    mgr.register(make_spec("Zebra"));
+    mgr.register(make_spec("Alpha"));
+    mgr.register(make_spec("Middle"));
+    let listing = mgr.build_agent_listing();
+    let lines: Vec<&str> = listing.lines().collect();
+    assert!(lines[0].contains("Alpha"));
+    assert!(lines[1].contains("Middle"));
+    assert!(lines[2].contains("Zebra"));
+}
+
+#[test]
+fn test_verification_agent_is_background() {
+    let mgr = SubagentManager::with_builtins();
+    let spec = mgr.get("Verification").unwrap();
+    assert!(spec.background, "Verification agent should have background=true");
+    assert!(spec.has_tool_restriction());
 }

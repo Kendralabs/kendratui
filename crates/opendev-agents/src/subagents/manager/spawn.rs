@@ -68,6 +68,7 @@ impl SubagentManager {
         parent_reasoning_effort: Option<String>,
         cancel_token: Option<CancellationToken>,
         debug_logger: Option<&opendev_runtime::SessionDebugLogger>,
+        model_override: Option<&str>,
     ) -> Result<SubagentRunResult, AgentError> {
         let spec = self.get(subagent_name).ok_or_else(|| {
             AgentError::ConfigError(format!("Unknown subagent type: {subagent_name}"))
@@ -85,13 +86,17 @@ impl SubagentManager {
             task_len = task.len(),
             tool_count = spec.tools.len(),
             working_dir = %working_dir,
+            model_override = ?model_override,
             "Spawning subagent"
         );
 
         progress.on_started(&spec.name, task);
 
-        // Determine model (spec override or parent's model)
-        let model = spec.model.as_deref().unwrap_or(parent_model).to_string();
+        // Determine model: model_override > spec.model > parent_model
+        let model = model_override
+            .or(spec.model.as_deref())
+            .unwrap_or(parent_model)
+            .to_string();
 
         // Build restricted tool list (if specified)
         let mut allowed_tools = if spec.has_tool_restriction() {
