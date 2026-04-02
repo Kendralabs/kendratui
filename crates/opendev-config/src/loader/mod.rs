@@ -195,9 +195,11 @@ impl ConfigLoader {
                 path: tmp_path.display().to_string(),
                 source: e,
             })?;
-            std::io::Write::write_all(&mut file, json.as_bytes()).map_err(|e| ConfigError::ReadError {
-                path: tmp_path.display().to_string(),
-                source: e,
+            std::io::Write::write_all(&mut file, json.as_bytes()).map_err(|e| {
+                ConfigError::ReadError {
+                    path: tmp_path.display().to_string(),
+                    source: e,
+                }
             })?;
         }
         #[cfg(not(unix))]
