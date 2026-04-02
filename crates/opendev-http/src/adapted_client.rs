@@ -155,11 +155,21 @@ impl AdaptedClient {
             .map_err(|e| HttpError::Other(format!("serialize error: {e}")))?;
 
         let mut child = tokio::process::Command::new("curl")
-            .args(["--silent", "--show-error", "--http1.1", "--location",
-                   "--request", "POST", url,
-                   "--header", auth_header,
-                   "--header", "Content-Type: application/json",
-                   "--data-binary", "@-"])
+            .args([
+                "--silent",
+                "--show-error",
+                "--http1.1",
+                "--location",
+                "--request",
+                "POST",
+                url,
+                "--header",
+                auth_header,
+                "--header",
+                "Content-Type: application/json",
+                "--data-binary",
+                "@-",
+            ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -167,11 +177,15 @@ impl AdaptedClient {
             .map_err(|e| HttpError::Other(format!("Failed to spawn curl: {e}")))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(&body).await
+            stdin
+                .write_all(&body)
+                .await
                 .map_err(|e| HttpError::Other(format!("curl stdin write error: {e}")))?;
         }
 
-        let output = child.wait_with_output().await
+        let output = child
+            .wait_with_output()
+            .await
             .map_err(|e| HttpError::Other(format!("curl wait error: {e}")))?;
 
         if !output.status.success() {
@@ -183,7 +197,8 @@ impl AdaptedClient {
             };
             warn!(request_id = %request_id, error = %msg, "curl request failed");
             return Ok(HttpResult::fail(
-                format!("[request_id={request_id}] {msg}"), false,
+                format!("[request_id={request_id}] {msg}"),
+                false,
             ));
         }
 
@@ -191,8 +206,11 @@ impl AdaptedClient {
         match serde_json::from_str::<serde_json::Value>(&stdout) {
             Ok(body_val) => {
                 if let Some(err_obj) = body_val.get("error") {
-                    let msg = err_obj.get("message").and_then(|m| m.as_str())
-                        .unwrap_or("API error").to_string();
+                    let msg = err_obj
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("API error")
+                        .to_string();
                     warn!(request_id = %request_id, error = %msg, "curl API error");
                     return Ok(HttpResult {
                         success: false,
@@ -212,7 +230,8 @@ impl AdaptedClient {
                 let msg = format!("parse error: {e}");
                 warn!(request_id = %request_id, error = %msg, "curl response parse error");
                 Ok(HttpResult::fail(
-                    format!("[request_id={request_id}] {msg}"), false,
+                    format!("[request_id={request_id}] {msg}"),
+                    false,
                 ))
             }
         }
@@ -650,11 +669,22 @@ impl AdaptedClient {
             .map_err(|e| HttpError::Other(format!("serialize error: {e}")))?;
 
         let mut child = tokio::process::Command::new("curl")
-            .args(["--silent", "--show-error", "--http1.1", "--no-buffer",
-                   "--location", "--request", "POST", url,
-                   "--header", auth_header,
-                   "--header", "Content-Type: application/json",
-                   "--data-binary", "@-"])
+            .args([
+                "--silent",
+                "--show-error",
+                "--http1.1",
+                "--no-buffer",
+                "--location",
+                "--request",
+                "POST",
+                url,
+                "--header",
+                auth_header,
+                "--header",
+                "Content-Type: application/json",
+                "--data-binary",
+                "@-",
+            ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -662,11 +692,15 @@ impl AdaptedClient {
             .map_err(|e| HttpError::Other(format!("Failed to spawn curl: {e}")))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(&body).await
+            stdin
+                .write_all(&body)
+                .await
                 .map_err(|e| HttpError::Other(format!("curl stdin write error: {e}")))?;
         }
 
-        let stdout = child.stdout.take()
+        let stdout = child
+            .stdout
+            .take()
             .ok_or_else(|| HttpError::Other("No stdout from curl".to_string()))?;
 
         let mut accumulated_text = String::new();
@@ -692,17 +726,27 @@ impl AdaptedClient {
             line.clear();
             let bytes_read = match reader.read_line(&mut line).await {
                 Ok(n) => n,
-                Err(e) => { warn!(error = %e, "curl SSE read error"); break; }
+                Err(e) => {
+                    warn!(error = %e, "curl SSE read error");
+                    break;
+                }
             };
-            if bytes_read == 0 { break; }
+            if bytes_read == 0 {
+                break;
+            }
 
             let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with(':') { continue; }
+            if trimmed.is_empty() || trimmed.starts_with(':') {
+                continue;
+            }
             let data = match trimmed.strip_prefix("data: ") {
                 Some(d) => d.trim(),
                 None => continue,
             };
-            if data == "[DONE]" { stream_done = true; break; }
+            if data == "[DONE]" {
+                stream_done = true;
+                break;
+            }
 
             let chunk: serde_json::Value = match serde_json::from_str(data) {
                 Ok(v) => v,
@@ -711,7 +755,10 @@ impl AdaptedClient {
 
             if let Some(choices) = chunk.get("choices").and_then(|c| c.as_array()) {
                 for choice in choices {
-                    let delta = match choice.get("delta") { Some(d) => d, None => continue };
+                    let delta = match choice.get("delta") {
+                        Some(d) => d,
+                        None => continue,
+                    };
 
                     if let Some(text) = delta.get("content").and_then(|c| c.as_str())
                         && !text.is_empty()
@@ -722,17 +769,23 @@ impl AdaptedClient {
 
                     if let Some(tc_deltas) = delta.get("tool_calls").and_then(|t| t.as_array()) {
                         for tc_delta in tc_deltas {
-                            let idx = tc_delta.get("index")
-                                .and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+                            let idx = tc_delta.get("index").and_then(|i| i.as_u64()).unwrap_or(0)
+                                as usize;
                             let tc_idx = if let Some(&existing) = tool_call_index.get(&idx) {
                                 existing
                             } else {
                                 let new_idx = tool_calls.len();
-                                let call_id = tc_delta.get("id").and_then(|i| i.as_str())
-                                    .unwrap_or("").to_string();
-                                let name = tc_delta.get("function")
+                                let call_id = tc_delta
+                                    .get("id")
+                                    .and_then(|i| i.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let name = tc_delta
+                                    .get("function")
                                     .and_then(|f| f.get("name"))
-                                    .and_then(|n| n.as_str()).unwrap_or("").to_string();
+                                    .and_then(|n| n.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
                                 tool_calls.push(serde_json::json!({
                                     "id": call_id, "type": "function",
                                     "function": { "name": name, "arguments": "" }
@@ -741,7 +794,8 @@ impl AdaptedClient {
                                 current_tool_args.insert(new_idx, String::new());
                                 new_idx
                             };
-                            if let Some(args) = tc_delta.get("function")
+                            if let Some(args) = tc_delta
+                                .get("function")
                                 .and_then(|f| f.get("arguments"))
                                 .and_then(|a| a.as_str())
                             {
@@ -751,7 +805,8 @@ impl AdaptedClient {
                     }
 
                     if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str())
-                        && !reason.is_empty() && reason != "null"
+                        && !reason.is_empty()
+                        && reason != "null"
                     {
                         stop_reason = Some(reason.to_string());
                     }
@@ -785,12 +840,21 @@ impl AdaptedClient {
         let finish = match stop_reason.as_deref() {
             Some("tool_calls") => "tool_calls",
             Some(other) if !other.is_empty() => other,
-            _ => if message.get("tool_calls").is_some() { "tool_calls" } else { "stop" },
+            _ => {
+                if message.get("tool_calls").is_some() {
+                    "tool_calls"
+                } else {
+                    "stop"
+                }
+            }
         };
 
         if !stream_done && message["content"].is_null() && message.get("tool_calls").is_none() {
             warn!("curl stream ended with no content");
-            return Ok(HttpResult::fail("No response received from curl stream", true));
+            return Ok(HttpResult::fail(
+                "No response received from curl stream",
+                true,
+            ));
         }
 
         let response = serde_json::json!({

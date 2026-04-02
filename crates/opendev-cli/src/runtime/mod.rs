@@ -333,8 +333,7 @@ impl AgentRuntime {
 
         // DashScope Coding Plan endpoint rejects reqwest — must use curl subprocess.
         let needs_curl = api_url.contains("coding-intl.dashscope.aliyuncs.com");
-        let curl_auth = needs_curl
-            .then(|| format!("Authorization: Bearer {api_key}"));
+        let curl_auth = needs_curl.then(|| format!("Authorization: Bearer {api_key}"));
 
         let http_client = Arc::new({
             let client = match adapter {
