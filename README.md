@@ -30,7 +30,7 @@ OpenDev is an open-source, terminal-native coding agent built as a compound AI s
 
 Work is organized into concurrent sessions composed of specialized sub-agents. Each agent executes typed workflows (Execution, Thinking, Compaction) that independently bind to an LLM, enabling fine-grained cost, latency, and capability trade-offs per workflow.
 
-Each workflow is a modular slot you can bind to any LLM of your choice: **Normal** (execution), **Thinking** (reasoning), **Compact** (context summarization), **Self-Critique** (output verification), and **VLM** (vision). For example, use Claude Opus for execution, GPT-o3 for thinking, and a lightweight Qwen model for compaction. Together, these combinations form a compound AI system where multiple models collaborate, each optimized for its role.
+OpenDev automatically routes each phase of work to the right model. Five workflow slots — **Normal** (execution), **Thinking** (reasoning), **Compact** (context summarization), **Self-Critique** (output verification), and **VLM** (vision) — each bind independently to any LLM you configure. For example, Claude Opus handles execution, GPT-o3 handles reasoning, and a lightweight Qwen model handles compaction — all routed automatically. Together, these form a compound AI system where multiple models collaborate, each optimized for its role.
 
 OpenDev is written in **Rust** — it starts in **4.3 ms**, uses just **9.4 MB of memory**, and ships as a single **18 MB binary**. That makes it the **fastest and lightest coding agent** available today — up to **128x faster startup** and **30x less memory** than alternatives.
 
