@@ -180,12 +180,13 @@ impl AgentRuntime {
         // Configure HTTP client based on provider.
         // Consult the registry for the correct API key env var and base URL,
         // so all registry-based providers work out of the box.
-        let provider_info = registry.get_provider(&config.model_provider);
-        let registry_env = provider_info.map(|pi| pi.api_key_env.as_str());
+        let provider_info = registry.get_provider_or_builtin(&config.model_provider);
+        let registry_env = provider_info.as_ref().map(|pi| pi.api_key_env.as_str());
         let api_key = config
             .get_api_key_with_env(registry_env)
             .unwrap_or_default();
         let registry_base_url = provider_info
+            .as_ref()
             .map(|pi| pi.api_base_url.clone())
             .filter(|s| !s.is_empty());
 
