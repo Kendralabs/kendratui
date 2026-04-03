@@ -41,8 +41,7 @@ impl ChatCompletionsAdapter {
 
             if let Some(tc_deltas) = delta.get("tool_calls").and_then(|t| t.as_array()) {
                 for tc_delta in tc_deltas {
-                    let idx =
-                        tc_delta.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+                    let idx = tc_delta.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
 
                     if let Some(id) = tc_delta.get("id").and_then(|i| i.as_str()) {
                         let name = tc_delta
