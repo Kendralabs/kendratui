@@ -204,9 +204,30 @@ pub struct AppConfig {
     #[serde(default)]
     pub sandbox: SandboxConfig,
 
+    // Custom models to show in the model picker (for providers not in the public registry)
+    // Example: [{"id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "name": "Llama 3.3 70B"}]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_models: Vec<CustomModelEntry>,
+
+    // Extra HTTP headers injected on every LLM request for this provider.
+    // Useful for gateways that require routing headers (e.g. Portkey x-portkey-provider).
+    // Example: {"x-portkey-provider": "workers-ai", "x-portkey-workers-ai-account-id": "abc"}
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extra_headers: HashMap<String, String>,
+
     // Config version for migration support
     #[serde(default = "default_config_version")]
     pub config_version: u32,
+}
+
+/// A user-defined model entry for the model picker.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomModelEntry {
+    /// Model ID as expected by the provider (e.g. "@cf/meta/llama-3.3-70b-instruct-fp8-fast").
+    pub id: String,
+    /// Human-readable display name shown in the picker.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
 }
 
 fn default_config_version() -> u32 {
@@ -288,6 +309,8 @@ impl Default for AppConfig {
             formatter: FormatterConfig::default(),
             channels: ChannelsConfig::default(),
             sandbox: SandboxConfig::default(),
+            custom_models: Vec::new(),
+            extra_headers: HashMap::new(),
             config_version: default_config_version(),
         }
     }

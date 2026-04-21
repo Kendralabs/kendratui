@@ -11,6 +11,7 @@ pub const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(60 * 60 * 24); // 24
 
 /// Display order for provider lists.
 pub const PRIORITY_PROVIDERS: &[&str] = &[
+    "kendra",
     "openai",
     "anthropic",
     "fireworks",

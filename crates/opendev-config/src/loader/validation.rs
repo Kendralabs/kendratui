@@ -91,6 +91,8 @@ impl ConfigLoader {
             "formatter",
             "channels",
             "sandbox",
+            "custom_models",
+            "extra_headers",
             "config_version",
         ]
         .into_iter()

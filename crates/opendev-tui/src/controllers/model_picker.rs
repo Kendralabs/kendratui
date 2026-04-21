@@ -61,9 +61,50 @@ impl ModelPickerController {
     }
 
     /// Load models from the registry cache, grouped by provider.
+    ///
+    /// `custom_models` is an optional list of `(id, display_name)` pairs that will
+    /// be prepended to the list as a "Custom" provider group.
     pub fn from_registry(cache_dir: &std::path::Path, current_model: &str) -> Self {
+        Self::from_registry_with_custom(cache_dir, current_model, &[])
+    }
+
+    /// Like `from_registry` but also includes user-defined custom models.
+    ///
+    /// `custom_provider_id` and `custom_provider_display` label the custom group
+    /// (e.g. `"kendra"` / `"Kendra AI Gateway"`). Defaults to `"custom"` / `"Custom"`.
+    pub fn from_registry_with_custom(
+        cache_dir: &std::path::Path,
+        current_model: &str,
+        custom_models: &[(String, String)],
+    ) -> Self {
+        Self::from_registry_with_custom_provider(cache_dir, current_model, custom_models, "custom", "Custom")
+    }
+
+    /// Full version allowing a named provider label for the custom model group.
+    pub fn from_registry_with_custom_provider(
+        cache_dir: &std::path::Path,
+        current_model: &str,
+        custom_models: &[(String, String)],
+        custom_provider_id: &str,
+        custom_provider_display: &str,
+    ) -> Self {
         let registry = ModelRegistry::load_from_cache(cache_dir);
         let mut models = Vec::new();
+
+        // Prepend custom models (from settings.json) at the top of the list
+        for (id, name) in custom_models {
+            models.push(ModelOption {
+                id: id.clone(),
+                name: name.clone(),
+                provider: custom_provider_id.to_string(),
+                provider_display: custom_provider_display.to_string(),
+                context_length: 0,
+                pricing_input: 0.0,
+                pricing_output: 0.0,
+                recommended: false,
+                has_api_key: true, // user configured it, assume key is available
+            });
+        }
 
         // Get providers sorted by priority, with API-key-available providers first
         let mut providers = registry.list_providers();

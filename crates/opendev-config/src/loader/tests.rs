@@ -522,6 +522,64 @@ fn test_cross_field_multiple_warnings() {
     );
 }
 
+// --- Custom models tests ---
+
+#[test]
+fn test_custom_models_load_from_config() {
+    let tmp = TempDir::new().unwrap();
+    let global = tmp.path().join("global.json");
+    let project = tmp.path().join("project.json");
+
+    std::fs::write(
+        &global,
+        r#"{
+            "model_provider": "cloudflare",
+            "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+            "api_key": "test-key",
+            "custom_models": [
+                {"id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "name": "Llama 3.3 70B FP8 Fast (CF)"},
+                {"id": "@cf/meta/llama-4-scout-17b-16e-instruct", "name": "Llama 4 Scout 17B (CF)"}
+            ]
+        }"#,
+    )
+    .unwrap();
+
+    let config = ConfigLoader::load(&global, &project).unwrap();
+    assert_eq!(config.model_provider, "cloudflare");
+    assert_eq!(config.custom_models.len(), 2, "custom_models should have 2 entries, got: {:?}", config.custom_models);
+    assert_eq!(config.custom_models[0].id, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+    assert_eq!(config.custom_models[0].name, "Llama 3.3 70B FP8 Fast (CF)");
+    assert_eq!(config.custom_models[1].id, "@cf/meta/llama-4-scout-17b-16e-instruct");
+}
+
+#[test]
+fn test_custom_models_merge_keeps_models() {
+    let base = AppConfig::default();
+    let overrides = serde_json::json!({
+        "custom_models": [
+            {"id": "model-1", "name": "Model One"},
+            {"id": "model-2", "name": "Model Two"}
+        ]
+    });
+    let merged = ConfigLoader::merge(base, overrides);
+    assert_eq!(merged.custom_models.len(), 2);
+    assert_eq!(merged.custom_models[0].id, "model-1");
+    assert_eq!(merged.custom_models[1].name, "Model Two");
+}
+
+#[test]
+fn test_custom_models_not_flagged_as_unknown() {
+    let json = serde_json::json!({
+        "custom_models": [{"id": "test", "name": "Test"}]
+    });
+    let unknown = ConfigLoader::warn_unknown_fields(&json, "test");
+    assert!(
+        unknown.is_empty(),
+        "custom_models should not be flagged as unknown, got: {:?}",
+        unknown
+    );
+}
+
 // --- Template substitution tests ---
 
 #[test]

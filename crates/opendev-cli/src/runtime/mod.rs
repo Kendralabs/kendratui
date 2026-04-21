@@ -331,6 +331,16 @@ impl AgentRuntime {
                 {
                     hdrs.insert("HTTP-Referer", val);
                 }
+                // Inject any user-configured extra headers (e.g. Portkey routing headers
+                // for the Kendra AI Gateway: x-portkey-provider, x-portkey-workers-ai-account-id)
+                for (key, value) in &config.extra_headers {
+                    if let (Ok(k), Ok(v)) = (
+                        reqwest::header::HeaderName::from_bytes(key.as_bytes()),
+                        HeaderValue::from_str(value),
+                    ) {
+                        hdrs.insert(k, v);
+                    }
+                }
                 let adapter = opendev_http::adapters::chat_completions::ChatCompletionsAdapter::new(
                     url.clone(),
                 );
@@ -560,12 +570,34 @@ impl AgentRuntime {
             if let Some((provider_id, _key, model_info)) = registry.find_model_by_id(new_model) {
                 (provider_id.to_string(), Some(model_info.clone()))
             } else {
-                // Model not in registry — allow it but warn; keep current provider
+                // Model not in registry — it's a custom model.
+                // Rebuild the HTTP client using the stored provider config (api_key +
+                // api_base_url from settings.json) so switching between custom models
+                // always uses the correct credentials, even if another provider was
+                // used in between.
                 info!(
                     model = new_model,
-                    "Model not found in registry, using as-is"
+                    provider = %self.config.model_provider,
+                    "Custom model selected — rebuilding HTTP client with configured provider"
                 );
                 self.llm_caller.config.model = new_model.to_string();
+                let provider = &self.config.model_provider.clone();
+                let api_key = self
+                    .config
+                    .get_api_key_with_env(None)
+                    .unwrap_or_default();
+                if !api_key.is_empty() {
+                    let base_url = self.config.api_base_url.as_deref();
+                    match Self::build_http_client(provider, &api_key, new_model, base_url, &self.config.extra_headers) {
+                        Ok(client) => {
+                            self.http_client = Arc::new(client);
+                            info!(provider = %provider, "HTTP client rebuilt for custom model");
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to rebuild HTTP client: {e}"));
+                        }
+                    }
+                }
                 return Ok(new_model.to_string());
             };
 
@@ -634,6 +666,7 @@ impl AgentRuntime {
                 &api_key,
                 new_model,
                 base_url.as_deref(),
+                &self.config.extra_headers,
             )?;
             self.http_client = Arc::new(new_client);
             info!(
@@ -652,6 +685,7 @@ impl AgentRuntime {
         api_key: &str,
         model: &str,
         api_base_url: Option<&str>,
+        extra_headers: &std::collections::HashMap<String, String>,
     ) -> Result<AdaptedClient, String> {
         let (api_url, headers, adapter): (String, HeaderMap, Option<Box<dyn ProviderAdapter>>) =
             match provider {
@@ -770,6 +804,15 @@ impl AgentRuntime {
                         && let Ok(val) = HeaderValue::from_str("https://opendev.ai")
                     {
                         hdrs.insert("HTTP-Referer", val);
+                    }
+                    // Inject user-configured extra headers (e.g. Portkey routing headers)
+                    for (key, value) in extra_headers {
+                        if let (Ok(k), Ok(v)) = (
+                            reqwest::header::HeaderName::from_bytes(key.as_bytes()),
+                            HeaderValue::from_str(value),
+                        ) {
+                            hdrs.insert(k, v);
+                        }
                     }
                     let adapter =
                         opendev_http::adapters::chat_completions::ChatCompletionsAdapter::new(

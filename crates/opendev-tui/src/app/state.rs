@@ -194,6 +194,12 @@ pub struct AppState {
     /// Timestamp of first Ctrl+C press for two-stage exit confirmation.
     /// When set, a second Ctrl+C within 2 seconds will exit the app.
     pub ctrl_c_pending: Option<Instant>,
+    /// Custom models from settings.json shown in the model picker.
+    /// Each entry is (id, display_name).
+    pub custom_models: Vec<(String, String)>,
+    /// The configured model_provider (e.g. "kendra", "cloudflare"). Used to
+    /// label the custom model group correctly in the model picker.
+    pub model_provider: String,
 }
 
 impl Default for AppState {
@@ -288,6 +294,8 @@ impl Default for AppState {
             force_clear: false,
             last_event_time: None,
             ctrl_c_pending: None,
+            custom_models: Vec::new(),
+            model_provider: String::new(),
         }
     }
 }

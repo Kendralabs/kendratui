@@ -179,6 +179,7 @@ impl ModelRegistry {
     /// Built-in fallback for well-known providers when registry is unavailable.
     pub fn builtin_provider(provider_id: &str) -> Option<ProviderInfo> {
         let (name, api_key_env, api_base_url) = match provider_id {
+            "kendra" => ("Kendra AI Gateway", "", "http://localhost:8787"),
             "anthropic" => (
                 "Anthropic",
                 "ANTHROPIC_API_KEY",

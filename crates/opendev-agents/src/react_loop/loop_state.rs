@@ -23,6 +23,7 @@ pub(super) struct LoopState {
     pub iteration: usize,
     pub consecutive_no_tool_calls: usize,
     pub consecutive_truncations: usize,
+    pub consecutive_api_failures: usize,
     pub doom_detector: DoomLoopDetector,
 
     /// Per-subdirectory instruction injection tracker.
@@ -80,6 +81,7 @@ impl LoopState {
             iteration: 0,
             consecutive_no_tool_calls: 0,
             consecutive_truncations: 0,
+            consecutive_api_failures: 0,
             doom_detector: DoomLoopDetector::new(),
             subdir_tracker,
             startup_paths,

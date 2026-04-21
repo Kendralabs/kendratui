@@ -319,6 +319,23 @@ pub async fn run_interactive(
     // Wire todo manager from runtime to TUI for panel sync
     app_state.todo_manager = Some(std::sync::Arc::clone(&agent_runtime.todo_manager));
 
+    // Store model_provider so the picker can label the custom group correctly
+    app_state.model_provider = config.model_provider.clone();
+
+    // Populate custom models from config (for providers not in the public registry)
+    app_state.custom_models = config
+        .custom_models
+        .iter()
+        .map(|m| {
+            let name = if m.name.is_empty() {
+                m.id.clone()
+            } else {
+                m.name.clone()
+            };
+            (m.id.clone(), name)
+        })
+        .collect();
+
     // Hydrate TUI with session history on resume/continue
     if let Some(session) = agent_runtime.session_manager.current_session() {
         for msg in &session.messages {
@@ -480,7 +497,7 @@ fn print_exit_message(exit_info: &opendev_tui::ExitInfo) {
 
     eprintln!();
     eprintln!("Session {session_id}{cost_str}");
-    eprintln!("Resume this session: opendev -r {session_id}");
+    eprintln!("Resume this session: kendracli -r {session_id}");
 }
 
 /// Replay recorded events from a JSONL file for debugging.

@@ -197,6 +197,11 @@ impl ReactLoop {
                 compactor,
             )?;
 
+            // Reset failure counter on any successful LLM response
+            if !matches!(turn, TurnResult::Continue) {
+                state.consecutive_api_failures = 0;
+            }
+
             match turn {
                 TurnResult::Interrupted => {
                     iter_metrics.total_duration_ms = iter_start.elapsed().as_millis() as u64;
@@ -356,7 +361,22 @@ impl ReactLoop {
                     }
                 }
                 TurnResult::Continue => {
-                    // LLM returned failure, loop will retry
+                    // LLM returned failure — track consecutive failures
+                    state.consecutive_api_failures += 1;
+                    const MAX_CONSECUTIVE_FAILURES: usize = 3;
+                    if state.consecutive_api_failures >= MAX_CONSECUTIVE_FAILURES {
+                        let err_msg = response
+                            .error
+                            .as_deref()
+                            .unwrap_or("unknown error")
+                            .to_string();
+                        iter_metrics.total_duration_ms = iter_start.elapsed().as_millis() as u64;
+                        self.push_metrics(iter_metrics);
+                        return Err(AgentError::LlmError(format!(
+                            "LLM API failed {} consecutive times: {}",
+                            MAX_CONSECUTIVE_FAILURES, err_msg
+                        )));
+                    }
                 }
             }
 

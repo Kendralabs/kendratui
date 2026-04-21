@@ -91,14 +91,20 @@ impl App {
             "models" => {
                 // Always open interactive model picker
                 let cache_dir = opendev_config::Paths::new(None).global_cache_dir();
-                let picker = crate::controllers::ModelPickerController::from_registry(
-                    &cache_dir,
-                    &self.state.model,
-                );
+                let (custom_id, custom_display) =
+                    provider_label_for_picker(&self.state.model_provider);
+                let picker =
+                    crate::controllers::ModelPickerController::from_registry_with_custom_provider(
+                        &cache_dir,
+                        &self.state.model,
+                        &self.state.custom_models,
+                        custom_id,
+                        custom_display,
+                    );
                 if picker.filtered_count() == 0 {
                     self.push_slash_echo(cmd);
                     self.push_command_result(
-                        "No models available. Run 'opendev setup' to configure providers."
+                        "No models available. Run 'kendracli setup' to configure providers."
                             .to_string(),
                     );
                 } else {
@@ -411,7 +417,7 @@ impl App {
                         "  /bg <id>           — Show background agent details",
                         "  /bg merge <id>     — Inject background agent result into conversation",
                         "  /bg kill <id>      — Kill a background agent",
-                        "  /exit              — Quit OpenDev",
+                        "  /exit              — Quit KendraCLI",
                         "",
                         "Keyboard shortcuts:",
                         "  Ctrl+C      — Clear input / interrupt / quit",
@@ -436,6 +442,15 @@ impl App {
                 ));
             }
         }
+    }
+}
+
+/// Map a model_provider to the (id, display_name) pair used to label the
+/// custom model group in the model picker.
+fn provider_label_for_picker(model_provider: &str) -> (&'static str, &'static str) {
+    match model_provider {
+        "kendra" => ("kendra", "Kendra AI Gateway"),
+        _ => ("custom", "Custom"),
     }
 }
 
