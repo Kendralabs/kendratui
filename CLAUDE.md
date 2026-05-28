@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+
+**Architecture & engineering principles:** See global `~/.claude/ENGINEERING-PRINCIPLES.md` — applies to all Kendra services. Invoke `/kendra-arch` to review/scaffold against these principles.
+
 ## Build & Development Commands
 
 ```bash
@@ -37,7 +40,7 @@ cd web-ui && npm ci && npm run build
 
 ## Architecture Overview
 
-OpenDev is a Rust workspace (edition 2024) with 21 crates under `crates/`. It is an open-source AI coding agent that spawns parallel agents, each bound to the LLM of your choice. The binary entry point is `opendev-cli`.
+OpenDev is a Rust workspace (edition 2024) with 20 crates under `crates/`. It is an open-source AI coding agent that spawns parallel agents, each bound to the LLM of your choice. The binary entry point is `opendev-cli`.
 
 ### Crate Map
 
@@ -54,7 +57,6 @@ crates/
   opendev-http        ← HTTP client, auth rotation, provider adapters (Anthropic, OpenAI, etc.)
   opendev-context     ← Context engineering (compaction stages, message validation)
   opendev-history     ← Session persistence (JSON per project, atomic writes)
-  opendev-memory      ← Memory systems (embeddings, reflection, playbook)
   opendev-tools-core  ← Tool registry, BaseTool trait, dispatch
   opendev-tools-impl  ← 30+ tool implementations (bash, edit, file ops, web, agents)
   opendev-tools-lsp   ← LSP integration and language servers
@@ -63,7 +65,7 @@ crates/
   opendev-channels    ← Channel routing
   opendev-hooks       ← Hook system
   opendev-plugins     ← Plugin manager
-  opendev-docker      ← Docker runtime support
+  opendev-sandbox     ← Sandbox runtime (process isolation, security policy enforcement)
 ```
 ## Post-Change Workflow
 
