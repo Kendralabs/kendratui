@@ -2,16 +2,16 @@
 
 ## Overview
 
-The subagent system enables the main agent to delegate complex, multi-step tasks to ephemeral child agents, each running its own isolated ReAct loop with a restricted tool set and specialized system prompt. Subagents are the primary mechanism for parallelism and task decomposition in OpenDev -- the parent agent spawns one or more subagents via the `spawn_subagent` tool, and each subagent operates with fresh message history, no access to the parent's conversation context, and a bounded iteration budget.
+The subagent system enables the main agent to delegate complex, multi-step tasks to ephemeral child agents, each running its own isolated ReAct loop with a restricted tool set and specialized system prompt. Subagents are the primary mechanism for parallelism and task decomposition in KendraCLI -- the parent agent spawns one or more subagents via the `spawn_subagent` tool, and each subagent operates with fresh message history, no access to the parent's conversation context, and a bounded iteration budget.
 
-In the overall architecture, the subagent system spans three crates: `opendev-agents` (spec and manager), `opendev-tools-impl` (the `SpawnSubagentTool` bridge that the LLM invokes), and `opendev-docker` (container lifecycle for sandboxed execution). The Python counterpart lives in `opendev/core/agents/subagents/`.
+In the overall architecture, the subagent system spans three crates: `kendra-agents` (spec and manager), `kendra-tools-impl` (the `SpawnSubagentTool` bridge that the LLM invokes), and `kendra-docker` (container lifecycle for sandboxed execution). The Python counterpart lives in `KendraCLI/core/agents/subagents/`.
 
 ## Python Architecture
 
 ### Module Structure
 
 ```
-opendev/core/agents/subagents/
+KendraCLI/core/agents/subagents/
   __init__.py              # Public API: SubAgentSpec, CompiledSubAgent, SubAgentManager, ALL_SUBAGENTS
   specs.py                 # SubAgentSpec (TypedDict), CompiledSubAgent (TypedDict)
   task_tool.py             # create_task_tool_schema(), format_task_result(), TASK_TOOL_NAME
@@ -64,17 +64,17 @@ opendev/core/agents/subagents/
 ### Module Structure
 
 ```
-crates/opendev-agents/src/subagents/
+crates/kendra-agents/src/subagents/
   mod.rs                   # Re-exports: SubAgentSpec, builtins, SubagentManager, SubagentType, etc.
   spec.rs                  # SubAgentSpec struct, builder methods, builtins module (factory functions)
   manager.rs               # SubagentManager, SubagentType enum, SubagentProgressCallback trait,
                            #   SubagentRunResult, NoopProgressCallback, spawn()
 
-crates/opendev-tools-impl/src/
+crates/kendra-tools-impl/src/
   agents.rs                # AgentsTool (list tool), SpawnSubagentTool (spawn tool),
                            #   SubagentEvent enum, ChannelProgressCallback
 
-crates/opendev-docker/src/
+crates/kendra-docker/src/
   lib.rs                   # Re-exports
   models.rs                # DockerConfig, ContainerSpec, VolumeMount, PortMapping, ContainerStatus, etc.
   deployment.rs            # DockerDeployment: pull_image, start_container, start, stop, inspect, remove
@@ -131,7 +131,7 @@ crates/opendev-docker/src/
 | `create_task_tool_schema()` | `SpawnSubagentTool::parameter_schema()` | Free function to trait method | Schema built from manager's registered specs |
 | `format_task_result()` | Inline in `SpawnSubagentTool::execute()` | Absorbed into tool execution | |
 | `NestedUICallback` | `ChannelProgressCallback` + `SubagentEvent` | Callback wrapper to channel + enum | Decoupled via async channel |
-| `DockerMixin` | `opendev-docker` crate | Mixin to separate crate | Full crate with deployment, session, tool handler |
+| `DockerMixin` | `kendra-docker` crate | Mixin to separate crate | Full crate with deployment, session, tool handler |
 | `_execute_with_docker()` | Not yet wired (crate exists) | Docker lifecycle separate from subagent manager | Crate ready but not integrated into `spawn()` |
 | `_execute_ask_user()` | Not yet migrated | Special-case subagent | Requires TUI integration |
 | `execute_parallel()` | Not yet migrated | `asyncio.gather` | Can use `tokio::join!` or `JoinSet` |
@@ -148,7 +148,7 @@ crates/opendev-docker/src/
 | Security Reviewer | `Security-Reviewer` | `Security-Reviewer` | Code Explorer tools + `run_command` | Security-focused code review with severity/confidence scoring |
 | Web Clone | `Web-clone` | `Web-Clone` | `capture_web_screenshot`, `analyze_image`, `write_file`, `read_file`, `run_command`, `list_files` | Visually analyze websites and generate code replicating their UI |
 | Web Generator | `Web-Generator` | `Web-Generator` | `write_file`, `edit_file`, `run_command`, `list_files`, `read_file` | Create new web applications from scratch |
-| Project Init | `Project-Init` | `project_init` | Python: `read_file`, `search`, `list_files`, `run_command`, `write_file`; Rust: `Read`, `Glob`, `Grep`, `Bash` | Analyze codebase and generate OPENDEV.md project instructions |
+| Project Init | `Project-Init` | `project_init` | Python: `read_file`, `search`, `list_files`, `run_command`, `write_file`; Rust: `Read`, `Glob`, `Grep`, `Bash` | Analyze codebase and generate KendraCLI.md project instructions |
 
 Note: All subagents intentionally exclude todo tools (`write_todos`, `update_todo`, etc.) -- only the main agent manages task tracking. Subagents also cannot spawn other subagents (no recursive spawning).
 
@@ -170,17 +170,17 @@ The Rust implementation counts tool calls after execution and emits a `shallow_w
 The Python codebase uses duck-typed callbacks with `hasattr()` checks for optional methods like `on_parallel_agents_start`. Rust replaces this with the `SubagentProgressCallback` trait, providing compile-time guarantees and enabling the `ChannelProgressCallback` implementation that bridges to the TUI event loop.
 
 ### 6. Docker as Optional, Transparent Layer
-Docker sandboxing is triggered by the presence of `docker_config` in a `SubAgentSpec`. The subagent's ReAct loop is unaware of Docker -- the tool registry is swapped to route calls through the container. If Docker is unavailable, execution falls back to local mode. The Rust `opendev-docker` crate provides the primitives but is not yet wired into the subagent spawn path.
+Docker sandboxing is triggered by the presence of `docker_config` in a `SubAgentSpec`. The subagent's ReAct loop is unaware of Docker -- the tool registry is swapped to route calls through the container. If Docker is unavailable, execution falls back to local mode. The Rust `kendra-docker` crate provides the primitives but is not yet wired into the subagent spawn path.
 
 ### 7. Custom Agent Extensibility
-Python supports user-defined agents via `~/.opendev/agents.json`, `<project>/.opendev/agents.json`, or markdown files in `~/.opendev/agents/*.md`. These are loaded by `register_custom_agents()` and participate in the same spawn mechanism as built-ins. This is not yet migrated to Rust.
+Python supports user-defined agents via `~/.kendra/agents.json`, `<project>/.kendra/agents.json`, or markdown files in `~/.kendra/agents/*.md`. These are loaded by `register_custom_agents()` and participate in the same spawn mechanism as built-ins. This is not yet migrated to Rust.
 
 ## Code Examples
 
 ### Defining a Built-in Subagent (Python)
 
 ```python
-# opendev/core/agents/subagents/agents/code_explorer.py
+# KendraCLI/core/agents/subagents/agents/code_explorer.py
 CODE_EXPLORER_SUBAGENT = SubAgentSpec(
     name="Code-Explorer",
     description="Deep LOCAL codebase exploration and research...",
@@ -192,7 +192,7 @@ CODE_EXPLORER_SUBAGENT = SubAgentSpec(
 ### Defining a Built-in Subagent (Rust)
 
 ```rust
-// crates/opendev-agents/src/subagents/spec.rs
+// crates/kendra-agents/src/subagents/spec.rs
 pub fn code_explorer(system_prompt: &str) -> SubAgentSpec {
     SubAgentSpec::new(
         "Code-Explorer",
@@ -206,7 +206,7 @@ pub fn code_explorer(system_prompt: &str) -> SubAgentSpec {
 ### Spawning a Subagent (Rust)
 
 ```rust
-// crates/opendev-agents/src/subagents/manager.rs — SubagentManager::spawn()
+// crates/kendra-agents/src/subagents/manager.rs — SubagentManager::spawn()
 let config = MainAgentConfig {
     model,
     temperature: Some(0.7),
@@ -225,7 +225,7 @@ let result = agent.run(task, &deps, None, task_monitor).await;
 ### SpawnSubagentTool Bridge (Rust)
 
 ```rust
-// crates/opendev-tools-impl/src/agents.rs
+// crates/kendra-tools-impl/src/agents.rs
 impl BaseTool for SpawnSubagentTool {
     async fn execute(&self, args: HashMap<String, Value>, ctx: &ToolContext) -> ToolResult {
         let agent_type = args.get("agent_type").and_then(|v| v.as_str()).unwrap();
@@ -244,7 +244,7 @@ impl BaseTool for SpawnSubagentTool {
 ### Docker Container Lifecycle (Rust)
 
 ```rust
-// crates/opendev-docker/src/deployment.rs
+// crates/kendra-docker/src/deployment.rs
 let mut deploy = DockerDeployment::new(config)?;  // Allocates port, generates container name
 deploy.start().await?;                             // Pulls image + starts container
 // ... execute subagent tools via DockerSession ...
@@ -254,7 +254,7 @@ deploy.stop().await?;                              // Graceful stop + force remo
 
 ## Remaining Gaps
 
-1. **Docker integration in spawn path**: The `opendev-docker` crate has full container lifecycle support, but `SubagentManager::spawn()` does not yet detect `docker_config` on a spec or route tools through `DockerToolHandler`. The Python `_execute_with_docker()` flow (container start, file copy, task rewrite, Docker tool registry, file copy back, container stop) needs to be wired in.
+1. **Docker integration in spawn path**: The `kendra-docker` crate has full container lifecycle support, but `SubagentManager::spawn()` does not yet detect `docker_config` on a spec or route tools through `DockerToolHandler`. The Python `_execute_with_docker()` flow (container start, file copy, task rewrite, Docker tool registry, file copy back, container stop) needs to be wired in.
 
 2. **Custom agent loading**: `register_custom_agents()` for JSON and markdown agent definitions is not yet migrated. This includes `AgentConfig`, `AgentSource`, and the skill path resolution logic.
 
@@ -274,10 +274,14 @@ deploy.stop().await?;                              // Graceful stop + force remo
 
 ## References
 
-- Python subagent specs: `opendev-py/opendev/core/agents/subagents/specs.py`
-- Python subagent manager: `opendev-py/opendev/core/agents/subagents/manager/`
-- Python built-in agents: `opendev-py/opendev/core/agents/subagents/agents/`
-- Rust SubAgentSpec: `crates/opendev-agents/src/subagents/spec.rs`
-- Rust SubagentManager: `crates/opendev-agents/src/subagents/manager.rs`
-- Rust SpawnSubagentTool: `crates/opendev-tools-impl/src/agents.rs`
-- Rust Docker crate: `crates/opendev-docker/src/`
+- Python subagent specs: `kendra-py/kendra/core/agents/subagents/specs.py`
+- Python subagent manager: `kendra-py/kendra/core/agents/subagents/manager/`
+- Python built-in agents: `kendra-py/kendra/core/agents/subagents/agents/`
+- Rust SubAgentSpec: `crates/kendra-agents/src/subagents/spec.rs`
+- Rust SubagentManager: `crates/kendra-agents/src/subagents/manager.rs`
+- Rust SpawnSubagentTool: `crates/kendra-tools-impl/src/agents.rs`
+- Rust Docker crate: `crates/kendra-docker/src/`
+
+
+
+

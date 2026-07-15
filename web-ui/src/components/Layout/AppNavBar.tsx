@@ -18,8 +18,8 @@ export function AppNavBar() {
         <div className="flex items-center gap-6">
           {/* Brand/Logo */}
           <Link to="/chat" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <img src="/icon_blue.png" alt="OpenDev" className="w-7 h-7 rounded-lg shadow-sm" />
-            <span className="text-base font-semibold text-gray-900">OpenDev</span>
+            <img src="/icon_blue.png" alt="KendraCLI" className="w-7 h-7 rounded-lg shadow-sm" />
+            <span className="text-base font-semibold text-gray-900">KendraCLI</span>
           </Link>
 
           {/* Navigation Links */}

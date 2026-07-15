@@ -1,10 +1,10 @@
-# OpenDev Project Documentation
+# KendraCLI Project Documentation
 
-This document provides a comprehensive overview of the OpenDev project, including its purpose, architecture, development guidelines, and how to build and run it.
+This document provides a comprehensive overview of the KendraCLI project, including its purpose, architecture, development guidelines, and how to build and run it.
 
 ## Project Overview
 
-OpenDev is an open-source, terminal-native coding agent built as a compound AI system. It leverages a structured ensemble of agents and workflows, each independently bound to a user-configured Large Language Model (LLM). This modular approach allows for fine-grained control over cost, latency, and capability trade-offs for different workflows (Execution, Thinking, Compaction, Self-Critique, Vision).
+KendraCLI is an open-source, terminal-native coding agent built as a compound AI system. It leverages a structured ensemble of agents and workflows, each independently bound to a user-configured Large Language Model (LLM). This modular approach allows for fine-grained control over cost, latency, and capability trade-offs for different workflows (Execution, Thinking, Compaction, Self-Critique, Vision).
 
 The project is primarily written in **Rust** for its performance and memory efficiency, enabling fast startup times and low memory consumption. It also includes a **React/Vite**-based Web UI for visual monitoring and remote sessions.
 
@@ -17,41 +17,41 @@ Key features include:
 
 ## Building and Running
 
-The OpenDev project consists of a Rust backend and a React/Vite frontend.
+The KendraCLI project consists of a Rust backend and a React/Vite frontend.
 
 ### Rust Backend (CLI)
 
 To build the Rust CLI from source:
 
 ```bash
-git clone https://github.com/opendev-to/opendev.git
-cd opendev
-cargo build --release -p opendev-cli
-# The binary will be located at target/release/opendev (or opendev.exe on Windows)
+git clone https://github.com/kendra-to/kendra.git
+cd kendra
+cargo build --release -p kendra-cli
+# The binary will be located at target/release/kendra (or kendra.exe on Windows)
 ```
 
 To run the interactive TUI:
 
 ```bash
-opendev
+kendra
 ```
 
 To run the Web UI:
 
 ```bash
-opendev run ui
+kendra run ui
 ```
 
 For single-prompt (non-interactive) execution:
 
 ```bash
-opendev -p "explain this codebase"
+kendra -p "explain this codebase"
 ```
 
 To resume the most recent session:
 
 ```bash
-opendev --continue
+kendra --continue
 ```
 
 ### Web UI (Frontend)
@@ -89,15 +89,15 @@ To run all tests for the Rust workspace:
 cargo test --workspace
 ```
 
-To run tests for a specific crate (e.g., `opendev-cli`):
+To run tests for a specific crate (e.g., `kendra-cli`):
 
 ```bash
-cargo test -p opendev-cli
+cargo test -p kendra-cli
 ```
 
 ### LLM Configuration (Multi-Provider Support)
 
-OpenDev supports multiple LLM providers and allows assigning different models to specific workflow slots. Configuration is done via environment variables or in `~/.opendev/settings.json`.
+KendraCLI supports multiple LLM providers and allows assigning different models to specific workflow slots. Configuration is done via environment variables or in `~/.kendra/settings.json`.
 
 Example `settings.json` for mixing providers:
 
@@ -121,10 +121,11 @@ Refer to `docs/providers.md` for detailed provider setup and advanced configurat
 
 ### MCP Integration
 
-OpenDev uses the Model Context Protocol (MCP) for dynamic tool discovery, enabling connection to external tools and data sources.
+KendraCLI uses the Model Context Protocol (MCP) for dynamic tool discovery, enabling connection to external tools and data sources.
 
 ```bash
-opendev mcp list
-opendev mcp add myserver uvx mcp-server-sqlite
-opendev mcp enable/disable myserver
+kendra mcp list
+kendra mcp add myserver uvx mcp-server-sqlite
+kendra mcp enable/disable myserver
 ```
+

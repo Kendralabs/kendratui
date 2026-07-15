@@ -1,0 +1,46 @@
+[package]
+name = "kendra-cli"
+description = "Binary entry point for the KendraCLI CLI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "kendra"
+path = "src/main.rs"
+
+[dependencies]
+kendra-models = { workspace = true }
+kendra-context = { workspace = true }
+kendra-config = { workspace = true }
+kendra-history = { workspace = true }
+kendra-repl = { workspace = true }
+kendra-tools-core = { workspace = true }
+kendra-web = { workspace = true }
+kendra-mcp = { workspace = true }
+kendra-http = { workspace = true }
+kendra-agents = { workspace = true }
+kendra-runtime = { workspace = true }
+kendra-tui = { workspace = true }
+kendra-tools-impl = { workspace = true }
+kendra-channels = { workspace = true }
+kendra-hooks = { workspace = true }
+kendra-plugins = { workspace = true }
+
+async-trait = { workspace = true }
+crossterm = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+dirs-next = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+

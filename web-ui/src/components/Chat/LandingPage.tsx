@@ -156,7 +156,7 @@ export function LandingPage() {
       {/* Background watermark layer */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <span className="text-5xl md:text-7xl font-mono font-bold tracking-wider text-bg-300 animate-breathe select-none">
-          OpenDev
+          KendraCLI
         </span>
         <div className="absolute animate-spin-slow" style={{ width: 360, height: 360 }}>
           {Array.from({ length: 24 }).map((_, i) => {

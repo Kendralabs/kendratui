@@ -114,10 +114,10 @@ export function TopBar({ onOpenCommandPalette }: TopBarProps) {
         </button>
 
         {/* Logo */}
-        <img src="/icon_blue.png" alt="OpenDev" className="w-7 h-7 rounded-lg shadow-sm flex-shrink-0" />
+        <img src="/icon_blue.png" alt="KendraCLI" className="w-7 h-7 rounded-lg shadow-sm flex-shrink-0" />
 
         <div className="flex items-baseline gap-1.5">
-          <span className="text-sm font-bold tracking-tight text-gray-900">OPENDEV</span>
+          <span className="text-sm font-bold tracking-tight text-gray-900">KENDRA</span>
           <span className="text-[10px] uppercase tracking-wider text-gray-500 hidden sm:inline">AI Assistant</span>
         </div>
       </div>

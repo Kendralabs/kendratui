@@ -1,17 +1,17 @@
 # Subagent Execution Model
 
-This document explains how subagents work in OpenDev at runtime.
+This document explains how subagents work in KendraCLI at runtime.
 
 The short version:
 
-- A subagent is not a separate `opendev` OS process.
+- A subagent is not a separate `KendraCLI` OS process.
 - A subagent is not a dedicated OS thread.
-- A subagent is an isolated logical agent state executed as an async task/future inside the main `opendev` process.
+- A subagent is an isolated logical agent state executed as an async task/future inside the main `KendraCLI` process.
 - Concurrency is managed by Tokio.
 
 ## One-Sentence Mental Model
 
-OpenDev runs as one Rust process. Inside that process, the parent agent and any subagents are separate in-memory execution states that Tokio schedules as asynchronous work.
+KendraCLI runs as one Rust process. Inside that process, the parent agent and any subagents are separate in-memory execution states that Tokio schedules as asynchronous work.
 
 If you need a simpler phrase, use this:
 
@@ -19,32 +19,32 @@ If you need a simpler phrase, use this:
 
 ## What the Computer Actually Sees
 
-When you run OpenDev today, the operating system typically sees:
+When you run KendraCLI today, the operating system typically sees:
 
-- one `opendev` process
+- one `KendraCLI` process
 - a Tokio runtime with a pool of worker threads
 - file descriptors, sockets, child processes launched by tools such as `run_command`
 
 What the operating system does **not** see for each subagent:
 
-- a new `opendev` process per subagent
+- a new `KendraCLI` process per subagent
 - a guaranteed dedicated OS thread per subagent
 
 So if the model spawns 5 subagents, the machine does **not** usually look like:
 
 ```text
-opendev
-opendev-subagent-1
-opendev-subagent-2
-opendev-subagent-3
-opendev-subagent-4
-opendev-subagent-5
+KendraCLI
+kendra-subagent-1
+kendra-subagent-2
+kendra-subagent-3
+kendra-subagent-4
+kendra-subagent-5
 ```
 
 Instead, it looks more like:
 
 ```text
-process: opendev
+process: KendraCLI
   runtime: tokio
   worker threads: a small shared pool
   tasks/futures:
@@ -75,7 +75,7 @@ Each subagent has its own:
 - progress stream back to TUI
 - final result
 
-This isolation is visible in the subagent manager where a fresh system prompt, tool schemas, `ToolContext`, and message list are built for each child run ([spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/subagents/manager/spawn.rs#L116), [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/subagents/manager/spawn.rs#L182), [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/subagents/manager/spawn.rs#L188), [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/subagents/manager/spawn.rs#L208)).
+This isolation is visible in the subagent manager where a fresh system prompt, tool schemas, `ToolContext`, and message list are built for each child run ([spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/subagents/manager/spawn.rs#L116), [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/subagents/manager/spawn.rs#L182), [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/subagents/manager/spawn.rs#L188), [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/subagents/manager/spawn.rs#L208)).
 
 Conceptually, memory might contain something like:
 
@@ -135,7 +135,7 @@ Async execution is a good fit for that pattern.
 
 Tokio is the async runtime that schedules these tasks.
 
-In OpenDev's current design, Tokio is responsible for:
+In KendraCLI's current design, Tokio is responsible for:
 
 - polling async agent futures
 - waking them when network or tool I/O completes
@@ -166,16 +166,16 @@ At a high level, the current path is:
 
 Relevant code:
 
-- tool entry point: [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-tools-impl/src/agents/spawn.rs#L139)
-- synchronous await of child run: [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-tools-impl/src/agents/spawn.rs#L260)
-- subagent execution entry: [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/subagents/manager/spawn.rs#L53)
-- runner context and child loop: [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/subagents/manager/spawn.rs#L216)
+- tool entry point: [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-tools-impl/src/agents/spawn.rs#L139)
+- synchronous await of child run: [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-tools-impl/src/agents/spawn.rs#L260)
+- subagent execution entry: [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/subagents/manager/spawn.rs#L53)
+- runner context and child loop: [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/subagents/manager/spawn.rs#L216)
 
 ## Is a Single `spawn_subagent` Call Parallel?
 
 No.
 
-A single `spawn_subagent` tool call blocks the parent tool execution until the child finishes. This is explicit in the tool implementation where it directly awaits the manager's `spawn()` call ([spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-tools-impl/src/agents/spawn.rs#L260)).
+A single `spawn_subagent` tool call blocks the parent tool execution until the child finishes. This is explicit in the tool implementation where it directly awaits the manager's `spawn()` call ([spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-tools-impl/src/agents/spawn.rs#L260)).
 
 That means this pattern is sequential:
 
@@ -191,7 +191,7 @@ parent
 
 Subagents run concurrently when the parent agent emits multiple `spawn_subagent` tool calls in the same model response.
 
-The ReAct loop has a special path for "all tool calls are `spawn_subagent`". In that case it executes them together with `futures::join_all`, bounded by a semaphore ([execution.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/react_loop/execution.rs#L657), [execution.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/react_loop/execution.rs#L667), [execution.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/react_loop/execution.rs#L731)).
+The ReAct loop has a special path for "all tool calls are `spawn_subagent`". In that case it executes them together with `futures::join_all`, bounded by a semaphore ([execution.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/react_loop/execution.rs#L657), [execution.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/react_loop/execution.rs#L667), [execution.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/react_loop/execution.rs#L731)).
 
 So this pattern is parallel:
 
@@ -223,9 +223,9 @@ So:
 
 This is especially efficient when most work is I/O-bound.
 
-## Why This Design Fits OpenDev
+## Why This Design Fits KendraCLI
 
-OpenDev subagents are mostly orchestrators around I/O-heavy operations:
+KendraCLI subagents are mostly orchestrators around I/O-heavy operations:
 
 - LLM HTTP calls
 - file reads
@@ -244,7 +244,7 @@ Benefits of the current model:
 - easy shared configuration and tool registry access
 - cheap cancellation trees using child tokens
 
-The code already reflects this by sharing the tool registry and HTTP client and giving each child its own logical execution context ([mod.rs](/Users/nghibui/codes/opendev/crates/opendev-cli/src/runtime/mod.rs#L333), [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-tools-impl/src/agents/spawn.rs#L263), [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-agents/src/subagents/manager/spawn.rs#L188)).
+The code already reflects this by sharing the tool registry and HTTP client and giving each child its own logical execution context ([mod.rs](/Users/nghibui/codes/kendra/crates/kendra-cli/src/runtime/mod.rs#L333), [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-tools-impl/src/agents/spawn.rs#L263), [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-agents/src/subagents/manager/spawn.rs#L188)).
 
 ## What Isolation Exists Today
 
@@ -267,7 +267,7 @@ But they still share:
 - shared libraries
 - shared registry objects
 
-Completed child sessions are persisted with a child `task_id` and `parent_id`, but that session separation is not the same thing as process separation ([spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-tools-impl/src/agents/spawn.rs#L233), [spawn.rs](/Users/nghibui/codes/opendev/crates/opendev-tools-impl/src/agents/spawn.rs#L281)).
+Completed child sessions are persisted with a child `task_id` and `parent_id`, but that session separation is not the same thing as process separation ([spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-tools-impl/src/agents/spawn.rs#L233), [spawn.rs](/Users/nghibui/codes/kendra/crates/kendra-tools-impl/src/agents/spawn.rs#L281)).
 
 ## What Would Change With a Thread-Per-Agent Design
 
@@ -280,7 +280,7 @@ If each subagent had its own dedicated OS thread:
 
 Thread-per-agent helps more when work is CPU-heavy and long-running.
 
-OpenDev subagents are generally not CPU-heavy. They are mostly waiting on remote calls and tool I/O. That is why async tasks are usually a better fit here than dedicated threads.
+KendraCLI subagents are generally not CPU-heavy. They are mostly waiting on remote calls and tool I/O. That is why async tasks are usually a better fit here than dedicated threads.
 
 ## What Would Change With a Subprocess-Per-Agent Design
 
@@ -309,7 +309,7 @@ So a subprocess model is not automatically "better". It is better when hard isol
 
 There is one related concept that can cause confusion: background agents in the TUI.
 
-Foreground subagents are still in-process child agent runs. Separately, the TUI can move agent work into a background Tokio task using `tokio::spawn(...)` ([tui_runner.rs](/Users/nghibui/codes/opendev/crates/opendev-cli/src/tui_runner.rs#L694)).
+Foreground subagents are still in-process child agent runs. Separately, the TUI can move agent work into a background Tokio task using `tokio::spawn(...)` ([tui_runner.rs](/Users/nghibui/codes/kendra/crates/kendra-cli/src/tui_runner.rs#L694)).
 
 That still does not mean "new OS process". It means "another async task scheduled by Tokio".
 
@@ -343,15 +343,19 @@ Use this shorthand when thinking about the current architecture:
 
 ## Summary
 
-Today, OpenDev subagents are:
+Today, KendraCLI subagents are:
 
 - isolated as agent state
 - executed as async futures
 - scheduled by Tokio
 - usually concurrent only when emitted in the same tool batch
 - not dedicated threads
-- not separate `opendev` child processes
+- not separate `KendraCLI` child processes
 
 The best mental model is:
 
-> One `opendev` process contains many independent agent states, and Tokio drives them forward as async work.
+> One `KendraCLI` process contains many independent agent states, and Tokio drives them forward as async work.
+
+
+
+

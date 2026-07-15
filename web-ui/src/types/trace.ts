@@ -136,8 +136,8 @@ export interface CollapsedNodeData extends Record<string, unknown> {
   subagentId?: string;
 }
 
-/** OpenDev ChatMessage JSONL record shape (as returned by the backend). */
-export interface OpenDevChatMessage {
+/** KendraCLI ChatMessage JSONL record shape (as returned by the backend). */
+export interface KendraCLIChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;

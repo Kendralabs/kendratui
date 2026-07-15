@@ -2,16 +2,16 @@
 
 ## Context
 
-OpenDev's subagent system is synchronous-only: parent blocks until subagent completes. No peer-to-peer communication, no persistent task state, no sidechain transcripts, no worktree isolation. This plan closes these gaps, inspired by Claude Code's architecture, across 6 crates with full TUI wiring and comprehensive testing.
+KendraCLI's subagent system is synchronous-only: parent blocks until subagent completes. No peer-to-peer communication, no persistent task state, no sidechain transcripts, no worktree isolation. This plan closes these gaps, inspired by Claude Code's architecture, across 6 crates with full TUI wiring and comprehensive testing.
 
 ---
 
-## Phase 1: Task State Machine (`opendev-runtime`)
+## Phase 1: Task State Machine (`kendra-runtime`)
 
 ### New files
-- `crates/opendev-runtime/src/task_manager/mod.rs`
-- `crates/opendev-runtime/src/task_manager/types.rs`
-- `crates/opendev-runtime/src/task_manager/tests.rs`
+- `crates/kendra-runtime/src/task_manager/mod.rs`
+- `crates/kendra-runtime/src/task_manager/types.rs`
+- `crates/kendra-runtime/src/task_manager/tests.rs`
 
 ### Types (`types.rs`)
 
@@ -101,7 +101,7 @@ pub enum TaskManagerEvent {
 
 ### Migration from BackgroundAgentManager
 
-`BackgroundAgentManager` in `crates/opendev-tui/src/managers/background_agents.rs` becomes a thin adapter:
+`BackgroundAgentManager` in `crates/kendra-tui/src/managers/background_agents.rs` becomes a thin adapter:
 - Internal `Arc<TaskManager>` replaces the `HashMap<String, BackgroundAgentTask>`
 - `add_task()` → `task_manager.create_task()`
 - `mark_completed()` → `task_manager.complete_task()`
@@ -110,22 +110,22 @@ pub enum TaskManagerEvent {
 - Existing `BackgroundAgentState` enum maps directly to `TaskState`
 
 ### Files to modify
-- `crates/opendev-runtime/src/lib.rs` — add `pub mod task_manager;` + re-exports
-- `crates/opendev-tui/src/managers/background_agents.rs` — delegate to TaskManager
+- `crates/kendra-runtime/src/lib.rs` — add `pub mod task_manager;` + re-exports
+- `crates/kendra-tui/src/managers/background_agents.rs` — delegate to TaskManager
 - No AppState struct changes needed (BackgroundAgentManager wraps internally)
 
 ---
 
-## Phase 2: Sidechain Transcripts (`opendev-history`)
+## Phase 2: Sidechain Transcripts (`kendra-history`)
 
 ### New files
-- `crates/opendev-history/src/sidechain/mod.rs`
-- `crates/opendev-history/src/sidechain/types.rs`
-- `crates/opendev-history/src/sidechain/writer.rs`
-- `crates/opendev-history/src/sidechain/reader.rs`
-- `crates/opendev-history/src/sidechain/tests.rs`
+- `crates/kendra-history/src/sidechain/mod.rs`
+- `crates/kendra-history/src/sidechain/types.rs`
+- `crates/kendra-history/src/sidechain/writer.rs`
+- `crates/kendra-history/src/sidechain/reader.rs`
+- `crates/kendra-history/src/sidechain/tests.rs`
 
-### Storage: `~/.opendev/sessions/{parent_session_id}/agents/{agent_id}.jsonl`
+### Storage: `~/.kendra/sessions/{parent_session_id}/agents/{agent_id}.jsonl`
 
 ### Types
 
@@ -180,11 +180,11 @@ pub struct SidechainWriter {
 - **Fire-and-forget** pattern: if write fails, log warning, continue execution (don't block agent)
 
 ### Files to modify
-- `crates/opendev-history/src/lib.rs` — add module
-- `crates/opendev-agents/src/subagents/runner/mod.rs` — add field
-- `crates/opendev-agents/src/subagents/runner/standard.rs` — write entries
-- `crates/opendev-agents/src/subagents/runner/simple.rs` — write entries
-- `crates/opendev-agents/src/subagents/manager/spawn.rs` — create writer
+- `crates/kendra-history/src/lib.rs` — add module
+- `crates/kendra-agents/src/subagents/runner/mod.rs` — add field
+- `crates/kendra-agents/src/subagents/runner/standard.rs` — write entries
+- `crates/kendra-agents/src/subagents/runner/simple.rs` — write entries
+- `crates/kendra-agents/src/subagents/manager/spawn.rs` — create writer
 
 ---
 
@@ -192,7 +192,7 @@ pub struct SidechainWriter {
 
 ### 3A: `run_in_background` Parameter
 
-**Modify**: `crates/opendev-tools-impl/src/agents/spawn.rs`
+**Modify**: `crates/kendra-tools-impl/src/agents/spawn.rs`
 
 Add fields to `SpawnSubagentTool`:
 ```rust
@@ -310,7 +310,7 @@ if run_in_background {
 }
 ```
 
-**New SubagentEvent variants** in `crates/opendev-tools-impl/src/agents/events.rs`:
+**New SubagentEvent variants** in `crates/kendra-tools-impl/src/agents/events.rs`:
 ```rust
 BackgroundSpawned { task_id, query, session_id, interrupt_token },
 BackgroundCompleted { task_id, success, result_summary, full_result, cost_usd, tool_call_count },
@@ -318,7 +318,7 @@ BackgroundProgress { task_id, tool_name, tool_count },
 BackgroundActivity { task_id, line },
 ```
 
-**New `BackgroundProgressCallback`** in `crates/opendev-tools-impl/src/agents/events.rs`:
+**New `BackgroundProgressCallback`** in `crates/kendra-tools-impl/src/agents/events.rs`:
 Implements `SubagentProgressCallback`, emits `BackgroundProgress` + `BackgroundActivity` events. Modeled after `BackgroundEventCallback` in `tui_runner/mod.rs:121-172`.
 
 ### 3B: Mid-Execution Backgrounding Enhancement
@@ -329,7 +329,7 @@ Implements `SubagentProgressCallback`, emits `BackgroundProgress` + `BackgroundA
 
 **Enhancement** — re-spawn in background after Ctrl+B:
 
-In `crates/opendev-cli/src/tui_runner/mod.rs`, inside the main agent listener task, after receiving `AgentResult::backgrounded()`:
+In `crates/kendra-cli/src/tui_runner/mod.rs`, inside the main agent listener task, after receiving `AgentResult::backgrounded()`:
 
 ```rust
 if result.backgrounded && !result.messages.is_empty() {
@@ -410,7 +410,7 @@ Flow:
 
 ## Phase 4: Enhanced SubAgentSpec
 
-Add to `crates/opendev-agents/src/subagents/spec/types.rs` (all `#[serde(default)]`):
+Add to `crates/kendra-agents/src/subagents/spec/types.rs` (all `#[serde(default)]`):
 
 ```rust
 pub permission_mode: Option<AgentPermissionMode>,  // Inherit, Autonomous, Manual
@@ -420,15 +420,15 @@ pub omit_instructions: bool,                        // skip CLAUDE.md/AGENTS.md
 ```
 
 ### Files to modify
-- `crates/opendev-agents/src/subagents/spec/types.rs` — add fields + enums
-- `crates/opendev-agents/src/subagents/custom_loader/parser.rs` — parse new keys
-- `crates/opendev-agents/src/subagents/manager/spawn.rs` — honor new fields
+- `crates/kendra-agents/src/subagents/spec/types.rs` — add fields + enums
+- `crates/kendra-agents/src/subagents/custom_loader/parser.rs` — parse new keys
+- `crates/kendra-agents/src/subagents/manager/spawn.rs` — honor new fields
 
 ---
 
 ## Phase 5: Agent Team System
 
-### 5A: Mailbox (`crates/opendev-runtime/src/mailbox/mod.rs`)
+### 5A: Mailbox (`crates/kendra-runtime/src/mailbox/mod.rs`)
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -454,7 +454,7 @@ pub struct Mailbox { inbox_path: PathBuf }
 - **Missing inbox file**: `send()` creates it. `receive()` returns empty vec.
 - **Unbounded growth**: `send()` checks array length; if >1000 messages, trim oldest read messages.
 
-### 5B: TeamManager (`crates/opendev-runtime/src/team_manager/mod.rs`)
+### 5B: TeamManager (`crates/kendra-runtime/src/team_manager/mod.rs`)
 
 ```rust
 pub struct TeamConfig {
@@ -484,7 +484,7 @@ pub struct TeamManager {
 
 **Orphaned team cleanup**: On `TeamManager::new()`, scan `teams_dir` for existing team configs. If `leader_session_id` doesn't match any active session, mark as orphaned. Cleanup on next `create_team()` or explicit `cleanup()`.
 
-### 5C: Team Tools (`crates/opendev-tools-impl/src/agents/team_tools.rs`)
+### 5C: Team Tools (`crates/kendra-tools-impl/src/agents/team_tools.rs`)
 
 #### CreateTeamTool
 - Parameters: `team_name: String`, `members: [{ name: String, agent_type: String, task: String }]`
@@ -515,7 +515,7 @@ pub struct TeamManager {
 
 ### 5D: Teammate Mailbox Polling
 
-In `crates/opendev-agents/src/react_loop/phases/llm_call.rs`, add before LLM call:
+In `crates/kendra-agents/src/react_loop/phases/llm_call.rs`, add before LLM call:
 
 ```rust
 // Drain mailbox messages before each LLM call
@@ -546,23 +546,23 @@ if let Some(ref mailbox) = ctx.mailbox {
 **Polling frequency**: Every react loop iteration (~1-5s between LLM calls). No explicit sleep needed.
 
 ### Files to create
-- `crates/opendev-runtime/src/mailbox/mod.rs`
-- `crates/opendev-runtime/src/mailbox/tests.rs`
-- `crates/opendev-runtime/src/team_manager/mod.rs`
-- `crates/opendev-runtime/src/team_manager/tests.rs`
-- `crates/opendev-tools-impl/src/agents/team_tools.rs`
-- `crates/opendev-tools-impl/src/agents/team_tools_tests.rs`
+- `crates/kendra-runtime/src/mailbox/mod.rs`
+- `crates/kendra-runtime/src/mailbox/tests.rs`
+- `crates/kendra-runtime/src/team_manager/mod.rs`
+- `crates/kendra-runtime/src/team_manager/tests.rs`
+- `crates/kendra-tools-impl/src/agents/team_tools.rs`
+- `crates/kendra-tools-impl/src/agents/team_tools_tests.rs`
 
 ### Files to modify
-- `crates/opendev-runtime/src/lib.rs` — add modules
-- `crates/opendev-agents/src/subagents/runner/mod.rs` — add `mailbox: Option<Arc<Mailbox>>` to RunnerContext
-- `crates/opendev-agents/src/react_loop/phases/llm_call.rs` — drain mailbox
+- `crates/kendra-runtime/src/lib.rs` — add modules
+- `crates/kendra-agents/src/subagents/runner/mod.rs` — add `mailbox: Option<Arc<Mailbox>>` to RunnerContext
+- `crates/kendra-agents/src/react_loop/phases/llm_call.rs` — drain mailbox
 
 ---
 
 ## Phase 6: Git Worktree Isolation
 
-### New file: `crates/opendev-runtime/src/worktree/mod.rs`
+### New file: `crates/kendra-runtime/src/worktree/mod.rs`
 
 ```rust
 pub struct WorktreeManager { base_dir: PathBuf }
@@ -571,7 +571,7 @@ pub struct WorktreeInfo { pub path: PathBuf, pub branch: String, pub agent_id: S
 pub enum MergeResult { Clean, Conflict { files: Vec<String> }, NoChanges }
 ```
 
-- `create(repo_root, agent_id)` — `git worktree add -b opendev/agent-{short_id} {path}`
+- `create(repo_root, agent_id)` — `git worktree add -b KendraCLI/agent-{short_id} {path}`
 - `cleanup(agent_id, has_changes)` — remove if no changes, retain if changes exist
 - `merge_back(agent_id, target)` — merge agent branch into target
 
@@ -589,7 +589,7 @@ This phase wires everything from backend through events to display. Every detail
 
 ### 7A: New AppEvent Variants
 
-Add to `crates/opendev-tui/src/event/mod.rs`:
+Add to `crates/kendra-tui/src/event/mod.rs`:
 
 ```rust
 // Background spawn (async from start) — mapped from SubagentEvent::BackgroundSpawned
@@ -609,7 +609,7 @@ TeamDeleted { team_id: String },
 
 ### 7B: SubagentEvent → AppEvent Bridge
 
-In `crates/opendev-cli/src/tui_runner/mod.rs`, extend the subagent event bridge (lines 278-352) to handle new variants:
+In `crates/kendra-cli/src/tui_runner/mod.rs`, extend the subagent event bridge (lines 278-352) to handle new variants:
 
 ```rust
 SubagentEvent::BackgroundSpawned { task_id, query, session_id, interrupt_token } => {
@@ -634,7 +634,7 @@ SubagentEvent::BackgroundActivity { task_id, line } => {
 
 ### 7C: Event Dispatch Routing
 
-In `crates/opendev-tui/src/app/event_dispatch.rs`, add to `handle_event()`:
+In `crates/kendra-tui/src/app/event_dispatch.rs`, add to `handle_event()`:
 
 ```rust
 AppEvent::BackgroundAgentSpawned { task_id, query, .. } => {
@@ -656,7 +656,7 @@ AppEvent::TeamDeleted { team_id } => {
 
 ### 7D: New Handler Files
 
-#### `crates/opendev-tui/src/app/handle_background.rs` — Extend existing
+#### `crates/kendra-tui/src/app/handle_background.rs` — Extend existing
 
 Add `handle_background_agent_spawned()`:
 ```rust
@@ -698,7 +698,7 @@ pub(super) fn handle_background_agent_completed(&mut self, ...) {
 }
 ```
 
-#### `crates/opendev-tui/src/app/handle_team.rs` — New file
+#### `crates/kendra-tui/src/app/handle_team.rs` — New file
 
 ```rust
 pub(super) fn handle_team_created(&mut self, team_id: &str, leader: &str, members: &[String]) {
@@ -757,7 +757,7 @@ pub(super) fn handle_team_deleted(&mut self, _team_id: &str) {
 
 ### 7E: AppState Additions
 
-In `crates/opendev-tui/src/app/state.rs`:
+In `crates/kendra-tui/src/app/state.rs`:
 
 ```rust
 pub active_team: Option<TeamDisplayState>,
@@ -767,7 +767,7 @@ pub task_watcher_messages: Option<usize>,   // message log view index
 
 ### 7F: SubagentDisplayState Extensions
 
-In `crates/opendev-tui/src/widgets/nested_tool/state.rs`:
+In `crates/kendra-tui/src/widgets/nested_tool/state.rs`:
 
 ```rust
 pub cost_usd: f64,
@@ -778,7 +778,7 @@ pub foreground_start: Option<Instant>,  // set when subagent starts in foregroun
 
 ### 7G: Ctrl+B Hint System
 
-**In `crates/opendev-tui/src/app/tick.rs`**, add to `handle_tick()`:
+**In `crates/kendra-tui/src/app/tick.rs`**, add to `handle_tick()`:
 
 ```rust
 // Ctrl+B hint: show after 2s of foreground subagent execution
@@ -796,7 +796,7 @@ for subagent in &mut self.state.active_subagents {
 }
 ```
 
-**In `crates/opendev-tui/src/widgets/conversation/spinner.rs`**, when rendering a spawn_subagent tool:
+**In `crates/kendra-tui/src/widgets/conversation/spinner.rs`**, when rendering a spawn_subagent tool:
 
 ```rust
 // After spinner line, if matched subagent has hint
@@ -812,7 +812,7 @@ if subagent.background_hint_shown && !subagent.backgrounded {
 
 ### 7H: Task Watcher Panel Enhancements
 
-**File**: `crates/opendev-tui/src/widgets/background_tasks.rs`
+**File**: `crates/kendra-tui/src/widgets/background_tasks.rs`
 
 #### Cell type icons
 In `render_cell()`, vary the title icon by source:
@@ -848,7 +848,7 @@ When `state.task_watcher_messages == Some(idx)`:
 
 ### 7I: Keybinding Changes
 
-In `crates/opendev-tui/src/app/key_handler.rs`, within task watcher key handling:
+In `crates/kendra-tui/src/app/key_handler.rs`, within task watcher key handling:
 
 ```rust
 KeyCode::Enter => {
@@ -892,7 +892,7 @@ Update help footer:
 
 ### 7J: Status Bar
 
-In `crates/opendev-tui/src/widgets/status_bar.rs`, extend background task display:
+In `crates/kendra-tui/src/widgets/status_bar.rs`, extend background task display:
 
 ```rust
 // Team status (when active)
@@ -921,7 +921,7 @@ if let Some(ref team) = self.team_status {
 
 ### 7L: Render Pipeline Changes
 
-In `crates/opendev-tui/src/app/render.rs`, update overlay rendering:
+In `crates/kendra-tui/src/app/render.rs`, update overlay rendering:
 
 ```rust
 // Task watcher overlay (with detail/message sub-views)
@@ -951,7 +951,7 @@ StatusBarWidget::new()
 
 ### 8A: Unit Tests (per module)
 
-#### TaskManager tests (`crates/opendev-runtime/src/task_manager/tests.rs`)
+#### TaskManager tests (`crates/kendra-runtime/src/task_manager/tests.rs`)
 ```rust
 #[test] fn test_create_task_and_retrieve()
 #[test] fn test_lifecycle_pending_running_completed()
@@ -974,7 +974,7 @@ StatusBarWidget::new()
 #[test] fn test_set_retain_blocks_eviction()
 ```
 
-#### Sidechain tests (`crates/opendev-history/src/sidechain/tests.rs`)
+#### Sidechain tests (`crates/kendra-history/src/sidechain/tests.rs`)
 ```rust
 #[test] fn test_write_and_read_entries()
 #[test] fn test_tail_returns_last_n()
@@ -987,7 +987,7 @@ StatusBarWidget::new()
 #[test] fn test_reader_nonexistent_file_error()
 ```
 
-#### Mailbox tests (`crates/opendev-runtime/src/mailbox/tests.rs`)
+#### Mailbox tests (`crates/kendra-runtime/src/mailbox/tests.rs`)
 ```rust
 #[test] fn test_send_and_receive()
 #[test] fn test_receive_marks_read()
@@ -1001,7 +1001,7 @@ StatusBarWidget::new()
 #[tokio::test] async fn test_poll_returns_on_new_message()
 ```
 
-#### TeamManager tests (`crates/opendev-runtime/src/team_manager/tests.rs`)
+#### TeamManager tests (`crates/kendra-runtime/src/team_manager/tests.rs`)
 ```rust
 #[test] fn test_create_and_get_team()
 #[test] fn test_delete_team_cleans_files()
@@ -1010,7 +1010,7 @@ StatusBarWidget::new()
 #[test] fn test_duplicate_team_name_error()
 ```
 
-#### WorktreeManager tests (`crates/opendev-runtime/src/worktree/tests.rs`)
+#### WorktreeManager tests (`crates/kendra-runtime/src/worktree/tests.rs`)
 ```rust
 #[test] fn test_create_worktree()         // needs git repo fixture
 #[test] fn test_cleanup_no_changes()      // verify worktree removed
@@ -1020,7 +1020,7 @@ StatusBarWidget::new()
 
 ### 8B: Integration Tests
 
-#### Background agent lifecycle (`crates/opendev-tools-impl/tests/background_agent.rs`)
+#### Background agent lifecycle (`crates/kendra-tools-impl/tests/background_agent.rs`)
 ```rust
 #[tokio::test]
 async fn test_background_spawn_returns_task_id() {
@@ -1056,7 +1056,7 @@ async fn test_duplicate_notification_prevention() {
 }
 ```
 
-#### Team lifecycle (`crates/opendev-tools-impl/tests/team_lifecycle.rs`)
+#### Team lifecycle (`crates/kendra-tools-impl/tests/team_lifecycle.rs`)
 ```rust
 #[tokio::test]
 async fn test_create_team_spawns_members() {
@@ -1085,7 +1085,7 @@ async fn test_shutdown_propagation() {
 }
 ```
 
-#### Sidechain resume (`crates/opendev-history/tests/sidechain_resume.rs`)
+#### Sidechain resume (`crates/kendra-history/tests/sidechain_resume.rs`)
 ```rust
 #[test]
 fn test_write_resume_cycle() {
@@ -1099,7 +1099,7 @@ fn test_write_resume_cycle() {
 
 ### 8C: TUI Unit Tests
 
-#### Event dispatch tests (`crates/opendev-tui/src/app/tests.rs`)
+#### Event dispatch tests (`crates/kendra-tui/src/app/tests.rs`)
 ```rust
 #[test]
 fn test_background_spawned_event_adds_toast() {
@@ -1195,25 +1195,25 @@ fn test_render_before_drain_includes_new_events() {
 
 ### 8D: Real Simulation Tests
 
-After `cargo build --release -p opendev-cli`:
+After `cargo build --release -p kendra-cli`:
 
 ```bash
 # Test 1: Background agent spawn
-echo "Spawn a background Explore agent to find all struct definitions in the agents crate" | opendev -p "test bg"
+echo "Spawn a background Explore agent to find all struct definitions in the agents crate" | KendraCLI -p "test bg"
 # Verify: toast appears, task watcher shows running task, completes with result
 
 # Test 2: Multiple background agents
-echo "Spawn 3 background agents in parallel: one to explore agents crate, one to explore tools crate, one to explore runtime crate" | opendev -p "test parallel bg"
+echo "Spawn 3 background agents in parallel: one to explore agents crate, one to explore tools crate, one to explore runtime crate" | KendraCLI -p "test parallel bg"
 # Verify: 3 tasks in watcher, all complete, results injected
 
 # Test 3: Ctrl+B hint
-echo "Explore the entire codebase and explain the architecture in detail" | opendev -p "test hint"
+echo "Explore the entire codebase and explain the architecture in detail" | KendraCLI -p "test hint"
 # Verify: after 2s, "Ctrl+B to background" hint appears
 # Press Ctrl+B: agent moves to background, toast appears
 # Press Ctrl+P: task watcher shows the backgrounded agent
 
 # Test 4: Team creation
-echo "Create a team with an Explore agent named researcher and a Planner agent named architect to analyze and plan a refactoring of the config system" | opendev -p "test team"
+echo "Create a team with an Explore agent named researcher and a Planner agent named architect to analyze and plan a refactoring of the config system" | KendraCLI -p "test team"
 # Verify: team toast, watcher shows 2 members, messages flow between them
 
 # Test 5: Task watcher navigation
@@ -1223,7 +1223,7 @@ echo "Create a team with an Explore agent named researcher and a Planner agent n
 # Background an agent, press x in watcher to kill, press r to restart
 
 # Test 7: Worktree isolation (if implemented)
-echo "Spawn an agent with worktree isolation to refactor a file" | opendev -p "test worktree"
+echo "Spawn an agent with worktree isolation to refactor a file" | KendraCLI -p "test worktree"
 # Verify: agent works in isolated worktree, changes don't affect main tree
 ```
 
@@ -1268,35 +1268,35 @@ echo "Spawn an agent with worktree isolation to refactor a file" | opendev -p "t
 
 | # | What | Crate | Depends on |
 |---|------|-------|-----------|
-| 1 | TaskManager + types | opendev-runtime | - |
-| 2 | Sidechain writer/reader | opendev-history | - |
-| 3 | Enhanced SubAgentSpec | opendev-agents | - |
-| 4 | TaskManager unit tests | opendev-runtime | 1 |
-| 5 | Sidechain tests | opendev-history | 2 |
-| 6 | BackgroundAgentManager → TaskManager adapter | opendev-tui | 1 |
-| 7 | Ctrl+B hint (tick + spinner) | opendev-tui | - |
-| 8 | `run_in_background` in SpawnSubagentTool | opendev-tools-impl | 1, 2, 6 (D8) |
-| 8.5 | `AgentRuntime::resume_with_messages()` | opendev-cli | - (D8) |
-| 9 | New SubagentEvent variants + bridge | opendev-tools-impl, opendev-cli | 8 |
-| 9.5 | LLM prompt templates (team-guide, subagent-guide update) | opendev-agents | - (F1-F3) |
-| 10 | New AppEvent variants + dispatch | opendev-tui | 9 |
-| 11 | Background handlers + toast + E4 skip eager display | opendev-tui | 10 |
-| 12 | Background integration tests | opendev-tools-impl | 8 |
-| 13 | Mid-execution backgrounding enhancement | opendev-cli | 1, 2, 8.5 (D8) |
-| 14 | Task watcher: detail view + enhanced footer (G2-G3) | opendev-tui | 6 |
-| 15 | Task watcher: new keybindings (C1 restart) | opendev-tui | 14 |
-| 16 | Mailbox system | opendev-runtime | - |
-| 17 | Mailbox tests | opendev-runtime | 16 |
-| 18 | TeamManager | opendev-runtime | 1, 16 |
-| 19 | Team tools (Create/Send/Delete) + prompts (F4-F5) | opendev-tools-impl | 9.5, 18 |
-| 20 | Teammate mailbox polling in react loop | opendev-agents | 16 |
-| 21 | Team events + TUI handlers (C6 permission badge) | opendev-tui | 19 |
-| 22 | Task watcher: team cells + messages + leader gold (G1) | opendev-tui | 21 |
-| 23 | Status bar team pill (D7) | opendev-tui | 21 |
-| 24 | Team integration tests | opendev-tools-impl | 19, 20 |
-| 25 | Worktree manager | opendev-runtime | 3 |
-| 26 | Worktree integration in spawn | opendev-agents | 25 |
-| 27 | Full TUI test suite | opendev-tui | all |
+| 1 | TaskManager + types | kendra-runtime | - |
+| 2 | Sidechain writer/reader | kendra-history | - |
+| 3 | Enhanced SubAgentSpec | kendra-agents | - |
+| 4 | TaskManager unit tests | kendra-runtime | 1 |
+| 5 | Sidechain tests | kendra-history | 2 |
+| 6 | BackgroundAgentManager → TaskManager adapter | kendra-tui | 1 |
+| 7 | Ctrl+B hint (tick + spinner) | kendra-tui | - |
+| 8 | `run_in_background` in SpawnSubagentTool | kendra-tools-impl | 1, 2, 6 (D8) |
+| 8.5 | `AgentRuntime::resume_with_messages()` | kendra-cli | - (D8) |
+| 9 | New SubagentEvent variants + bridge | kendra-tools-impl, kendra-cli | 8 |
+| 9.5 | LLM prompt templates (team-guide, subagent-guide update) | kendra-agents | - (F1-F3) |
+| 10 | New AppEvent variants + dispatch | kendra-tui | 9 |
+| 11 | Background handlers + toast + E4 skip eager display | kendra-tui | 10 |
+| 12 | Background integration tests | kendra-tools-impl | 8 |
+| 13 | Mid-execution backgrounding enhancement | kendra-cli | 1, 2, 8.5 (D8) |
+| 14 | Task watcher: detail view + enhanced footer (G2-G3) | kendra-tui | 6 |
+| 15 | Task watcher: new keybindings (C1 restart) | kendra-tui | 14 |
+| 16 | Mailbox system | kendra-runtime | - |
+| 17 | Mailbox tests | kendra-runtime | 16 |
+| 18 | TeamManager | kendra-runtime | 1, 16 |
+| 19 | Team tools (Create/Send/Delete) + prompts (F4-F5) | kendra-tools-impl | 9.5, 18 |
+| 20 | Teammate mailbox polling in react loop | kendra-agents | 16 |
+| 21 | Team events + TUI handlers (C6 permission badge) | kendra-tui | 19 |
+| 22 | Task watcher: team cells + messages + leader gold (G1) | kendra-tui | 21 |
+| 23 | Status bar team pill (D7) | kendra-tui | 21 |
+| 24 | Team integration tests | kendra-tools-impl | 19, 20 |
+| 25 | Worktree manager | kendra-runtime | 3 |
+| 26 | Worktree integration in spawn | kendra-agents | 25 |
+| 27 | Full TUI test suite | kendra-tui | all |
 | 28 | Real simulation tests | all | all |
 | 29 | `cargo test && clippy && build` | all | all |
 
@@ -1314,7 +1314,7 @@ These gaps were discovered by auditing Claude Code's implementation against the 
 
 Claude Code auto-backgrounds foreground agents after **120 seconds** (env-gated via `CLAUDE_AUTO_BACKGROUND_TASKS`).
 
-**Add to OpenDev**: Optional config `auto_background_timeout_secs: Option<u64>` in opendev config.
+**Add to KendraCLI**: Optional config `auto_background_timeout_secs: Option<u64>` in KendraCLI config.
 
 **Implementation in `tick.rs`**:
 ```rust
@@ -1375,7 +1375,7 @@ pub last_activity: Option<ToolActivity>,
 
 When `SendMessage` targets a completed agent, Claude Code **auto-resumes** it. The plan mentions resume vaguely.
 
-**Exact resume flow for OpenDev**:
+**Exact resume flow for KendraCLI**:
 1. `SendMessageTool` checks `TaskManager.get(recipient_task_id)` state
 2. If `state == Completed || state == Failed`:
    a. Open `SidechainReader` for the agent
@@ -1596,13 +1596,13 @@ The audit confirmed these already exist and should be **reused, not recreated**:
 | `SubagentEvent` enum | `tools-impl/agents/events.rs` | Extend with new variants |
 | `ChannelReceivers` struct | `runtime/mod.rs:84-90` | Extend with team event channel |
 | `ToolRegistry::register()` | `tools-core/registry/mod.rs` | Use for new team tools |
-| Config extensibility | `opendev-models/config/mod.rs` | Add `auto_background_timeout_secs` |
+| Config extensibility | `kendra-models/config/mod.rs` | Add `auto_background_timeout_secs` |
 
 ### B3: `resume_with_messages()` Doesn't Exist — Implementation Detail
 
 The plan mentions `runtime.resume_with_messages()` for Ctrl+B mid-execution re-spawn. This method doesn't exist yet.
 
-**Implementation approach**: Create it in `crates/opendev-cli/src/runtime/query.rs`:
+**Implementation approach**: Create it in `crates/kendra-cli/src/runtime/query.rs`:
 
 ```rust
 /// Resume an agent from existing message history (for backgrounded agents).
@@ -1639,7 +1639,7 @@ pub async fn resume_with_messages(
 
 Team tools (`CreateTeamTool`, `SendMessageTool`, `DeleteTeamTool`) need `Arc<TaskManager>` and `Arc<TeamManager>`, which are late-binding (created after `ToolRegistry`).
 
-**Register them in the same place as `SpawnSubagentTool`** — in `AgentRuntime::new()` at `crates/opendev-cli/src/runtime/mod.rs:360-396`:
+**Register them in the same place as `SpawnSubagentTool`** — in `AgentRuntime::new()` at `crates/kendra-cli/src/runtime/mod.rs:360-396`:
 
 ```rust
 // After SpawnSubagentTool registration (line ~396):
@@ -1660,20 +1660,20 @@ if let Some(ref tm) = self.task_manager {
 
 ### B5: Team Event Channel Extension
 
-Add to `ToolChannelReceivers` in `crates/opendev-cli/src/runtime/mod.rs`:
+Add to `ToolChannelReceivers` in `crates/kendra-cli/src/runtime/mod.rs`:
 
 ```rust
 pub struct ToolChannelReceivers {
-    pub ask_user_rx: opendev_runtime::AskUserReceiver,
-    pub plan_approval_rx: opendev_runtime::PlanApprovalReceiver,
-    pub tool_approval_rx: opendev_runtime::ToolApprovalReceiver,
+    pub ask_user_rx: KendraCLI_runtime::AskUserReceiver,
+    pub plan_approval_rx: KendraCLI_runtime::PlanApprovalReceiver,
+    pub tool_approval_rx: KendraCLI_runtime::ToolApprovalReceiver,
     pub subagent_event_rx: Option<mpsc::UnboundedReceiver<SubagentEvent>>,
     // NEW:
     pub team_event_rx: Option<mpsc::UnboundedReceiver<TeamEvent>>,
 }
 ```
 
-Create `TeamEvent` enum in `crates/opendev-tools-impl/src/agents/events.rs`:
+Create `TeamEvent` enum in `crates/kendra-tools-impl/src/agents/events.rs`:
 
 ```rust
 #[derive(Debug, Clone)]
@@ -1857,7 +1857,7 @@ fn try_restart_task(&mut self, focus_idx: usize) {
 
 When user sends a message while a background result is being processed:
 
-**OpenDev current behavior** (verified):
+**KendraCLI current behavior** (verified):
 - `drain_next_pending()` sets `agent_active = true` before sending sentinel
 - While `agent_active = true`, user's Enter key still calls `handle_user_submit()` which pushes to `pending_queue` as `PendingItem::UserMessage`
 - When background result processing finishes → `AgentFinished` → `drain_next_pending()` picks up user message next
@@ -1943,9 +1943,9 @@ let title = if let Some((name, _)) = agent_badge {
 };
 ```
 
-### C7: Notification Format for OpenDev
+### C7: Notification Format for KendraCLI
 
-Claude Code uses XML notifications. For OpenDev, we use the existing `\x00__BG_RESULT__` sentinel format (JSON). No XML needed — the sentinel is already implemented and working.
+Claude Code uses XML notifications. For KendraCLI, we use the existing `\x00__BG_RESULT__` sentinel format (JSON). No XML needed — the sentinel is already implemented and working.
 
 **But we should enrich the payload** to match Claude Code's information density:
 
@@ -2053,7 +2053,7 @@ bg_agent_running (from bg_agent_manager.running_count())
 
 ### D2: Config Flows via AgentRuntime, NOT AppState
 
-`auto_background_timeout_secs` lives in `AppConfig` (opendev-models), accessed via `AgentRuntime.config`. But the TUI's `handle_tick()` runs on `App`, which doesn't have direct config access.
+`auto_background_timeout_secs` lives in `AppConfig` (kendra-models), accessed via `AgentRuntime.config`. But the TUI's `handle_tick()` runs on `App`, which doesn't have direct config access.
 
 **Solution**: Pass the timeout value to AppState during initialization:
 
@@ -2067,7 +2067,7 @@ app.state.auto_background_timeout_secs = self.runtime.config.auto_background_tim
 pub auto_background_timeout_secs: Option<u64>,  // None = disabled
 ```
 
-**Add to AppConfig** (opendev-models/src/config/mod.rs):
+**Add to AppConfig** (kendra-models/src/config/mod.rs):
 ```rust
 #[serde(default)]
 pub auto_background_timeout_secs: Option<u64>,  // None = disabled, Some(120) = 2 min
@@ -2109,7 +2109,7 @@ Team events follow the exact same pattern as subagent events (verified in `runti
 ```rust
 // In runtime/mod.rs, after subagent channel creation:
 let (team_event_tx, team_event_rx) =
-    tokio::sync::mpsc::unbounded_channel::<opendev_tools_impl::TeamEvent>();
+    tokio::sync::mpsc::unbounded_channel::<KendraCLI_tools_impl::TeamEvent>();
 
 // Pass sender to team tools:
 registry.register(Arc::new(CreateTeamTool::new(...).with_event_sender(team_event_tx.clone())));
@@ -2276,7 +2276,7 @@ The LLM learns tool behavior from **two sources**: JSON schemas (what tools exis
 
 **New prompt templates to create**:
 
-#### `crates/opendev-agents/templates/system/main/main-team-guide.md`
+#### `crates/kendra-agents/templates/system/main/main-team-guide.md`
 ```markdown
 ## Agent Teams
 
@@ -2306,7 +2306,7 @@ To analyze a large codebase, create a team:
 Members communicate findings via send_message. You receive their results when they complete.
 ```
 
-#### Update `crates/opendev-agents/templates/system/main/main-subagent-guide.md`
+#### Update `crates/kendra-agents/templates/system/main/main-subagent-guide.md`
 Add this section:
 ```markdown
 ### Background Agents
@@ -2323,7 +2323,7 @@ Example: spawn 3 background Explore agents to analyze different parts of the cod
 simultaneously, then process their results as they come in.
 ```
 
-#### Update `crates/opendev-agents/templates/system/main/main-available-tools.md`
+#### Update `crates/kendra-agents/templates/system/main/main-available-tools.md`
 Add to the tool categories list:
 ```markdown
 - **Teams**: create_team, send_message, delete_team
@@ -2374,7 +2374,7 @@ fn description(&self) -> &str {
 
 System prompt sections are loaded via `PromptComposer` with priority ordering. The new team guide needs to be registered:
 
-**In `crates/opendev-agents/src/prompts/composer/factories.rs`**:
+**In `crates/kendra-agents/src/prompts/composer/factories.rs`**:
 ```rust
 // After the subagent guide section (~priority 45):
 sections.push(PromptSection {
@@ -2523,7 +2523,11 @@ cargo test --workspace --lib --tests
 cargo clippy --workspace -- -D warnings
 cargo check --workspace
 cargo fmt --all
-cargo build --release -p opendev-cli
-echo "hello" | opendev -p "hello"
+cargo build --release -p kendra-cli
+echo "hello" | KendraCLI -p "hello"
 cargo clean --profile dev
 ```
+
+
+
+

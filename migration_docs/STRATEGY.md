@@ -3,7 +3,7 @@
 ## Goals
 
 1. **Performance**: Eliminate Python GIL bottleneck, achieve native-speed token counting, file I/O, JSON serialization, and HTTP request handling
-2. **Single binary distribution**: Ship a single `opendev` binary with no Python runtime dependency
+2. **Single binary distribution**: Ship a single `KendraCLI` binary with no Python runtime dependency
 3. **Memory safety**: Leverage Rust's ownership model to eliminate runtime crashes from null references, data races, and memory leaks
 4. **Type safety**: Replace runtime Pydantic validation with compile-time type checking
 5. **Startup time**: Sub-100ms cold start vs current ~2-3s Python import chain
@@ -60,31 +60,31 @@ CLI Entry (cli/main.py)
 ## Target Architecture (Rust)
 
 ```
-opendev-cli (binary crate, clap)
+kendra-cli (binary crate, clap)
     │
-    ├── opendev-tui ──────── ratatui + crossterm
-    ├── opendev-web ──────── axum + WebSocket + tower-http
+    ├── kendra-tui ──────── ratatui + crossterm
+    ├── kendra-web ──────── axum + WebSocket + tower-http
     │
-    ├── opendev-repl ─────── command processing
+    ├── kendra-repl ─────── command processing
     │
-    ├── opendev-agents ───── ReAct loop + subagents
-    │   └── uses: opendev-http, opendev-tools-core, opendev-context
+    ├── kendra-agents ───── ReAct loop + subagents
+    │   └── uses: kendra-http, kendra-tools-core, kendra-context
     │
-    ├── opendev-tools-core ── BaseTool trait, registry
-    ├── opendev-tools-impl ── 40+ tool implementations
-    ├── opendev-tools-lsp ─── LSP client + 39 language servers
-    ├── opendev-tools-symbol ─ AST-based symbol operations
+    ├── kendra-tools-core ── BaseTool trait, registry
+    ├── kendra-tools-impl ── 40+ tool implementations
+    ├── kendra-tools-lsp ─── LSP client + 39 language servers
+    ├── kendra-tools-symbol ─ AST-based symbol operations
     │
-    ├── opendev-mcp ──────── MCP client (stdio/SSE/HTTP)
-    ├── opendev-channels ─── multi-channel router
+    ├── kendra-mcp ──────── MCP client (stdio/SSE/HTTP)
+    ├── kendra-channels ─── multi-channel router
     │
-    ├── opendev-context ──── compaction, validated message list
-    ├── opendev-history ──── session persistence, file locks
-    ├── opendev-memory ───── ACE playbook, embeddings
+    ├── kendra-context ──── compaction, validated message list
+    ├── kendra-history ──── session persistence, file locks
+    ├── kendra-memory ───── ACE playbook, embeddings
     │
-    ├── opendev-http ─────── reqwest client, auth rotation
-    ├── opendev-config ───── hierarchical config loading
-    └── opendev-models ───── serde data models (foundation)
+    ├── kendra-http ─────── reqwest client, auth rotation
+    ├── kendra-config ───── hierarchical config loading
+    └── kendra-models ───── serde data models (foundation)
 ```
 
 ## Risk Assessment
@@ -113,8 +113,12 @@ Phase is complete when:
 4. Performance is equal to or better than Python
 
 Full migration is complete when:
-1. `opendev-cli` binary runs all features without Python runtime
+1. `kendra-cli` binary runs all features without Python runtime
 2. React frontend works unchanged against Rust web backend
 3. All existing session files load correctly
 4. All 40+ tools work correctly
 5. MCP and LSP integrations function
+
+
+
+

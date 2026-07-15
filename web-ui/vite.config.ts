@@ -29,7 +29,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../opendev/web/static',
+    outDir: '../kendra/web/static',
     emptyOutDir: true,
   },
 })

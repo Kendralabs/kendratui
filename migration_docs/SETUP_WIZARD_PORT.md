@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Rust setup wizard (`opendev-rust/crates/opendev-cli/src/setup/`) is currently a bare-bones `println!`-based CLI with numbered menus. The Python version (`opendev/setup/`) has a rich interactive experience with railway/clack-style rendering, arrow-key navigation, search filtering, and a 9-step multi-slot model configuration flow. This document describes the plan to port the full Python wizard to Rust.
+The Rust setup wizard (`kendra-rust/crates/kendra-cli/src/setup/`) is currently a bare-bones `println!`-based CLI with numbered menus. The Python version (`KendraCLI/setup/`) has a rich interactive experience with railway/clack-style rendering, arrow-key navigation, search filtering, and a 9-step multi-slot model configuration flow. This document describes the plan to port the full Python wizard to Rust.
 
 ## Current State
 
@@ -10,7 +10,7 @@ The Rust setup wizard (`opendev-rust/crates/opendev-cli/src/setup/`) is currentl
 - `wizard.py` — 9-step wizard flow: intro → provider → key → validate → model → thinking slot → critique slot → vision slot → compact slot → summary + save
 - `wizard_ui.py` — Rail rendering primitives (`rail_intro`, `rail_step`, `rail_info_box`, `rail_confirm`, `rail_prompt`, `rail_summary_box`, etc.) using Rich console markup
 - `interactive_menu.py` — `InteractiveMenu` class with arrow-key navigation, `/` search, scroll window, `❯` pointer, blue highlight on active row
-- `providers.py` — Dynamic provider/model lookup via `ModelRegistry` (loaded from `~/.opendev/cache/providers/*.json`)
+- `providers.py` — Dynamic provider/model lookup via `ModelRegistry` (loaded from `~/.kendra/cache/providers/*.json`)
 
 ### Rust (current, to be rewritten)
 - `mod.rs` — 5-step wizard (no thinking/critique/vision/compact slots), uses `println!` + numbered selection (`read_selection`)
@@ -20,17 +20,17 @@ The Rust setup wizard (`opendev-rust/crates/opendev-cli/src/setup/`) is currentl
 
 | Action | Path | Description |
 |--------|------|-------------|
-| Edit | `opendev-rust/crates/opendev-cli/Cargo.toml` | Add `crossterm = { workspace = true }` dep |
-| New | `opendev-rust/crates/opendev-cli/src/setup/rail_ui.rs` | Rail rendering primitives |
-| New | `opendev-rust/crates/opendev-cli/src/setup/interactive_menu.rs` | Arrow-key interactive menu |
-| Rewrite | `opendev-rust/crates/opendev-cli/src/setup/providers.rs` | Use `ModelRegistry` instead of hardcoded list |
-| Rewrite | `opendev-rust/crates/opendev-cli/src/setup/mod.rs` | Full 9-step wizard flow |
+| Edit | `kendra-rust/crates/kendra-cli/Cargo.toml` | Add `crossterm = { workspace = true }` dep |
+| New | `kendra-rust/crates/kendra-cli/src/setup/rail_ui.rs` | Rail rendering primitives |
+| New | `kendra-rust/crates/kendra-cli/src/setup/interactive_menu.rs` | Arrow-key interactive menu |
+| Rewrite | `kendra-rust/crates/kendra-cli/src/setup/providers.rs` | Use `ModelRegistry` instead of hardcoded list |
+| Rewrite | `kendra-rust/crates/kendra-cli/src/setup/mod.rs` | Full 9-step wizard flow |
 
 ## Step-by-Step Plan
 
 ### Step 1: Add crossterm dependency
 
-Add `crossterm = { workspace = true }` to `opendev-cli/Cargo.toml` under `[dependencies]`. Already in workspace `Cargo.toml` as `crossterm = { version = "0.28", features = ["event-stream"] }`.
+Add `crossterm = { workspace = true }` to `kendra-cli/Cargo.toml` under `[dependencies]`. Already in workspace `Cargo.toml` as `crossterm = { version = "0.28", features = ["event-stream"] }`.
 
 ### Step 2: Create `rail_ui.rs` — Rail rendering primitives
 
@@ -111,7 +111,7 @@ fn all_providers() -> Vec<ProviderConfig> { vec![...hardcoded...] }
 
 New approach:
 ```rust
-use opendev_config::{ModelRegistry, Paths};
+use KendraCLI_config::{ModelRegistry, Paths};
 
 impl ProviderSetup {
     pub fn provider_choices() -> Vec<(String, String, String)> {
@@ -155,7 +155,7 @@ Port the complete `wizard.py` flow. The current Rust wizard has 5 steps; the Pyt
 
 #### Flow (matching Python exactly):
 
-1. **Intro** — `rail_intro("Welcome to OpenDev!", [...])`
+1. **Intro** — `rail_intro("Welcome to KendraCLI!", [...])`
 2. **Step 1: Select Provider** — `select_provider()` using `InteractiveMenu`
 3. **Step 2: API Key** — `get_api_key()` with env detection + `rail_prompt(password=true)`
 4. **Step 3: Validate** — `rail_confirm("Validate API key?")` → `validate_api_key()`
@@ -213,15 +213,19 @@ pub mod interactive_menu;
 
 ## Verification Plan
 
-1. `cargo build --release -p opendev-cli` — must compile cleanly
-2. `rm -rf ~/.opendev && opendev` — should launch rail-style wizard with interactive menus
+1. `cargo build --release -p kendra-cli` — must compile cleanly
+2. `rm -rf ~/.kendra && KendraCLI` — should launch rail-style wizard with interactive menus
 3. Walk through all 9 steps — verify each slot menu works, search filters, arrow keys navigate
 4. Verify summary shows correct "same as Normal/Thinking" labels
 5. Confirm save writes correct `settings.json` with all slot fields
-6. `cargo test -p opendev-cli` — all existing + new tests pass
+6. `cargo test -p kendra-cli` — all existing + new tests pass
 
 ## Dependencies
 
 - `crossterm` — already in workspace (`version = "0.28", features = ["event-stream"]`)
-- `opendev-config` — already a dependency of `opendev-cli` (provides `ModelRegistry`, `Paths`)
-- `opendev-models` — already a dependency (provides `AppConfig`)
+- `kendra-config` — already a dependency of `kendra-cli` (provides `ModelRegistry`, `Paths`)
+- `kendra-models` — already a dependency (provides `AppConfig`)
+
+
+
+

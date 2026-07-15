@@ -2,9 +2,9 @@
 
 ## Overview
 
-The TUI layer was rewritten from Python's Textual framework (event-driven, CSS-styled, retained widget tree) to Rust's ratatui (immediate-mode, constraint-based, stateless render functions). The Python implementation comprised ~32K LOC across 90+ files in `opendev/ui_textual/`; the Rust replacement is ~11K LOC across 35 files in `crates/opendev-tui/src/`. This 3:1 compression is the result of eliminating Textual's widget lifecycle overhead, collapsing CSS-driven layout into inline constraint expressions, and replacing the callback-based agent bridge with a typed `AppEvent` enum delivered over `tokio::mpsc` channels.
+The TUI layer was rewritten from Python's Textual framework (event-driven, CSS-styled, retained widget tree) to Rust's ratatui (immediate-mode, constraint-based, stateless render functions). The Python implementation comprised ~32K LOC across 90+ files in `KendraCLI/ui_textual/`; the Rust replacement is ~11K LOC across 35 files in `crates/kendra-tui/src/`. This 3:1 compression is the result of eliminating Textual's widget lifecycle overhead, collapsing CSS-driven layout into inline constraint expressions, and replacing the callback-based agent bridge with a typed `AppEvent` enum delivered over `tokio::mpsc` channels.
 
-Within the overall architecture, `opendev-tui` is the terminal frontend. It consumes events produced by the agent runtime (`opendev-agents`, `opendev-runtime`) and renders them to the terminal via `crossterm` + `ratatui`. The binary entrypoint (`opendev-cli`) wires the TUI to the runtime by sharing an `mpsc::UnboundedSender<AppEvent>` that the agent loop uses to push events into the UI.
+Within the overall architecture, `kendra-tui` is the terminal frontend. It consumes events produced by the agent runtime (`kendra-agents`, `kendra-runtime`) and renders them to the terminal via `crossterm` + `ratatui`. The binary entrypoint (`kendra-cli`) wires the TUI to the runtime by sharing an `mpsc::UnboundedSender<AppEvent>` that the agent loop uses to push events into the UI.
 
 ## Python Architecture
 
@@ -146,7 +146,7 @@ formatters/
 | `StatusBar(Static)` | `StatusBarWidget<'a>` | Reactive Rich Text -> immediate Span construction | Same visual output, no `reactive` machinery |
 | `UICallbackProtocol` (30 methods) | `AppEvent` enum (37 variants) | Trait-based callbacks -> typed enum dispatch | Compiler-enforced exhaustive matching |
 | `BridgeUICallback` | `mpsc::UnboundedSender<AppEvent>` | Dual-forwarding callback object -> channel clone | Web UI gets its own channel subscriber |
-| `TextualRunner` | `opendev-cli` main + `App::with_message_channel()` | Orchestrator class -> channel wiring at startup | No more `call_from_thread` marshaling |
+| `TextualRunner` | `kendra-cli` main + `App::with_message_channel()` | Orchestrator class -> channel wiring at startup | No more `call_from_thread` marshaling |
 | `BlockRegistry` + `ContentBlock` | Not needed | Resize reflow bookkeeping eliminated | Immediate-mode re-renders everything each frame |
 | `DefaultScrollController` | `AppState::scroll_offset` + `user_scrolled` | Object with timer callbacks -> two fields | Scroll logic in `handle_key()` match arms |
 | `DefaultSpinnerManager` | `SpinnerState` + `SpinnerController` | Timer-driven animation -> tick-driven frame counter | `Tick` event advances frame every 80ms |
@@ -209,7 +209,7 @@ Colors are constants in `style_tokens.rs`. Conditional visibility is a Rust `if`
 
 **Textual**: The bridge is a `UICallbackProtocol` with ~30 methods (`on_thinking_start`, `on_tool_call`, `on_assistant_message`, etc.). `BridgeUICallback` implements this protocol and forwards to both the TUI callback and an optional web callback. Agent code runs on background threads and must use `call_from_thread()` to marshal updates onto the Textual event loop. The `TextualRunner` class (in `runner.py`) orchestrates the agent lifecycle, history hydration, console bridging, and MCP auto-connect.
 
-**Ratatui**: The bridge is an `mpsc::UnboundedSender<AppEvent>`. The agent runtime sends typed events (`AppEvent::ToolStarted { tool_id, tool_name }`, `AppEvent::AgentChunk(text)`, etc.) directly into the channel. The `EventHandler` merges these with terminal events using `tokio::select!`. No thread marshaling is needed because both the agent and the TUI run on the same tokio runtime. The web UI (in `opendev-web`) subscribes to the same event stream via a broadcast channel.
+**Ratatui**: The bridge is an `mpsc::UnboundedSender<AppEvent>`. The agent runtime sends typed events (`AppEvent::ToolStarted { tool_id, tool_name }`, `AppEvent::AgentChunk(text)`, etc.) directly into the channel. The `EventHandler` merges these with terminal events using `tokio::select!`. No thread marshaling is needed because both the agent and the TUI run on the same tokio runtime. The web UI (in `kendra-web`) subscribes to the same event stream via a broadcast channel.
 
 ## Key Design Decisions
 
@@ -344,9 +344,13 @@ fn render(&self, frame: &mut ratatui::Frame) {
 
 ## References
 
-- Python source: `/Users/nghibui/codes/opendev-py/opendev/ui_textual/`
-- Rust source: `/Users/nghibui/codes/opendev/crates/opendev-tui/src/`
+- Python source: `/Users/nghibui/codes/kendra-py/kendra/ui_textual/`
+- Rust source: `/Users/nghibui/codes/kendra/crates/kendra-tui/src/`
 - Textual framework: https://textual.textualize.io/
 - Ratatui framework: https://ratatui.rs/
 - crossterm terminal backend: https://docs.rs/crossterm/
-- Related migration docs: `/Users/nghibui/codes/opendev/migration_docs/`
+- Related migration docs: `/Users/nghibui/codes/kendra/migration_docs/`
+
+
+
+

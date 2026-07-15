@@ -8,9 +8,9 @@
 
 use std::fs::{self, OpenOptions};
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use std::io::Write;
 
 use serde::{Deserialize, Serialize};
 use tracing::warn;

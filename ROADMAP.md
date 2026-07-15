@@ -1,6 +1,6 @@
-# OpenDev Roadmap
+# kendra Roadmap
 
-This document outlines OpenDev's development priorities. Features are grouped by maturity and projected timeline. Contributions and feedback are welcome — open an issue to discuss anything here.
+This document outlines kendra's development priorities. Features are grouped by maturity and projected timeline. Contributions and feedback are welcome — open an issue to discuss anything here.
 
 ---
 
@@ -29,8 +29,8 @@ This document outlines OpenDev's development priorities. Features are grouped by
 
 - **Remote Web UI Sessions**: Deploy the Web UI as a remote server, enabling mobile access and async task execution
 - **Proactive Agent Loop**: Background execution where the agent continues working autonomously between user prompts
-- **Telegram Integration**: Chat with your OpenDev agent via Telegram bot (adapter skeleton in place)
-- **WhatsApp Integration**: Interact with OpenDev via WhatsApp Business API (adapter skeleton in place)
+- **Telegram Integration**: Chat with your kendra agent via Telegram bot (adapter skeleton in place)
+- **WhatsApp Integration**: Interact with kendra via WhatsApp Business API (adapter skeleton in place)
 - **Enhanced Docker Sandboxing**: Improved isolation for untrusted code execution
 
 ---
@@ -43,7 +43,7 @@ This document outlines OpenDev's development priorities. Features are grouped by
 - **CI/CD Awareness**: Read pipeline status, fix failing builds, suggest deployment steps
 
 ### Medium-Term
-- **Slack / Discord Integration**: Bring OpenDev into team channels, trigger tasks and receive updates
+- **Slack / Discord Integration**: Bring kendra into team channels, trigger tasks and receive updates
 - **Email Channel**: Send coding tasks via email, receive diffs and summaries back
 - **iMessage / Signal Integration**: Personal messaging channels for mobile-first async workflows
 - **Multi-Repo Support**: Work across multiple repositories in a single session
@@ -60,4 +60,5 @@ This document outlines OpenDev's development priorities. Features are grouped by
 
 ## 💡 Community Ideas
 
-Have a feature request? [Open an issue](https://github.com/opendev-to/opendev/issues) and let's discuss.
+Have a feature request? [Open an issue](https://github.com/kendra-to/kendra/issues) and let's discuss.
+

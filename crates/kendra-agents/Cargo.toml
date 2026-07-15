@@ -1,0 +1,38 @@
+[package]
+name = "kendra-agents"
+description = "Agent layer with ReAct loop, prompt composition, and subagents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kendra-models = { workspace = true }
+kendra-config = { workspace = true }
+kendra-http = { workspace = true }
+kendra-tools-core = { workspace = true }
+kendra-context = { workspace = true }
+kendra-runtime = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+futures = { workspace = true }
+kendra-hooks = { workspace = true }
+dirs = "6"
+reqwest = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "macros"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "agent_bench"
+harness = false
+

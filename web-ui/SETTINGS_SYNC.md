@@ -4,8 +4,8 @@
 
 Both the Web UI and Terminal CLI use **the same configuration files** as the single source of truth:
 
-- `~/.opendev/settings.json` (global settings)
-- `.opendev/settings.json` (project-specific settings)
+- `~/.kendra/settings.json` (global settings)
+- `.kendra/settings.json` (project-specific settings)
 
 This ensures automatic synchronization without needing special sync logic.
 
@@ -78,3 +78,4 @@ Future settings to add:
 - **Conflict resolution**: Handle simultaneous changes from both UIs
 - **Change history**: Track who changed what and when
 - **Validation**: Prevent invalid configurations from being saved
+

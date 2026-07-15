@@ -2,11 +2,11 @@
 
 ## Overview
 
-The Python-to-Rust migration of OpenDev is substantially complete. All 7 phases defined in PHASES.md have been executed, producing 20 Rust crates (79,652 LOC) from the original Python codebase (117,928 LOC across 548 files). The Rust workspace compiles cleanly, passes 1,856 tests, and ships a single ~3.7 MB release binary. Core feature parity is achieved across the CLI, TUI, web backend, agent system, tool framework, context engineering, memory, MCP, hooks, plugins, and Docker subsystems. The remaining gaps are minor: a handful of Python channel adapters (Telegram, WhatsApp) are intentionally deferred, the LSP server catalog is consolidated from 35 individual files to 21 inline configs, and some Python-specific UI screens (Textual modals) were replaced with ratatui equivalents rather than 1:1 ports.
+The Python-to-Rust migration of KendraCLI is substantially complete. All 7 phases defined in PHASES.md have been executed, producing 20 Rust crates (79,652 LOC) from the original Python codebase (117,928 LOC across 548 files). The Rust workspace compiles cleanly, passes 1,856 tests, and ships a single ~3.7 MB release binary. Core feature parity is achieved across the CLI, TUI, web backend, agent system, tool framework, context engineering, memory, MCP, hooks, plugins, and Docker subsystems. The remaining gaps are minor: a handful of Python channel adapters (Telegram, WhatsApp) are intentionally deferred, the LSP server catalog is consolidated from 35 individual files to 21 inline configs, and some Python-specific UI screens (Textual modals) were replaced with ratatui equivalents rather than 1:1 ports.
 
 ## Python Architecture
 
-The Python codebase (`opendev-py/opendev/`) is organized into 10 top-level packages:
+The Python codebase (`kendra-py/kendra/`) is organized into 10 top-level packages:
 
 | Package | Files | LOC | Purpose |
 |---------|-------|-----|---------|
@@ -35,27 +35,27 @@ The Rust workspace (`crates/`) contains 20 crates plus 1 binary entry point:
 
 | Crate | Files | LOC | Maps to Python |
 |-------|-------|-----|----------------|
-| `opendev-cli` | 7 | 3,171 | `cli/` + `setup/` |
-| `opendev-tui` | 49 | 11,041 | `ui_textual/` |
-| `opendev-web` | 14 | 5,351 | `web/` |
-| `opendev-repl` | 15 | 3,855 | `repl/` |
-| `opendev-agents` | 18 | 7,528 | `core/agents/` |
-| `opendev-runtime` | 19 | 6,161 | `core/runtime/` + `core/events/` + `core/utils/` |
-| `opendev-config` | 5 | 1,813 | `config/` + `core/paths.py` |
-| `opendev-models` | 11 | 2,513 | `models/` |
-| `opendev-http` | 11 | 2,907 | `core/agents/components/api/` + `core/auth/` |
-| `opendev-context` | 10 | 3,227 | `core/context_engineering/` (compaction, picker, retrieval) |
-| `opendev-history` | 7 | 1,877 | `core/context_engineering/history/` |
-| `opendev-memory` | 9 | 3,329 | `core/context_engineering/memory/` |
-| `opendev-tools-core` | 7 | 1,914 | `core/context_engineering/tools/` (registry, policy, sanitizer) |
-| `opendev-tools-impl` | 31 | 12,713 | `core/context_engineering/tools/implementations/` + `handlers/` |
-| `opendev-tools-lsp` | 9 | 2,252 | `core/context_engineering/tools/lsp/` |
-| `opendev-tools-symbol` | 7 | 1,207 | `core/context_engineering/tools/symbol_tools/` |
-| `opendev-mcp` | 7 | 2,556 | `core/context_engineering/mcp/` |
-| `opendev-channels` | 3 | 516 | `core/channels/` |
-| `opendev-hooks` | 5 | 1,704 | `core/hooks/` |
-| `opendev-plugins` | 5 | 1,882 | `core/plugins/` |
-| `opendev-docker` | 8 | 2,135 | `core/docker/` |
+| `kendra-cli` | 7 | 3,171 | `cli/` + `setup/` |
+| `kendra-tui` | 49 | 11,041 | `ui_textual/` |
+| `kendra-web` | 14 | 5,351 | `web/` |
+| `kendra-repl` | 15 | 3,855 | `repl/` |
+| `kendra-agents` | 18 | 7,528 | `core/agents/` |
+| `kendra-runtime` | 19 | 6,161 | `core/runtime/` + `core/events/` + `core/utils/` |
+| `kendra-config` | 5 | 1,813 | `config/` + `core/paths.py` |
+| `kendra-models` | 11 | 2,513 | `models/` |
+| `kendra-http` | 11 | 2,907 | `core/agents/components/api/` + `core/auth/` |
+| `kendra-context` | 10 | 3,227 | `core/context_engineering/` (compaction, picker, retrieval) |
+| `kendra-history` | 7 | 1,877 | `core/context_engineering/history/` |
+| `kendra-memory` | 9 | 3,329 | `core/context_engineering/memory/` |
+| `kendra-tools-core` | 7 | 1,914 | `core/context_engineering/tools/` (registry, policy, sanitizer) |
+| `kendra-tools-impl` | 31 | 12,713 | `core/context_engineering/tools/implementations/` + `handlers/` |
+| `kendra-tools-lsp` | 9 | 2,252 | `core/context_engineering/tools/lsp/` |
+| `kendra-tools-symbol` | 7 | 1,207 | `core/context_engineering/tools/symbol_tools/` |
+| `kendra-mcp` | 7 | 2,556 | `core/context_engineering/mcp/` |
+| `kendra-channels` | 3 | 516 | `core/channels/` |
+| `kendra-hooks` | 5 | 1,704 | `core/hooks/` |
+| `kendra-plugins` | 5 | 1,882 | `core/plugins/` |
+| `kendra-docker` | 8 | 2,135 | `core/docker/` |
 | **Total** | **257** | **79,652** | |
 
 ## Migration Mapping
@@ -64,79 +64,79 @@ The Rust workspace (`crates/`) contains 20 crates plus 1 binary entry point:
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `cli/main.py` (click CLI) | `opendev-cli/src/main.rs` (clap) | Done | Full argument parity |
-| `cli/config_commands.py` | `opendev-cli/src/main.rs` | Done | Integrated into clap subcommands |
-| `cli/mcp_commands.py` | `opendev-cli/src/main.rs` | Done | Integrated into clap subcommands |
-| `cli/run_commands.py` | `opendev-cli/src/main.rs` | Done | `run` / `plan` / `resume` subcommands |
-| `cli/non_interactive.py` | `opendev-cli/src/main.rs` | Done | Piped stdin / `-p` prompt mode |
-| `setup/wizard.py` | `opendev-cli/src/setup/mod.rs` | Done | Interactive setup wizard |
-| `setup/providers.py` | `opendev-cli/src/setup/providers.rs` | Done | Provider detection and validation |
-| `setup/interactive_menu.py` | `opendev-cli/src/setup/interactive_menu.rs` | Done | Rail-style menu UI |
-| `setup/wizard_ui.py` | `opendev-cli/src/setup/rail_ui.rs` | Done | Renamed to rail_ui |
-| `setup/validator.py` | `opendev-cli/src/setup/providers.rs` | Done | Merged into providers |
+| `cli/main.py` (click CLI) | `kendra-cli/src/main.rs` (clap) | Done | Full argument parity |
+| `cli/config_commands.py` | `kendra-cli/src/main.rs` | Done | Integrated into clap subcommands |
+| `cli/mcp_commands.py` | `kendra-cli/src/main.rs` | Done | Integrated into clap subcommands |
+| `cli/run_commands.py` | `kendra-cli/src/main.rs` | Done | `run` / `plan` / `resume` subcommands |
+| `cli/non_interactive.py` | `kendra-cli/src/main.rs` | Done | Piped stdin / `-p` prompt mode |
+| `setup/wizard.py` | `kendra-cli/src/setup/mod.rs` | Done | Interactive setup wizard |
+| `setup/providers.py` | `kendra-cli/src/setup/providers.rs` | Done | Provider detection and validation |
+| `setup/interactive_menu.py` | `kendra-cli/src/setup/interactive_menu.rs` | Done | Rail-style menu UI |
+| `setup/wizard_ui.py` | `kendra-cli/src/setup/rail_ui.rs` | Done | Renamed to rail_ui |
+| `setup/validator.py` | `kendra-cli/src/setup/providers.rs` | Done | Merged into providers |
 
 ### Configuration
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `config/models.py` | `opendev-config/src/models_dev.rs` | Done | ModelInfo, ProviderInfo |
-| `config/models_dev_loader.py` | `opendev-config/src/models_dev.rs` | Done | models.dev API cache |
-| `config/__init__.py` (loader) | `opendev-config/src/loader.rs` | Done | Hierarchical: project > user > env > defaults |
-| `core/paths.py` | `opendev-config/src/paths.rs` | Done | All path constants |
+| `config/models.py` | `kendra-config/src/models_dev.rs` | Done | ModelInfo, ProviderInfo |
+| `config/models_dev_loader.py` | `kendra-config/src/models_dev.rs` | Done | models.dev API cache |
+| `config/__init__.py` (loader) | `kendra-config/src/loader.rs` | Done | Hierarchical: project > user > env > defaults |
+| `core/paths.py` | `kendra-config/src/paths.rs` | Done | All path constants |
 
 ### Models
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `models/message.py` | `opendev-models/src/message.rs` | Done | ChatMessage, ToolCall, Role, InputProvenance |
-| `models/session.py` | `opendev-models/src/session.rs` | Done | Session, SessionMetadata |
-| `models/config.py` | `opendev-models/src/config.rs` | Done | AppConfig, PermissionConfig, PlaybookConfig |
-| `models/file_change.py` | `opendev-models/src/file_change.rs` | Done | FileChange, FileChangeType |
-| `models/operation.py` | `opendev-models/src/operation.rs` | Done | WriteResult, EditResult, BashResult |
-| `models/user.py` | `opendev-models/src/user.rs` | Done | User model |
-| `models/api.py` | `opendev-models/src/api.rs` | Done | API request/response types |
-| `models/message_validator.py` | `opendev-models/src/validator.rs` | Done | Validation rules |
-| `models/agent_deps.py` | `opendev-agents/src/traits.rs` | Done | Moved to AgentDeps in agents crate |
-| N/A | `opendev-models/src/datetime_compat.rs` | Done | New: serde compat for chrono DateTimes |
+| `models/message.py` | `kendra-models/src/message.rs` | Done | ChatMessage, ToolCall, Role, InputProvenance |
+| `models/session.py` | `kendra-models/src/session.rs` | Done | Session, SessionMetadata |
+| `models/config.py` | `kendra-models/src/config.rs` | Done | AppConfig, PermissionConfig, PlaybookConfig |
+| `models/file_change.py` | `kendra-models/src/file_change.rs` | Done | FileChange, FileChangeType |
+| `models/operation.py` | `kendra-models/src/operation.rs` | Done | WriteResult, EditResult, BashResult |
+| `models/user.py` | `kendra-models/src/user.rs` | Done | User model |
+| `models/api.py` | `kendra-models/src/api.rs` | Done | API request/response types |
+| `models/message_validator.py` | `kendra-models/src/validator.rs` | Done | Validation rules |
+| `models/agent_deps.py` | `kendra-agents/src/traits.rs` | Done | Moved to AgentDeps in agents crate |
+| N/A | `kendra-models/src/datetime_compat.rs` | Done | New: serde compat for chrono DateTimes |
 
 ### HTTP Client and Auth
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/agents/components/api/http_client.py` | `opendev-http/src/client.rs` | Done | reqwest + rustls-tls |
-| `core/agents/components/api/auth_rotation.py` | `opendev-http/src/rotation.rs` | Done | API key rotation with cooldown |
-| `core/agents/components/api/base_adapter.py` | `opendev-http/src/adapters/` | Done | ProviderAdapter trait |
-| `core/agents/components/api/anthropic_adapter.py` | `opendev-http/src/adapters/anthropic.rs` | Done | Anthropic streaming |
-| `core/agents/components/api/openai_responses_adapter.py` | `opendev-http/src/adapters/openai.rs` | Done | OpenAI responses API |
-| `core/agents/components/api/configuration.py` | `opendev-http/src/models.rs` | Done | RetryConfig, HttpError |
-| `core/auth/credentials.py` | `opendev-http/src/auth.rs` | Done | CredentialStore (mode 0600) |
-| `core/auth/user_store.py` | `opendev-http/src/user_store.rs` | Done | User storage |
-| N/A | `opendev-http/src/adapted_client.rs` | Done | New: unified AdaptedClient wrapper |
+| `core/agents/components/api/http_client.py` | `kendra-http/src/client.rs` | Done | reqwest + rustls-tls |
+| `core/agents/components/api/auth_rotation.py` | `kendra-http/src/rotation.rs` | Done | API key rotation with cooldown |
+| `core/agents/components/api/base_adapter.py` | `kendra-http/src/adapters/` | Done | ProviderAdapter trait |
+| `core/agents/components/api/anthropic_adapter.py` | `kendra-http/src/adapters/anthropic.rs` | Done | Anthropic streaming |
+| `core/agents/components/api/openai_responses_adapter.py` | `kendra-http/src/adapters/openai.rs` | Done | OpenAI responses API |
+| `core/agents/components/api/configuration.py` | `kendra-http/src/models.rs` | Done | RetryConfig, HttpError |
+| `core/auth/credentials.py` | `kendra-http/src/auth.rs` | Done | CredentialStore (mode 0600) |
+| `core/auth/user_store.py` | `kendra-http/src/user_store.rs` | Done | User storage |
+| N/A | `kendra-http/src/adapted_client.rs` | Done | New: unified AdaptedClient wrapper |
 
 ### Context Engineering
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/context_engineering/compaction.py` | `opendev-context/src/compaction.rs` | Done | Staged compaction (70/80/85/90/99%) |
-| `core/context_engineering/validated_message_list.py` | `opendev-context/src/validated_list.rs` | Done | Write-time pair enforcement |
-| `core/context_engineering/message_pair_validator.py` | `opendev-context/src/pair_validator.rs` | Done | Structural repair |
-| `core/context_engineering/context_picker/` | `opendev-context/src/context_picker.rs` | Done | Dynamic context selection |
+| `core/context_engineering/compaction.py` | `kendra-context/src/compaction.rs` | Done | Staged compaction (70/80/85/90/99%) |
+| `core/context_engineering/validated_message_list.py` | `kendra-context/src/validated_list.rs` | Done | Write-time pair enforcement |
+| `core/context_engineering/message_pair_validator.py` | `kendra-context/src/pair_validator.rs` | Done | Structural repair |
+| `core/context_engineering/context_picker/` | `kendra-context/src/context_picker.rs` | Done | Dynamic context selection |
 | `core/context_engineering/context_picker/tracer.py` | N/A | Missing | Context picker tracing/debugging not ported |
-| `core/context_engineering/retrieval/indexer.py` | `opendev-context/src/retrieval/indexer.rs` | Done | Codebase indexer |
-| `core/context_engineering/retrieval/retriever.py` | `opendev-context/src/retrieval/retriever.rs` | Done | Context retriever |
-| `core/context_engineering/retrieval/token_monitor.py` | `opendev-context/src/retrieval/token_monitor.rs` | Done | Token budget monitoring |
-| N/A | `opendev-context/src/worktree.rs` | Done | New: git worktree management |
+| `core/context_engineering/retrieval/indexer.py` | `kendra-context/src/retrieval/indexer.rs` | Done | Codebase indexer |
+| `core/context_engineering/retrieval/retriever.py` | `kendra-context/src/retrieval/retriever.rs` | Done | Context retriever |
+| `core/context_engineering/retrieval/token_monitor.py` | `kendra-context/src/retrieval/token_monitor.rs` | Done | Token budget monitoring |
+| N/A | `kendra-context/src/worktree.rs` | Done | New: git worktree management |
 
 ### History and Sessions
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/context_engineering/history/session_manager/manager.py` | `opendev-history/src/session_manager.rs` | Done | JSON read/write |
-| `core/context_engineering/history/session_manager/index.py` | `opendev-history/src/index.rs` | Done | Session index |
-| `core/context_engineering/history/session_manager/listing.py` | `opendev-history/src/listing.rs` | Done | Session listing/search |
-| `core/context_engineering/history/session_manager/persistence.py` | `opendev-history/src/session_manager.rs` | Done | Merged into session_manager |
-| `core/context_engineering/history/file_locks.py` | `opendev-history/src/file_locks.rs` | Done | fd-lock crate |
-| `core/context_engineering/history/snapshot.py` | `opendev-history/src/snapshot.rs` | Done | Shadow git snapshots |
+| `core/context_engineering/history/session_manager/manager.py` | `kendra-history/src/session_manager.rs` | Done | JSON read/write |
+| `core/context_engineering/history/session_manager/index.py` | `kendra-history/src/index.rs` | Done | Session index |
+| `core/context_engineering/history/session_manager/listing.py` | `kendra-history/src/listing.rs` | Done | Session listing/search |
+| `core/context_engineering/history/session_manager/persistence.py` | `kendra-history/src/session_manager.rs` | Done | Merged into session_manager |
+| `core/context_engineering/history/file_locks.py` | `kendra-history/src/file_locks.rs` | Done | fd-lock crate |
+| `core/context_engineering/history/snapshot.py` | `kendra-history/src/snapshot.rs` | Done | Shadow git snapshots |
 | `core/context_engineering/history/topic_detector.py` | N/A | Missing | Topic detection not ported (used for session titles) |
 | `core/context_engineering/history/undo_manager.py` | N/A | Missing | Undo manager not ported (snapshot-based undo) |
 
@@ -144,242 +144,242 @@ The Rust workspace (`crates/`) contains 20 crates plus 1 binary entry point:
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/context_engineering/memory/playbook.py` | `opendev-memory/src/playbook.rs` | Done | Structured bullet store |
-| `core/context_engineering/memory/delta.py` | `opendev-memory/src/delta.rs` | Done | Batch mutations |
-| `core/context_engineering/memory/embeddings.py` | `opendev-memory/src/embeddings.rs` | Done | Embedding cache + cosine similarity |
-| `core/context_engineering/memory/selector.py` | `opendev-memory/src/selector.rs` | Done | Intelligent bullet selection |
-| `core/context_engineering/memory/reflection/reflector.py` | `opendev-memory/src/reflector.rs` | Done | Post-turn reflection |
-| `core/context_engineering/memory/roles.py` | `opendev-memory/src/roles.rs` | Done | ACE role models |
-| `core/context_engineering/memory/conversation_summarizer.py` | `opendev-memory/src/summarizer.rs` | Done | Conversation summarizer |
+| `core/context_engineering/memory/playbook.py` | `kendra-memory/src/playbook.rs` | Done | Structured bullet store |
+| `core/context_engineering/memory/delta.py` | `kendra-memory/src/delta.rs` | Done | Batch mutations |
+| `core/context_engineering/memory/embeddings.py` | `kendra-memory/src/embeddings.rs` | Done | Embedding cache + cosine similarity |
+| `core/context_engineering/memory/selector.py` | `kendra-memory/src/selector.rs` | Done | Intelligent bullet selection |
+| `core/context_engineering/memory/reflection/reflector.py` | `kendra-memory/src/reflector.rs` | Done | Post-turn reflection |
+| `core/context_engineering/memory/roles.py` | `kendra-memory/src/roles.rs` | Done | ACE role models |
+| `core/context_engineering/memory/conversation_summarizer.py` | `kendra-memory/src/summarizer.rs` | Done | Conversation summarizer |
 
 ### Tools — Core Framework
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/context_engineering/tools/implementations/base.py` | `opendev-tools-core/src/traits.rs` | Done | BaseTool async trait |
-| `core/context_engineering/tools/registry.py` | `opendev-tools-core/src/registry.rs` | Done | ToolRegistry |
-| `core/context_engineering/tools/param_normalizer.py` | `opendev-tools-core/src/normalizer.rs` | Done | camelCase, path resolution |
-| `core/context_engineering/tools/result_sanitizer.py` | `opendev-tools-core/src/sanitizer.rs` | Done | Result truncation |
-| `core/context_engineering/tools/tool_policy.py` | `opendev-tools-core/src/policy.rs` | Done | Access profiles |
-| `core/context_engineering/tools/parallel_policy.py` | `opendev-tools-core/src/parallel.rs` | Done | Read-only parallel execution |
-| `core/context_engineering/tools/context.py` | `opendev-tools-core/src/traits.rs` | Done | ToolContext in traits |
+| `core/context_engineering/tools/implementations/base.py` | `kendra-tools-core/src/traits.rs` | Done | BaseTool async trait |
+| `core/context_engineering/tools/registry.py` | `kendra-tools-core/src/registry.rs` | Done | ToolRegistry |
+| `core/context_engineering/tools/param_normalizer.py` | `kendra-tools-core/src/normalizer.rs` | Done | camelCase, path resolution |
+| `core/context_engineering/tools/result_sanitizer.py` | `kendra-tools-core/src/sanitizer.rs` | Done | Result truncation |
+| `core/context_engineering/tools/tool_policy.py` | `kendra-tools-core/src/policy.rs` | Done | Access profiles |
+| `core/context_engineering/tools/parallel_policy.py` | `kendra-tools-core/src/parallel.rs` | Done | Read-only parallel execution |
+| `core/context_engineering/tools/context.py` | `kendra-tools-core/src/traits.rs` | Done | ToolContext in traits |
 | `core/context_engineering/tools/middleware.py` | N/A | Missing | Tool middleware chain not ported |
 | `core/context_engineering/tools/file_time.py` | N/A | Missing | File access time tracking not ported |
-| `core/context_engineering/tools/path_utils.py` | `opendev-tools-core/src/normalizer.rs` | Done | Merged into normalizer |
+| `core/context_engineering/tools/path_utils.py` | `kendra-tools-core/src/normalizer.rs` | Done | Merged into normalizer |
 
 ### Tools — Implementations
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `bash_tool/` | `opendev-tools-impl/src/bash.rs` | Done | tokio::process::Command |
-| `edit_tool/` | `opendev-tools-impl/src/file_edit.rs` + `edit_replacers.rs` | Done | Edit with replacers |
-| `file_ops.py` (read) | `opendev-tools-impl/src/file_read.rs` | Done | |
-| `file_ops.py` (list) | `opendev-tools-impl/src/file_list.rs` | Done | |
-| `write_tool.py` | `opendev-tools-impl/src/file_write.rs` | Done | |
-| `git_tool.py` | `opendev-tools-impl/src/git.rs` | Done | std::process::Command |
-| `web_fetch_tool.py` | `opendev-tools-impl/src/web_fetch.rs` | Done | reqwest + scraper |
-| `web_search_tool.py` | `opendev-tools-impl/src/web_search.rs` | Done | |
-| `web_screenshot_tool.py` | `opendev-tools-impl/src/web_screenshot.rs` | Done | |
-| `browser_tool.py` | `opendev-tools-impl/src/browser.rs` | Done | |
-| `ask_user_tool.py` | `opendev-tools-impl/src/ask_user.rs` | Done | |
-| `memory_tools.py` | `opendev-tools-impl/src/memory.rs` | Done | |
-| `session_tools.py` | `opendev-tools-impl/src/session.rs` | Done | |
-| `patch_tool.py` | `opendev-tools-impl/src/patch.rs` | Done | |
-| `schedule_tool.py` | `opendev-tools-impl/src/schedule.rs` | Done | |
-| `pdf_tool.py` | `opendev-tools-impl/src/pdf.rs` | Done | |
-| `open_browser_tool.py` | `opendev-tools-impl/src/open_browser.rs` | Done | |
-| `agents_tool.py` | `opendev-tools-impl/src/agents.rs` | Done | |
-| `batch_tool.py` | `opendev-tools-impl/src/batch.rs` | Done | |
-| `diff_preview.py` | `opendev-tools-impl/src/diff_preview.rs` | Done | |
-| `message_tool.py` | `opendev-tools-impl/src/message.rs` | Done | |
-| `notebook_edit_tool.py` | `opendev-tools-impl/src/notebook_edit.rs` | Done | |
-| `task_complete_tool.py` | `opendev-tools-impl/src/task_complete.rs` | Done | |
-| `vlm_tool.py` | `opendev-tools-impl/src/vlm.rs` | Done | |
-| `present_plan_tool.py` | `opendev-tools-impl/src/present_plan.rs` | Done | |
-| N/A | `opendev-tools-impl/src/todo.rs` | Done | New: todo management tool |
-| N/A | `opendev-tools-impl/src/worktree.rs` | Done | New: git worktree tool |
-| N/A | `opendev-tools-impl/src/file_search.rs` | Done | New: dedicated search tool (split from file_ops) |
+| `bash_tool/` | `kendra-tools-impl/src/bash.rs` | Done | tokio::process::Command |
+| `edit_tool/` | `kendra-tools-impl/src/file_edit.rs` + `edit_replacers.rs` | Done | Edit with replacers |
+| `file_ops.py` (read) | `kendra-tools-impl/src/file_read.rs` | Done | |
+| `file_ops.py` (list) | `kendra-tools-impl/src/file_list.rs` | Done | |
+| `write_tool.py` | `kendra-tools-impl/src/file_write.rs` | Done | |
+| `git_tool.py` | `kendra-tools-impl/src/git.rs` | Done | std::process::Command |
+| `web_fetch_tool.py` | `kendra-tools-impl/src/web_fetch.rs` | Done | reqwest + scraper |
+| `web_search_tool.py` | `kendra-tools-impl/src/web_search.rs` | Done | |
+| `web_screenshot_tool.py` | `kendra-tools-impl/src/web_screenshot.rs` | Done | |
+| `browser_tool.py` | `kendra-tools-impl/src/browser.rs` | Done | |
+| `ask_user_tool.py` | `kendra-tools-impl/src/ask_user.rs` | Done | |
+| `memory_tools.py` | `kendra-tools-impl/src/memory.rs` | Done | |
+| `session_tools.py` | `kendra-tools-impl/src/session.rs` | Done | |
+| `patch_tool.py` | `kendra-tools-impl/src/patch.rs` | Done | |
+| `schedule_tool.py` | `kendra-tools-impl/src/schedule.rs` | Done | |
+| `pdf_tool.py` | `kendra-tools-impl/src/pdf.rs` | Done | |
+| `open_browser_tool.py` | `kendra-tools-impl/src/open_browser.rs` | Done | |
+| `agents_tool.py` | `kendra-tools-impl/src/agents.rs` | Done | |
+| `batch_tool.py` | `kendra-tools-impl/src/batch.rs` | Done | |
+| `diff_preview.py` | `kendra-tools-impl/src/diff_preview.rs` | Done | |
+| `message_tool.py` | `kendra-tools-impl/src/message.rs` | Done | |
+| `notebook_edit_tool.py` | `kendra-tools-impl/src/notebook_edit.rs` | Done | |
+| `task_complete_tool.py` | `kendra-tools-impl/src/task_complete.rs` | Done | |
+| `vlm_tool.py` | `kendra-tools-impl/src/vlm.rs` | Done | |
+| `present_plan_tool.py` | `kendra-tools-impl/src/present_plan.rs` | Done | |
+| N/A | `kendra-tools-impl/src/todo.rs` | Done | New: todo management tool |
+| N/A | `kendra-tools-impl/src/worktree.rs` | Done | New: git worktree tool |
+| N/A | `kendra-tools-impl/src/file_search.rs` | Done | New: dedicated search tool (split from file_ops) |
 
 ### Tools — LSP Integration
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `tools/lsp/wrapper.py` | `opendev-tools-lsp/src/wrapper.rs` | Done | LspWrapper managing server instances |
-| `tools/lsp/ls_handler.py` | `opendev-tools-lsp/src/handler.rs` | Done | JSON-RPC communication |
-| `tools/lsp/ls_types.py` | `opendev-tools-lsp/src/protocol.rs` | Done | Unified symbol types |
-| `tools/lsp/ls/cache.py` | `opendev-tools-lsp/src/cache.rs` | Done | Symbol query caching |
-| `tools/lsp/ls/server.py` | `opendev-tools-lsp/src/handler.rs` | Done | Merged into handler |
-| `tools/lsp/ls_utils.py` | `opendev-tools-lsp/src/utils.rs` | Done | Text/path utilities |
-| `tools/lsp/language_servers/` (35 files) | `opendev-tools-lsp/src/servers/configs.rs` | Partial | Consolidated to 21 inline configs; 14 niche servers omitted |
-| `tools/lsp/lsp_protocol_handler/` | `opendev-tools-lsp/src/handler.rs` | Done | Merged into handler |
-| `tools/lsp/util/` (4 files) | `opendev-tools-lsp/src/utils.rs` | Done | Consolidated |
+| `tools/lsp/wrapper.py` | `kendra-tools-lsp/src/wrapper.rs` | Done | LspWrapper managing server instances |
+| `tools/lsp/ls_handler.py` | `kendra-tools-lsp/src/handler.rs` | Done | JSON-RPC communication |
+| `tools/lsp/ls_types.py` | `kendra-tools-lsp/src/protocol.rs` | Done | Unified symbol types |
+| `tools/lsp/ls/cache.py` | `kendra-tools-lsp/src/cache.rs` | Done | Symbol query caching |
+| `tools/lsp/ls/server.py` | `kendra-tools-lsp/src/handler.rs` | Done | Merged into handler |
+| `tools/lsp/ls_utils.py` | `kendra-tools-lsp/src/utils.rs` | Done | Text/path utilities |
+| `tools/lsp/language_servers/` (35 files) | `kendra-tools-lsp/src/servers/configs.rs` | Partial | Consolidated to 21 inline configs; 14 niche servers omitted |
+| `tools/lsp/lsp_protocol_handler/` | `kendra-tools-lsp/src/handler.rs` | Done | Merged into handler |
+| `tools/lsp/util/` (4 files) | `kendra-tools-lsp/src/utils.rs` | Done | Consolidated |
 | `tools/lsp/retriever.py` | N/A | Partial | LSP-based retrieval folded into handler |
-| `tools/lsp/settings.py` | `opendev-tools-lsp/src/servers/mod.rs` | Done | ServerConfig struct |
+| `tools/lsp/settings.py` | `kendra-tools-lsp/src/servers/mod.rs` | Done | ServerConfig struct |
 
 ### Tools — Symbol Operations
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `tools/symbol_tools/find_symbol.py` | `opendev-tools-symbol/src/find_symbol.rs` | Done | |
-| `tools/symbol_tools/find_referencing_symbols.py` | `opendev-tools-symbol/src/find_references.rs` | Done | |
-| `tools/symbol_tools/rename_symbol.py` | `opendev-tools-symbol/src/rename.rs` | Done | |
-| `tools/symbol_tools/replace_symbol_body.py` | `opendev-tools-symbol/src/replace_body.rs` | Done | |
+| `tools/symbol_tools/find_symbol.py` | `kendra-tools-symbol/src/find_symbol.rs` | Done | |
+| `tools/symbol_tools/find_referencing_symbols.py` | `kendra-tools-symbol/src/find_references.rs` | Done | |
+| `tools/symbol_tools/rename_symbol.py` | `kendra-tools-symbol/src/rename.rs` | Done | |
+| `tools/symbol_tools/replace_symbol_body.py` | `kendra-tools-symbol/src/replace_body.rs` | Done | |
 | `tools/symbol_tools/insert_symbol.py` | N/A | Missing | insert_before/insert_after_symbol not ported |
 
 ### Agents
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/base/abstract/base_agent.py` | `opendev-agents/src/traits.rs` | Done | BaseAgent async trait |
-| `core/agents/main_agent/agent.py` | `opendev-agents/src/main_agent.rs` | Done | Composition over inheritance |
-| `core/agents/main_agent/llm_calls.py` | `opendev-agents/src/llm_calls.rs` | Done | LlmCaller |
-| `core/agents/main_agent/run_loop.py` | `opendev-agents/src/react_loop.rs` | Done | ReactLoop with TurnResult |
-| `core/agents/main_agent/http_clients.py` | `opendev-http/src/adapted_client.rs` | Done | Moved to http crate |
-| `core/agents/prompts/composition.py` | `opendev-agents/src/prompts/` | Done | PromptComposer |
-| `core/agents/prompts/loader.py` | `opendev-agents/src/prompts/` | Done | include_str! + filesystem fallback |
-| `core/agents/prompts/renderer.py` | `opendev-agents/src/prompts/` | Done | Template rendering |
-| `core/agents/prompts/variables.py` | `opendev-agents/src/prompts/` | Done | Variable injection |
-| `core/agents/prompts/reminders.py` | `opendev-agents/src/prompts/` | Done | Reminder sections |
-| `core/agents/prompts/templates/` (93 files) | `crates/opendev-agents/templates/` (91 files) | Done | 2 files are Python README/CHANGELOG |
-| `core/agents/components/response/cleaner.py` | `opendev-agents/src/response/` | Done | ResponseCleaner |
-| `core/agents/components/response/plan_parser.py` | `opendev-agents/src/response/` | Done | Plan parsing |
-| `core/agents/components/prompts/builders.py` | `opendev-agents/src/prompts/` | Done | Merged into prompt composer |
-| `core/agents/components/prompts/environment.py` | `opendev-agents/src/prompts/` | Done | Environment context |
-| `core/agents/components/schemas/` | `opendev-agents/src/prompts/` | Done | Schema building in prompt composer |
-| `core/agents/subagents/specs.py` | `opendev-agents/src/subagents/spec.rs` | Done | SubAgentSpec |
-| `core/agents/subagents/manager/` | `opendev-agents/src/subagents/manager.rs` | Done | SubagentManager |
-| `core/agents/subagents/agents/` (8 types) | `opendev-agents/src/subagents/` | Partial | Generic spec-based system; individual agent files consolidated |
-| `core/agents/subagents/task_tool.py` | `opendev-tools-impl/src/agents.rs` | Done | Moved to tools crate |
-| `core/agents/subagents/tool_metadata.py` | `opendev-tools-impl/src/agents.rs` | Done | Merged |
-| `core/skills.py` | `opendev-agents/src/skills.rs` | Done | SkillLoader with frontmatter |
-| N/A | `opendev-agents/src/doom_loop.rs` | Done | New: doom loop detection |
+| `core/base/abstract/base_agent.py` | `kendra-agents/src/traits.rs` | Done | BaseAgent async trait |
+| `core/agents/main_agent/agent.py` | `kendra-agents/src/main_agent.rs` | Done | Composition over inheritance |
+| `core/agents/main_agent/llm_calls.py` | `kendra-agents/src/llm_calls.rs` | Done | LlmCaller |
+| `core/agents/main_agent/run_loop.py` | `kendra-agents/src/react_loop.rs` | Done | ReactLoop with TurnResult |
+| `core/agents/main_agent/http_clients.py` | `kendra-http/src/adapted_client.rs` | Done | Moved to http crate |
+| `core/agents/prompts/composition.py` | `kendra-agents/src/prompts/` | Done | PromptComposer |
+| `core/agents/prompts/loader.py` | `kendra-agents/src/prompts/` | Done | include_str! + filesystem fallback |
+| `core/agents/prompts/renderer.py` | `kendra-agents/src/prompts/` | Done | Template rendering |
+| `core/agents/prompts/variables.py` | `kendra-agents/src/prompts/` | Done | Variable injection |
+| `core/agents/prompts/reminders.py` | `kendra-agents/src/prompts/` | Done | Reminder sections |
+| `core/agents/prompts/templates/` (93 files) | `crates/kendra-agents/templates/` (91 files) | Done | 2 files are Python README/CHANGELOG |
+| `core/agents/components/response/cleaner.py` | `kendra-agents/src/response/` | Done | ResponseCleaner |
+| `core/agents/components/response/plan_parser.py` | `kendra-agents/src/response/` | Done | Plan parsing |
+| `core/agents/components/prompts/builders.py` | `kendra-agents/src/prompts/` | Done | Merged into prompt composer |
+| `core/agents/components/prompts/environment.py` | `kendra-agents/src/prompts/` | Done | Environment context |
+| `core/agents/components/schemas/` | `kendra-agents/src/prompts/` | Done | Schema building in prompt composer |
+| `core/agents/subagents/specs.py` | `kendra-agents/src/subagents/spec.rs` | Done | SubAgentSpec |
+| `core/agents/subagents/manager/` | `kendra-agents/src/subagents/manager.rs` | Done | SubagentManager |
+| `core/agents/subagents/agents/` (8 types) | `kendra-agents/src/subagents/` | Partial | Generic spec-based system; individual agent files consolidated |
+| `core/agents/subagents/task_tool.py` | `kendra-tools-impl/src/agents.rs` | Done | Moved to tools crate |
+| `core/agents/subagents/tool_metadata.py` | `kendra-tools-impl/src/agents.rs` | Done | Merged |
+| `core/skills.py` | `kendra-agents/src/skills.rs` | Done | SkillLoader with frontmatter |
+| N/A | `kendra-agents/src/doom_loop.rs` | Done | New: doom loop detection |
 
 ### Runtime Services
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/runtime/approval/manager.py` | `opendev-runtime/src/approval.rs` | Done | ApprovalRulesManager |
-| `core/runtime/approval/rules.py` | `opendev-runtime/src/approval.rs` | Done | Merged |
-| `core/runtime/approval/constants.py` | `opendev-runtime/src/constants.rs` | Done | SAFE_COMMANDS, AutonomyLevel |
-| `core/runtime/cost_tracker.py` | `opendev-runtime/src/cost_tracker.rs` | Done | Token usage and cost |
-| `core/runtime/interrupt_token.py` | `opendev-runtime/src/interrupt.rs` | Done | CancellationToken pattern |
-| `core/runtime/mode_manager.py` | `opendev-runtime/src/constants.rs` | Done | AutonomyLevel, ThinkingLevel |
-| `core/runtime/session_model.py` | `opendev-runtime/src/session_model.rs` | Done | Per-session model overlay |
-| `core/runtime/plan_index.py` | `opendev-runtime/src/plan_index.rs` | Done | Plan-session association |
-| `core/runtime/plan_names.py` | `opendev-runtime/src/plan_names.rs` | Done | Adjective-verb-noun generator |
-| `core/runtime/custom_commands.py` | `opendev-runtime/src/custom_commands.rs` | Done | Custom command loader |
-| `core/runtime/monitoring/error_handler.py` | `opendev-runtime/src/error_handler.rs` | Done | Error classification and retry |
-| `core/runtime/monitoring/task_monitor.py` | `opendev-agents/src/traits.rs` | Done | TaskMonitor trait |
+| `core/runtime/approval/manager.py` | `kendra-runtime/src/approval.rs` | Done | ApprovalRulesManager |
+| `core/runtime/approval/rules.py` | `kendra-runtime/src/approval.rs` | Done | Merged |
+| `core/runtime/approval/constants.py` | `kendra-runtime/src/constants.rs` | Done | SAFE_COMMANDS, AutonomyLevel |
+| `core/runtime/cost_tracker.py` | `kendra-runtime/src/cost_tracker.rs` | Done | Token usage and cost |
+| `core/runtime/interrupt_token.py` | `kendra-runtime/src/interrupt.rs` | Done | CancellationToken pattern |
+| `core/runtime/mode_manager.py` | `kendra-runtime/src/constants.rs` | Done | AutonomyLevel, ThinkingLevel |
+| `core/runtime/session_model.py` | `kendra-runtime/src/session_model.rs` | Done | Per-session model overlay |
+| `core/runtime/plan_index.py` | `kendra-runtime/src/plan_index.rs` | Done | Plan-session association |
+| `core/runtime/plan_names.py` | `kendra-runtime/src/plan_names.rs` | Done | Adjective-verb-noun generator |
+| `core/runtime/custom_commands.py` | `kendra-runtime/src/custom_commands.rs` | Done | Custom command loader |
+| `core/runtime/monitoring/error_handler.py` | `kendra-runtime/src/error_handler.rs` | Done | Error classification and retry |
+| `core/runtime/monitoring/task_monitor.py` | `kendra-agents/src/traits.rs` | Done | TaskMonitor trait |
 | `core/runtime/services/runtime_service.py` | N/A | Missing | RuntimeService not ported as standalone (distributed across crates) |
-| `core/runtime/config.py` | `opendev-config/src/loader.rs` | Done | Moved to config crate |
-| `core/events/bus.py` | `opendev-runtime/src/event_bus.rs` | Done | tokio::sync::broadcast |
-| `core/events/types.py` | `opendev-runtime/src/event_bus.rs` | Done | Event struct |
-| `core/utils/action_summarizer.py` | `opendev-runtime/src/action_summarizer.rs` | Done | |
-| `core/utils/tool_result_summarizer.py` | `opendev-runtime/src/action_summarizer.rs` | Done | Merged |
-| `core/utils/gitignore.py` | `opendev-runtime/src/gitignore.rs` | Done | GitIgnoreParser |
-| `core/utils/sound.py` | `opendev-runtime/src/sound.rs` | Done | Finish sound |
-| `core/debug/session_debug_logger.py` | `opendev-runtime/src/debug_logger.rs` | Done | SessionDebugLogger |
-| `core/snapshot/manager.py` | `opendev-runtime/src/snapshot.rs` | Done | SnapshotManager |
-| N/A | `opendev-runtime/src/todo.rs` | Done | New: TodoManager, TodoItem |
-| N/A | `opendev-runtime/src/errors.rs` | Done | New: structured error types |
+| `core/runtime/config.py` | `kendra-config/src/loader.rs` | Done | Moved to config crate |
+| `core/events/bus.py` | `kendra-runtime/src/event_bus.rs` | Done | tokio::sync::broadcast |
+| `core/events/types.py` | `kendra-runtime/src/event_bus.rs` | Done | Event struct |
+| `core/utils/action_summarizer.py` | `kendra-runtime/src/action_summarizer.rs` | Done | |
+| `core/utils/tool_result_summarizer.py` | `kendra-runtime/src/action_summarizer.rs` | Done | Merged |
+| `core/utils/gitignore.py` | `kendra-runtime/src/gitignore.rs` | Done | GitIgnoreParser |
+| `core/utils/sound.py` | `kendra-runtime/src/sound.rs` | Done | Finish sound |
+| `core/debug/session_debug_logger.py` | `kendra-runtime/src/debug_logger.rs` | Done | SessionDebugLogger |
+| `core/snapshot/manager.py` | `kendra-runtime/src/snapshot.rs` | Done | SnapshotManager |
+| N/A | `kendra-runtime/src/todo.rs` | Done | New: TodoManager, TodoItem |
+| N/A | `kendra-runtime/src/errors.rs` | Done | New: structured error types |
 
 ### REPL
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `repl/repl.py` | `opendev-repl/src/repl.rs` | Done | Main REPL loop |
-| `repl/query_processor.py` | `opendev-repl/src/query_processor.rs` | Done | Query processing |
-| `repl/query_enhancer.py` | `opendev-repl/src/query_enhancer.rs` | Done | @file injection, context enhancement |
-| `repl/file_content_injector.py` | `opendev-repl/src/file_injector.rs` | Done | File content injection |
-| `repl/tool_executor.py` | `opendev-repl/src/tool_executor.rs` | Done | Tool execution |
-| `repl/llm_caller.py` | `opendev-repl/src/handlers.rs` | Done | Merged into handler registry |
-| `repl/react_executor/` (5 files) | `opendev-agents/src/react_loop.rs` | Done | Moved to agents crate |
-| `repl/commands/` (12 files) | `opendev-repl/src/commands/builtin.rs` | Done | Consolidated into single module |
-| `repl/commands/plugins_commands/` (4 files) | `opendev-repl/src/commands/builtin.rs` | Done | Consolidated |
-| `repl/ui/` (7 files) | `opendev-tui/` | Done | Moved to TUI crate |
+| `repl/repl.py` | `kendra-repl/src/repl.rs` | Done | Main REPL loop |
+| `repl/query_processor.py` | `kendra-repl/src/query_processor.rs` | Done | Query processing |
+| `repl/query_enhancer.py` | `kendra-repl/src/query_enhancer.rs` | Done | @file injection, context enhancement |
+| `repl/file_content_injector.py` | `kendra-repl/src/file_injector.rs` | Done | File content injection |
+| `repl/tool_executor.py` | `kendra-repl/src/tool_executor.rs` | Done | Tool execution |
+| `repl/llm_caller.py` | `kendra-repl/src/handlers.rs` | Done | Merged into handler registry |
+| `repl/react_executor/` (5 files) | `kendra-agents/src/react_loop.rs` | Done | Moved to agents crate |
+| `repl/commands/` (12 files) | `kendra-repl/src/commands/builtin.rs` | Done | Consolidated into single module |
+| `repl/commands/plugins_commands/` (4 files) | `kendra-repl/src/commands/builtin.rs` | Done | Consolidated |
+| `repl/ui/` (7 files) | `kendra-tui/` | Done | Moved to TUI crate |
 
 ### TUI (Terminal UI)
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `ui_textual/chat_app.py` | `opendev-tui/src/app.rs` | Done | Main ratatui app |
-| `ui_textual/widgets/conversation/` | `opendev-tui/src/widgets/conversation.rs` | Done | Conversation rendering |
-| `ui_textual/widgets/chat_text_area.py` | `opendev-tui/src/widgets/input.rs` | Done | Input widget |
-| `ui_textual/widgets/status_bar.py` | `opendev-tui/src/widgets/status_bar.rs` | Done | Status bar |
-| `ui_textual/widgets/welcome_panel.py` | `opendev-tui/src/widgets/welcome_panel.rs` | Done | Welcome panel |
-| `ui_textual/widgets/todo_panel.py` | `opendev-tui/src/widgets/todo_panel.rs` | Done | Todo panel |
-| `ui_textual/widgets/progress_bar.py` | `opendev-tui/src/widgets/progress.rs` | Done | Progress indicator |
+| `ui_textual/chat_app.py` | `kendra-tui/src/app.rs` | Done | Main ratatui app |
+| `ui_textual/widgets/conversation/` | `kendra-tui/src/widgets/conversation.rs` | Done | Conversation rendering |
+| `ui_textual/widgets/chat_text_area.py` | `kendra-tui/src/widgets/input.rs` | Done | Input widget |
+| `ui_textual/widgets/status_bar.py` | `kendra-tui/src/widgets/status_bar.rs` | Done | Status bar |
+| `ui_textual/widgets/welcome_panel.py` | `kendra-tui/src/widgets/welcome_panel.rs` | Done | Welcome panel |
+| `ui_textual/widgets/todo_panel.py` | `kendra-tui/src/widgets/todo_panel.rs` | Done | Todo panel |
+| `ui_textual/widgets/progress_bar.py` | `kendra-tui/src/widgets/progress.rs` | Done | Progress indicator |
 | `ui_textual/widgets/debug_panel.py` | N/A | Missing | Debug panel not ported |
 | `ui_textual/widgets/toast.py` | N/A | Missing | Toast notifications not ported |
 | `ui_textual/widgets/terminal_box_renderer.py` | N/A | Missing | Terminal box renderer not needed (ratatui native) |
-| `ui_textual/widgets/conversation_log.py` | `opendev-tui/src/widgets/conversation.rs` | Done | Merged into conversation widget |
-| `ui_textual/controllers/` (12 files) | `opendev-tui/src/controllers/` (12 files) | Done | Full parity |
-| `ui_textual/formatters_internal/` (13 files) | `opendev-tui/src/formatters/` (11 files) | Done | Consolidated |
-| `ui_textual/managers/` (10 files) | `opendev-tui/src/managers/` | Done | Spinner, display, etc. |
-| `ui_textual/screens/command_approval_modal.py` | `opendev-tui/src/controllers/approval.rs` | Done | Inline approval prompt |
-| `ui_textual/screens/command_palette.py` | `opendev-tui/src/autocomplete/` | Done | Reimplemented as autocomplete |
-| `ui_textual/screens/question_screen.py` | `opendev-tui/src/controllers/ask_user.rs` | Done | Inline question prompt |
+| `ui_textual/widgets/conversation_log.py` | `kendra-tui/src/widgets/conversation.rs` | Done | Merged into conversation widget |
+| `ui_textual/controllers/` (12 files) | `kendra-tui/src/controllers/` (12 files) | Done | Full parity |
+| `ui_textual/formatters_internal/` (13 files) | `kendra-tui/src/formatters/` (11 files) | Done | Consolidated |
+| `ui_textual/managers/` (10 files) | `kendra-tui/src/managers/` | Done | Spinner, display, etc. |
+| `ui_textual/screens/command_approval_modal.py` | `kendra-tui/src/controllers/approval.rs` | Done | Inline approval prompt |
+| `ui_textual/screens/command_palette.py` | `kendra-tui/src/autocomplete/` | Done | Reimplemented as autocomplete |
+| `ui_textual/screens/question_screen.py` | `kendra-tui/src/controllers/ask_user.rs` | Done | Inline question prompt |
 | `ui_textual/screens/session_picker.py` | N/A | Missing | Session picker modal not ported |
 | `ui_textual/screens/status_dialog.py` | N/A | Missing | Status dialog modal not ported |
 | `ui_textual/screens/subagent_detail.py` | N/A | Missing | Subagent detail modal not ported |
-| `ui_textual/services/` (4 files) | `opendev-tui/src/managers/` | Done | Merged into managers |
-| `ui_textual/renderers/` | `opendev-tui/src/formatters/` | Done | Merged |
-| `ui_textual/runner_components/` (7 files) | `opendev-tui/src/app.rs` | Done | Merged into app module |
-| `ui_textual/runner.py` | `opendev-tui/src/app.rs` | Done | Event loop in app |
-| `ui_textual/ui_callback/` (4 files) | `opendev-tui/src/app.rs` | Done | Integrated |
-| `ui_textual/autocomplete_internal/` | `opendev-tui/src/autocomplete/` | Done | Full autocomplete |
+| `ui_textual/services/` (4 files) | `kendra-tui/src/managers/` | Done | Merged into managers |
+| `ui_textual/renderers/` | `kendra-tui/src/formatters/` | Done | Merged |
+| `ui_textual/runner_components/` (7 files) | `kendra-tui/src/app.rs` | Done | Merged into app module |
+| `ui_textual/runner.py` | `kendra-tui/src/app.rs` | Done | Event loop in app |
+| `ui_textual/ui_callback/` (4 files) | `kendra-tui/src/app.rs` | Done | Integrated |
+| `ui_textual/autocomplete_internal/` | `kendra-tui/src/autocomplete/` | Done | Full autocomplete |
 | `ui_textual/styles/chat.tcss` | N/A | N/A | Textual CSS not applicable to ratatui |
-| `ui_textual/style_tokens.py` | `opendev-tui/src/formatters/style_tokens.rs` | Done | Color constants |
-| `ui_textual/constants.py` | `opendev-tui/src/app.rs` | Done | Merged into app |
-| `ui_textual/models/collapsible_output.py` | `opendev-tui/src/widgets/tool_display.rs` | Done | Collapsible in tool display |
-| N/A | `opendev-tui/src/widgets/spinner.rs` | Done | New: inline spinner widget |
-| N/A | `opendev-tui/src/widgets/thinking.rs` | Done | New: thinking block widget |
-| N/A | `opendev-tui/src/widgets/nested_tool.rs` | Done | New: nested tool display |
-| `input/autocomplete/` (5 files) | `opendev-tui/src/autocomplete/` (5 files) | Done | Full parity |
+| `ui_textual/style_tokens.py` | `kendra-tui/src/formatters/style_tokens.rs` | Done | Color constants |
+| `ui_textual/constants.py` | `kendra-tui/src/app.rs` | Done | Merged into app |
+| `ui_textual/models/collapsible_output.py` | `kendra-tui/src/widgets/tool_display.rs` | Done | Collapsible in tool display |
+| N/A | `kendra-tui/src/widgets/spinner.rs` | Done | New: inline spinner widget |
+| N/A | `kendra-tui/src/widgets/thinking.rs` | Done | New: thinking block widget |
+| N/A | `kendra-tui/src/widgets/nested_tool.rs` | Done | New: nested tool display |
+| `input/autocomplete/` (5 files) | `kendra-tui/src/autocomplete/` (5 files) | Done | Full parity |
 
 ### Web Backend
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `web/server.py` | `opendev-web/src/server.rs` | Done | Axum app + middleware |
-| `web/websocket.py` | `opendev-web/src/websocket.rs` | Done | WebSocket manager |
-| `web/state.py` | `opendev-web/src/state.rs` | Done | Arc<RwLock<WebState>> |
-| `web/protocol.py` | `opendev-web/src/protocol.rs` | Done | Message types |
-| `web/routes/auth.py` | `opendev-web/src/routes/auth.rs` | Done | Auth routes |
-| `web/routes/chat.py` | `opendev-web/src/routes/chat.rs` | Done | Chat routes |
-| `web/routes/commands.py` | `opendev-web/src/routes/commands.rs` | Done | Command routes |
-| `web/routes/config.py` | `opendev-web/src/routes/config.rs` | Done | Config routes |
-| `web/routes/mcp.py` | `opendev-web/src/routes/mcp.rs` | Done | MCP routes |
-| `web/routes/sessions.py` | `opendev-web/src/routes/sessions.rs` | Done | Session routes |
-| `web/web_approval_manager.py` | `opendev-web/src/websocket.rs` | Done | Merged into WebSocket |
-| `web/web_ask_user_manager.py` | `opendev-web/src/websocket.rs` | Done | Merged into WebSocket |
-| `web/web_ui_callback.py` | `opendev-web/src/websocket.rs` | Done | Merged |
-| `web/ws_tool_broadcaster.py` | `opendev-web/src/websocket.rs` | Done | Merged |
-| `web/agent_executor.py` | `opendev-web/src/server.rs` | Done | Merged into server |
+| `web/server.py` | `kendra-web/src/server.rs` | Done | Axum app + middleware |
+| `web/websocket.py` | `kendra-web/src/websocket.rs` | Done | WebSocket manager |
+| `web/state.py` | `kendra-web/src/state.rs` | Done | Arc<RwLock<WebState>> |
+| `web/protocol.py` | `kendra-web/src/protocol.rs` | Done | Message types |
+| `web/routes/auth.py` | `kendra-web/src/routes/auth.rs` | Done | Auth routes |
+| `web/routes/chat.py` | `kendra-web/src/routes/chat.rs` | Done | Chat routes |
+| `web/routes/commands.py` | `kendra-web/src/routes/commands.rs` | Done | Command routes |
+| `web/routes/config.py` | `kendra-web/src/routes/config.rs` | Done | Config routes |
+| `web/routes/mcp.py` | `kendra-web/src/routes/mcp.rs` | Done | MCP routes |
+| `web/routes/sessions.py` | `kendra-web/src/routes/sessions.rs` | Done | Session routes |
+| `web/web_approval_manager.py` | `kendra-web/src/websocket.rs` | Done | Merged into WebSocket |
+| `web/web_ask_user_manager.py` | `kendra-web/src/websocket.rs` | Done | Merged into WebSocket |
+| `web/web_ui_callback.py` | `kendra-web/src/websocket.rs` | Done | Merged |
+| `web/ws_tool_broadcaster.py` | `kendra-web/src/websocket.rs` | Done | Merged |
+| `web/agent_executor.py` | `kendra-web/src/server.rs` | Done | Merged into server |
 | `web/bridge_guard.py` | N/A | Missing | Bridge guard not ported (Python-specific) |
-| `web/dependencies/auth.py` | `opendev-web/src/routes/auth.rs` | Done | Merged |
+| `web/dependencies/auth.py` | `kendra-web/src/routes/auth.rs` | Done | Merged |
 | `web/logging_config.py` | N/A | N/A | Uses tracing crate instead |
-| `web/port_utils.py` | `opendev-web/src/server.rs` | Done | Merged |
+| `web/port_utils.py` | `kendra-web/src/server.rs` | Done | Merged |
 | `web/static/` | `web-ui/` | Done | Separate React/Vite project |
 
 ### MCP (Model Context Protocol)
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/context_engineering/mcp/manager/manager.py` | `opendev-mcp/src/manager.rs` | Done | McpManager |
-| `core/context_engineering/mcp/manager/connection.py` | `opendev-mcp/src/manager.rs` | Done | Merged |
-| `core/context_engineering/mcp/manager/transport.py` | `opendev-mcp/src/transport/` | Done | stdio, SSE, HTTP |
-| `core/context_engineering/mcp/manager/server_config.py` | `opendev-mcp/src/config.rs` | Done | McpServerConfig |
-| `core/context_engineering/mcp/config.py` | `opendev-mcp/src/config.rs` | Done | McpConfig |
-| `core/context_engineering/mcp/models.py` | `opendev-mcp/src/models.rs` | Done | McpTool, McpContent, etc. |
-| `core/context_engineering/mcp/handler.py` | `opendev-mcp/src/manager.rs` | Done | Merged |
+| `core/context_engineering/mcp/manager/manager.py` | `kendra-mcp/src/manager.rs` | Done | McpManager |
+| `core/context_engineering/mcp/manager/connection.py` | `kendra-mcp/src/manager.rs` | Done | Merged |
+| `core/context_engineering/mcp/manager/transport.py` | `kendra-mcp/src/transport/` | Done | stdio, SSE, HTTP |
+| `core/context_engineering/mcp/manager/server_config.py` | `kendra-mcp/src/config.rs` | Done | McpServerConfig |
+| `core/context_engineering/mcp/config.py` | `kendra-mcp/src/config.rs` | Done | McpConfig |
+| `core/context_engineering/mcp/models.py` | `kendra-mcp/src/models.rs` | Done | McpTool, McpContent, etc. |
+| `core/context_engineering/mcp/handler.py` | `kendra-mcp/src/manager.rs` | Done | Merged |
 
 ### Channels
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/channels/router.py` | `opendev-channels/src/router.rs` | Done | MessageRouter |
-| `core/channels/base.py` | `opendev-channels/src/router.rs` | Done | ChannelAdapter trait |
+| `core/channels/router.py` | `kendra-channels/src/router.rs` | Done | MessageRouter |
+| `core/channels/base.py` | `kendra-channels/src/router.rs` | Done | ChannelAdapter trait |
 | `core/channels/mock.py` | N/A | N/A | Test utility, not needed |
 | `core/channels/reset_policies.py` | N/A | Missing | Reset policies not ported |
 | `core/channels/telegram.py` | N/A | Missing | Telegram adapter not ported (deferred) |
@@ -390,34 +390,34 @@ The Rust workspace (`crates/`) contains 20 crates plus 1 binary entry point:
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/hooks/manager.py` | `opendev-hooks/src/manager.rs` | Done | HookManager |
-| `core/hooks/executor.py` | `opendev-hooks/src/executor.rs` | Done | HookExecutor with timeout |
-| `core/hooks/models.py` | `opendev-hooks/src/models.rs` | Done | HookEvent, HookCommand, HookMatcher |
-| `core/hooks/loader.py` | `opendev-hooks/src/models.rs` | Done | Merged into models |
+| `core/hooks/manager.py` | `kendra-hooks/src/manager.rs` | Done | HookManager |
+| `core/hooks/executor.py` | `kendra-hooks/src/executor.rs` | Done | HookExecutor with timeout |
+| `core/hooks/models.py` | `kendra-hooks/src/models.rs` | Done | HookEvent, HookCommand, HookMatcher |
+| `core/hooks/loader.py` | `kendra-hooks/src/models.rs` | Done | Merged into models |
 | `core/hooks/plugin_hooks.py` | N/A | Missing | Plugin hook integration not ported |
 
 ### Plugins
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/plugins/manager/manager.py` | `opendev-plugins/src/manager.rs` | Done | PluginManager |
-| `core/plugins/manager/installer.py` | `opendev-plugins/src/manager.rs` | Done | Merged |
-| `core/plugins/manager/bundle.py` | `opendev-plugins/src/manager.rs` | Done | Merged |
-| `core/plugins/manager/marketplace.py` | `opendev-plugins/src/marketplace.rs` | Done | Marketplace management |
-| `core/plugins/models.py` | `opendev-plugins/src/models.rs` | Done | PluginManifest, etc. |
-| `core/plugins/config.py` | `opendev-plugins/src/models.rs` | Done | Merged |
+| `core/plugins/manager/manager.py` | `kendra-plugins/src/manager.rs` | Done | PluginManager |
+| `core/plugins/manager/installer.py` | `kendra-plugins/src/manager.rs` | Done | Merged |
+| `core/plugins/manager/bundle.py` | `kendra-plugins/src/manager.rs` | Done | Merged |
+| `core/plugins/manager/marketplace.py` | `kendra-plugins/src/marketplace.rs` | Done | Marketplace management |
+| `core/plugins/models.py` | `kendra-plugins/src/models.rs` | Done | PluginManifest, etc. |
+| `core/plugins/config.py` | `kendra-plugins/src/models.rs` | Done | Merged |
 
 ### Docker
 
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
-| `core/docker/local_runtime.py` | `opendev-docker/src/local_runtime.rs` | Done | LocalRuntime |
-| `core/docker/remote_runtime.py` | `opendev-docker/src/remote_runtime.rs` | Done | RemoteRuntime |
-| `core/docker/deployment.py` | `opendev-docker/src/deployment.rs` | Done | DockerDeployment |
-| `core/docker/session.py` | `opendev-docker/src/session.rs` | Done | DockerSession |
-| `core/docker/models.py` | `opendev-docker/src/models.rs` | Done | ContainerSpec, etc. |
-| `core/docker/tool_handler.py` | `opendev-docker/src/tool_handler.rs` | Done | DockerToolHandler |
-| `core/docker/exceptions.py` | `opendev-docker/src/errors.rs` | Done | DockerError |
+| `core/docker/local_runtime.py` | `kendra-docker/src/local_runtime.rs` | Done | LocalRuntime |
+| `core/docker/remote_runtime.py` | `kendra-docker/src/remote_runtime.rs` | Done | RemoteRuntime |
+| `core/docker/deployment.py` | `kendra-docker/src/deployment.rs` | Done | DockerDeployment |
+| `core/docker/session.py` | `kendra-docker/src/session.rs` | Done | DockerSession |
+| `core/docker/models.py` | `kendra-docker/src/models.rs` | Done | ContainerSpec, etc. |
+| `core/docker/tool_handler.py` | `kendra-docker/src/tool_handler.rs` | Done | DockerToolHandler |
+| `core/docker/exceptions.py` | `kendra-docker/src/errors.rs` | Done | DockerError |
 | `core/docker/server.py` | N/A | Missing | Docker server endpoint not ported |
 
 ### Miscellaneous Python Modules
@@ -425,15 +425,15 @@ The Rust workspace (`crates/`) contains 20 crates plus 1 binary entry point:
 | Python Module/Feature | Rust Crate/Module | Status | Notes |
 |---|---|---|---|
 | `core/base/factories/agent_factory.py` | N/A | N/A | Not needed; direct construction in Rust |
-| `core/base/factories/tool_factory.py` | `opendev-tools-core/src/registry.rs` | Done | ToolRegistry replaces factory |
+| `core/base/factories/tool_factory.py` | `kendra-tools-core/src/registry.rs` | Done | ToolRegistry replaces factory |
 | `core/base/interfaces/` (6 files) | Various traits | Done | Distributed across crates as traits |
-| `core/base/exceptions/` | `opendev-runtime/src/errors.rs` | Done | Structured error types |
-| `core/formatters/manager.py` | `opendev-tui/src/formatters/` | Done | Moved to TUI crate |
-| `core/git/worktree.py` | `opendev-context/src/worktree.rs` | Done | WorktreeManager |
+| `core/base/exceptions/` | `kendra-runtime/src/errors.rs` | Done | Structured error types |
+| `core/formatters/manager.py` | `kendra-tui/src/formatters/` | Done | Moved to TUI crate |
+| `core/git/worktree.py` | `kendra-context/src/worktree.rs` | Done | WorktreeManager |
 | `core/file_watcher.py` | N/A | Missing | File watcher not ported (159 LOC) |
-| `core/scheduler.py` | `opendev-tools-impl/src/schedule.rs` | Done | Merged into schedule tool |
+| `core/scheduler.py` | `kendra-tools-impl/src/schedule.rs` | Done | Merged into schedule tool |
 | `core/logging.py` | N/A | N/A | Uses tracing crate instead |
-| `core/errors.py` | `opendev-runtime/src/errors.rs` | Done | Structured errors |
+| `core/errors.py` | `kendra-runtime/src/errors.rs` | Done | Structured errors |
 
 ## Key Design Decisions
 
@@ -476,14 +476,14 @@ The Rust workspace (`crates/`) contains 20 crates plus 1 binary entry point:
 
 | Feature | Crate | Notes |
 |---|---|---|
-| Doom loop detector | `opendev-agents` | Detects and breaks agent loops |
-| Todo management system | `opendev-runtime` + `opendev-tools-impl` | TodoManager, TodoTool |
-| Git worktree tool | `opendev-tools-impl` | Worktree management for parallel agents |
-| Worktree manager | `opendev-context` | WorktreeManager for context isolation |
-| Dedicated file search tool | `opendev-tools-impl` | Split from monolithic file_ops |
-| Structured error types | `opendev-runtime` | ErrorCategory with pattern matching |
-| datetime_compat module | `opendev-models` | Serde compatibility for chrono |
-| Adapted client wrapper | `opendev-http` | Unified provider-agnostic client |
+| Doom loop detector | `kendra-agents` | Detects and breaks agent loops |
+| Todo management system | `kendra-runtime` + `kendra-tools-impl` | TodoManager, TodoTool |
+| Git worktree tool | `kendra-tools-impl` | Worktree management for parallel agents |
+| Worktree manager | `kendra-context` | WorktreeManager for context isolation |
+| Dedicated file search tool | `kendra-tools-impl` | Split from monolithic file_ops |
+| Structured error types | `kendra-runtime` | ErrorCategory with pattern matching |
+| datetime_compat module | `kendra-models` | Serde compatibility for chrono |
+| Adapted client wrapper | `kendra-http` | Unified provider-agnostic client |
 
 ## Overall Statistics
 
@@ -542,19 +542,23 @@ The Rust workspace (`crates/`) contains 20 crates plus 1 binary entry point:
 ## References
 
 ### Python Codebase
-- Source root: `/Users/nghibui/codes/opendev-py/opendev/`
+- Source root: `/Users/nghibui/codes/kendra-py/kendra/`
 - Key files: `core/agents/main_agent/agent.py`, `core/context_engineering/compaction.py`, `ui_textual/chat_app.py`
 
 ### Rust Codebase
-- Workspace root: `/Users/nghibui/codes/opendev/`
-- Crate directory: `/Users/nghibui/codes/opendev/crates/`
-- Binary entry: `/Users/nghibui/codes/opendev/crates/opendev-cli/src/main.rs`
-- Prompt templates: `/Users/nghibui/codes/opendev/crates/opendev-agents/templates/`
-- Web frontend: `/Users/nghibui/codes/opendev/web-ui/`
+- Workspace root: `/Users/nghibui/codes/kendra/`
+- Crate directory: `/Users/nghibui/codes/kendra/crates/`
+- Binary entry: `/Users/nghibui/codes/kendra/crates/kendra-cli/src/main.rs`
+- Prompt templates: `/Users/nghibui/codes/kendra/crates/kendra-agents/templates/`
+- Web frontend: `/Users/nghibui/codes/kendra/web-ui/`
 
 ### Migration Documentation
-- Architecture: `/Users/nghibui/codes/opendev/migration_docs/ARCHITECTURE.md`
-- Crate mapping: `/Users/nghibui/codes/opendev/migration_docs/CRATE_MAPPING.md`
-- Phases: `/Users/nghibui/codes/opendev/migration_docs/PHASES.md`
-- Strategy: `/Users/nghibui/codes/opendev/migration_docs/STRATEGY.md`
-- Testing: `/Users/nghibui/codes/opendev/migration_docs/TESTING.md`
+- Architecture: `/Users/nghibui/codes/kendra/migration_docs/ARCHITECTURE.md`
+- Crate mapping: `/Users/nghibui/codes/kendra/migration_docs/CRATE_MAPPING.md`
+- Phases: `/Users/nghibui/codes/kendra/migration_docs/PHASES.md`
+- Strategy: `/Users/nghibui/codes/kendra/migration_docs/STRATEGY.md`
+- Testing: `/Users/nghibui/codes/kendra/migration_docs/TESTING.md`
+
+
+
+

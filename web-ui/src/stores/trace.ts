@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { TraceSessionInfo, SessionData } from '../types/trace';
 import { fetchTraceProjects, fetchTraceSessions, fetchTraceSession } from '../api/traces';
-import { adaptOpenDevMessages } from '../utils/trace/adapter';
+import { adaptKendraCLIMessages } from '../utils/trace/adapter';
 
 interface TraceState {
   projects: string[];
@@ -60,7 +60,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
     set({ selectedSessionId: sessionId, loading: true, error: null });
     try {
       const messages = await fetchTraceSession(selectedProject, sessionId);
-      const sessionData = adaptOpenDevMessages(messages, sessionId);
+      const sessionData = adaptKendraCLIMessages(messages, sessionId);
       set({ sessionData, loading: false });
     } catch (e) {
       set({ error: (e as Error).message, loading: false });

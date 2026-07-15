@@ -1,0 +1,19 @@
+{
+  "exportedAt": "2026-06-10",
+  "workspace": "Kendra Labs",
+  "source": {
+    "index": "https://app.notion.com/p/59b6f84ad3f94f4a87171ee64339f8b5",
+    "docs": [
+      {"file": "00_INDEX.md", "url": "https://app.notion.com/p/59b6f84ad3f94f4a87171ee64339f8b5"},
+      {"file": "01_VISION.md", "url": "https://app.notion.com/p/8f5e97de147c48489819fa1f42d9b715"},
+      {"file": "02_ARCHITECTURE.md", "url": "https://app.notion.com/p/3a90a9140cd44e40a1dac87392fd3d92"},
+      {"file": "03_CLI_TUI.md", "url": "https://app.notion.com/p/5712f16eea1145c6ac569f234e4274c3"},
+      {"file": "04_PERMISSIONS_GOVERNANCE.md", "url": "https://app.notion.com/p/21bb7cf7efaf45d9807a9ab3e8e0d089"},
+      {"file": "05_TOOLING_MCP_EXTENSIBILITY.md", "url": "https://app.notion.com/p/c281c6f242d7473b845517cae313acbe"},
+      {"file": "06_MEMORY_CONTEXT_SESSION.md", "url": "https://app.notion.com/p/c73a2a2dc13e427ab19c87270abaf80f"},
+      {"file": "07_ROADMAP.md", "url": "https://app.notion.com/p/a413ba0d31b24d4a8639c126e8f6200f"},
+      {"file": "10_COMPETITORS.md", "url": "https://app.notion.com/p/6b849ab1b80441979285ea7662efccc3"},
+      {"file": "11_FACTORY_AI.md", "url": "https://app.notion.com/p/136d4eb4ffed4cb78edb5050814b35b4"}
+    ]
+  }
+}

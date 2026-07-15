@@ -1,6 +1,6 @@
-# OpenDev Architecture
+# KendraCLI Architecture
 
-This document describes OpenDev as it exists in the current Rust codebase and presents a narrative architecture that is suitable for technical onboarding, design reviews, demos, and rendered documentation.
+This document describes KendraCLI as it exists in the current Rust codebase and presents a narrative architecture that is suitable for technical onboarding, design reviews, demos, and rendered documentation.
 
 It is intentionally opinionated in presentation: the goal is not only to list crates, but to explain the system as a compound AI runtime with clear control planes, data planes, and user-facing flows.
 
@@ -10,7 +10,7 @@ Technical report reference:
 
 ## Executive Summary
 
-OpenDev is a compound AI coding agent built as a Rust workspace. It is not a single monolithic chatbot loop. It is a layered system that combines:
+KendraCLI is a compound AI coding agent built as a Rust workspace. It is not a single monolithic chatbot loop. It is a layered system that combines:
 
 - interaction surfaces: CLI, TUI, Web UI, REPL, channel adapters
 - a runtime core: config, approval, sessions, history, interruption, cost tracking
@@ -19,20 +19,20 @@ OpenDev is a compound AI coding agent built as a Rust workspace. It is not a sin
 - a provider abstraction: multi-provider, multi-model HTTP adapters
 - persistence and context systems: history, memory, snapshots, artifact indexes
 
-The result is a system where the user sees "one assistant", but internally OpenDev behaves more like an operating environment for cooperating agent workflows.
+The result is a system where the user sees "one assistant", but internally KendraCLI behaves more like an operating environment for cooperating agent workflows.
 
 ## Design Thesis
 
 The architecture can be understood through four ideas:
 
-1. OpenDev is a runtime, not just a prompt wrapper.
-2. OpenDev is compound AI, not single-model AI.
-3. OpenDev treats tools as first-class execution primitives.
-4. OpenDev separates user interaction, agent reasoning, and infrastructure concerns into distinct crates.
+1. KendraCLI is a runtime, not just a prompt wrapper.
+2. KendraCLI is compound AI, not single-model AI.
+3. KendraCLI treats tools as first-class execution primitives.
+4. KendraCLI separates user interaction, agent reasoning, and infrastructure concerns into distinct crates.
 
 ## System Context
 
-At the outermost layer, OpenDev sits between users, models, tools, and persistent state.
+At the outermost layer, KendraCLI sits between users, models, tools, and persistent state.
 
 ```mermaid
 flowchart LR
@@ -42,7 +42,7 @@ flowchart LR
     WEB[Web UI]
     CH[External Channels]
 
-    ORCH[OpenDev Runtime + Agent Orchestrator]
+    ORCH[KendraCLI Runtime + Agent Orchestrator]
 
     TOOLS[Local Tools / MCP / LSP / Git / Web]
     MODELS[LLM Providers]
@@ -63,10 +63,10 @@ flowchart LR
     ORCH --> STATE
 ```
 
-This view is the easiest way to explain OpenDev to non-implementers:
+This view is the easiest way to explain KendraCLI to non-implementers:
 
 - users interact through multiple frontends
-- OpenDev orchestrates reasoning and tool execution
+- KendraCLI orchestrates reasoning and tool execution
 - model providers supply intelligence
 - tools supply action
 - state systems make sessions resumable and durable
@@ -78,39 +78,39 @@ The Rust workspace is already fairly well-factored. A useful way to present it i
 ```mermaid
 flowchart TB
     subgraph UX[Interaction Layer]
-        CLI[opendev-cli]
-        TUI[opendev-tui]
-        WEB[opendev-web]
-        REPL[opendev-repl]
-        CHAN[opendev-channels]
+        CLI[kendra-cli]
+        TUI[kendra-tui]
+        WEB[kendra-web]
+        REPL[kendra-repl]
+        CHAN[kendra-channels]
     end
 
     subgraph ORCH[Orchestration Layer]
-        AGENTS[opendev-agents]
-        CONTEXT[opendev-context]
-        CONFIG[opendev-config]
-        RUNTIME[opendev-runtime]
+        AGENTS[kendra-agents]
+        CONTEXT[kendra-context]
+        CONFIG[kendra-config]
+        RUNTIME[kendra-runtime]
     end
 
     subgraph TOOLING[Tool Platform]
-        TOOLS_CORE[opendev-tools-core]
-        TOOLS_IMPL[opendev-tools-impl]
-        TOOLS_LSP[opendev-tools-lsp]
-        TOOLS_SYMBOL[opendev-tools-symbol]
-        MCP[opendev-mcp]
-        PLUGINS[opendev-plugins]
-        HOOKS[opendev-hooks]
+        TOOLS_CORE[kendra-tools-core]
+        TOOLS_IMPL[kendra-tools-impl]
+        TOOLS_LSP[kendra-tools-lsp]
+        TOOLS_SYMBOL[kendra-tools-symbol]
+        MCP[kendra-mcp]
+        PLUGINS[kendra-plugins]
+        HOOKS[kendra-hooks]
     end
 
     subgraph IO[Provider + Persistence Layer]
-        HTTP[opendev-http]
-        HISTORY[opendev-history]
-        MEMORY[opendev-memory]
-        DOCKER[opendev-docker]
+        HTTP[kendra-http]
+        HISTORY[kendra-history]
+        MEMORY[kendra-memory]
+        DOCKER[kendra-docker]
     end
 
     subgraph MODELS[Shared Types]
-        SHARED[opendev-models]
+        SHARED[kendra-models]
     end
 
     UX --> ORCH
@@ -127,55 +127,55 @@ flowchart TB
 
 This is where sessions enter the system.
 
-- `opendev-cli`: binary entry point, argument parsing, dispatch
-- `opendev-tui`: terminal-native interactive interface
-- `opendev-web`: Axum backend and WebSocket event broadcasting
-- `opendev-repl`: REPL loop, slash commands, prompt preprocessing
-- `opendev-channels`: route inbound/outbound messages for external channels
+- `kendra-cli`: binary entry point, argument parsing, dispatch
+- `kendra-tui`: terminal-native interactive interface
+- `kendra-web`: Axum backend and WebSocket event broadcasting
+- `kendra-repl`: REPL loop, slash commands, prompt preprocessing
+- `kendra-channels`: route inbound/outbound messages for external channels
 
 #### Orchestration Layer
 
 This is the control center.
 
-- `opendev-agents`: ReAct loop, prompt composition, subagents, skills
-- `opendev-context`: context engineering, instruction discovery, compaction helpers
-- `opendev-config`: hierarchical config loading, validation, migration
-- `opendev-runtime`: approvals, interruptions, cost tracking, todo lifecycle, events
+- `kendra-agents`: ReAct loop, prompt composition, subagents, skills
+- `kendra-context`: context engineering, instruction discovery, compaction helpers
+- `kendra-config`: hierarchical config loading, validation, migration
+- `kendra-runtime`: approvals, interruptions, cost tracking, todo lifecycle, events
 
 #### Tool Platform
 
 This is the action system.
 
-- `opendev-tools-core`: registry and tool contracts
-- `opendev-tools-impl`: concrete tool implementations
-- `opendev-tools-lsp`: language-server-backed capabilities
-- `opendev-tools-symbol`: AST and symbol navigation
-- `opendev-mcp`: external tool protocol integration
-- `opendev-plugins`: plugin system
-- `opendev-hooks`: lifecycle automation hooks
+- `kendra-tools-core`: registry and tool contracts
+- `kendra-tools-impl`: concrete tool implementations
+- `kendra-tools-lsp`: language-server-backed capabilities
+- `kendra-tools-symbol`: AST and symbol navigation
+- `kendra-mcp`: external tool protocol integration
+- `kendra-plugins`: plugin system
+- `kendra-hooks`: lifecycle automation hooks
 
 #### Provider + Persistence Layer
 
 This is where external and durable state is handled.
 
-- `opendev-http`: provider adapters and API calls
-- `opendev-history`: session persistence and snapshotting
-- `opendev-memory`: memory and embedding-backed systems
-- `opendev-docker`: runtime isolation for Docker-backed execution paths
+- `kendra-http`: provider adapters and API calls
+- `kendra-history`: session persistence and snapshotting
+- `kendra-memory`: memory and embedding-backed systems
+- `kendra-docker`: runtime isolation for Docker-backed execution paths
 
 #### Shared Types
 
-- `opendev-models`: config, session, message, and cross-crate model types
+- `kendra-models`: config, session, message, and cross-crate model types
 
 ## Architectural Character
 
-OpenDev is best described as three overlapping architectures at once:
+KendraCLI is best described as three overlapping architectures at once:
 
 - a product architecture: CLI/TUI/Web surfaces
 - an agent architecture: model calls, reasoning loops, subagents, compaction
 - a systems architecture: registries, event buses, approvals, state persistence
 
-This is important because many AI tools stop at the second layer. OpenDev does not. It treats the agent as part of a broader runtime system.
+This is important because many AI tools stop at the second layer. KendraCLI does not. It treats the agent as part of a broader runtime system.
 
 ## Core Runtime Narrative
 
@@ -203,7 +203,7 @@ A request can begin in:
 
 ### 2. Config and Session Resolution
 
-Before any model call happens, OpenDev establishes:
+Before any model call happens, KendraCLI establishes:
 
 - working directory
 - project instructions
@@ -225,7 +225,7 @@ The prompt is not a static string. It is assembled from:
 - conversation history
 - optionally compacted or summarized context
 
-This is where OpenDev behaves like a context engineering system rather than a plain chatbot wrapper.
+This is where KendraCLI behaves like a context engineering system rather than a plain chatbot wrapper.
 
 ### 4. Agent ReAct Loop
 
@@ -237,13 +237,13 @@ The core execution engine is the ReAct loop:
 - observe results
 - continue or finish
 
-This loop is implemented in `opendev-agents` and is where autonomy actually lives.
+This loop is implemented in `kendra-agents` and is where autonomy actually lives.
 
 ### 5. Tool Execution and Provider Calls
 
 The agent can:
 
-- call model providers through `opendev-http`
+- call model providers through `kendra-http`
 - invoke built-in tools
 - call MCP-discovered tools
 - use LSP or symbol tooling for code understanding
@@ -251,7 +251,7 @@ The agent can:
 
 ### 6. State Persistence and UI Events
 
-During and after execution, OpenDev:
+During and after execution, KendraCLI:
 
 - streams progress to the TUI or Web UI
 - records tool results and messages
@@ -293,7 +293,7 @@ sequenceDiagram
 
 ## Compound AI View
 
-One of the most important "fancy" ways to describe OpenDev is that it is a compound AI system, not a single-model shell.
+One of the most important "fancy" ways to describe KendraCLI is that it is a compound AI system, not a single-model shell.
 
 That means different workflows can bind to different models:
 
@@ -334,7 +334,7 @@ flowchart TB
     VLM --> M5
 ```
 
-This gives OpenDev a strong story:
+This gives KendraCLI a strong story:
 
 - expensive reasoning can be isolated
 - cheap summarization can be delegated
@@ -343,7 +343,7 @@ This gives OpenDev a strong story:
 
 ## Subagent Architecture
 
-Subagents are an important part of the system story because they make OpenDev feel less like one long loop and more like a coordinated agent environment.
+Subagents are an important part of the system story because they make KendraCLI feel less like one long loop and more like a coordinated agent environment.
 
 In the current codebase, subagents are:
 
@@ -371,7 +371,7 @@ flowchart TD
     R --> P
 ```
 
-This is a strong visual because it shows OpenDev as a coordinator of bounded work packets rather than a single sequential brain.
+This is a strong visual because it shows KendraCLI as a coordinator of bounded work packets rather than a single sequential brain.
 
 ## Runtime Control Planes
 
@@ -388,10 +388,10 @@ Responsible for:
 
 Primary crates:
 
-- `opendev-cli`
-- `opendev-tui`
-- `opendev-web`
-- `opendev-channels`
+- `kendra-cli`
+- `kendra-tui`
+- `kendra-web`
+- `kendra-channels`
 
 ### Agent Control Plane
 
@@ -406,9 +406,9 @@ Responsible for:
 
 Primary crates:
 
-- `opendev-agents`
-- `opendev-context`
-- `opendev-runtime`
+- `kendra-agents`
+- `kendra-context`
+- `kendra-runtime`
 
 ### Action Plane
 
@@ -421,11 +421,11 @@ Responsible for:
 
 Primary crates:
 
-- `opendev-tools-core`
-- `opendev-tools-impl`
-- `opendev-tools-lsp`
-- `opendev-tools-symbol`
-- `opendev-mcp`
+- `kendra-tools-core`
+- `kendra-tools-impl`
+- `kendra-tools-lsp`
+- `kendra-tools-symbol`
+- `kendra-mcp`
 
 ### Provider Plane
 
@@ -438,7 +438,7 @@ Responsible for:
 
 Primary crate:
 
-- `opendev-http`
+- `kendra-http`
 
 ### Persistence Plane
 
@@ -452,9 +452,9 @@ Responsible for:
 
 Primary crates:
 
-- `opendev-history`
-- `opendev-memory`
-- `opendev-config`
+- `kendra-history`
+- `kendra-memory`
+- `kendra-config`
 
 ## Why the Crate Split Works
 
@@ -465,7 +465,7 @@ The current workspace separation is good because it aligns to stable responsibil
 - session/history logic is not buried inside the TUI.
 - provider adapters are swappable without changing orchestration semantics.
 
-This gives OpenDev a relatively clean evolutionary path:
+This gives KendraCLI a relatively clean evolutionary path:
 
 - more tools can be added without redesigning the runtime
 - more providers can be added without rewriting the loop
@@ -473,11 +473,11 @@ This gives OpenDev a relatively clean evolutionary path:
 
 ## A Recommended "Fancy" Presentation Narrative
 
-If you need to present OpenDev in a deck, demo, or document, use this sequence:
+If you need to present KendraCLI in a deck, demo, or document, use this sequence:
 
 ### Slide 1: Product Identity
 
-OpenDev is a terminal-native, open-source compound AI coding runtime.
+KendraCLI is a terminal-native, open-source compound AI coding runtime.
 
 ### Slide 2: System Context
 
@@ -511,7 +511,7 @@ Use the "Subagent Architecture" diagram.
 
 ### Slide 7: Architectural Differentiation
 
-Explain that OpenDev differs from a typical CLI wrapper because it combines:
+Explain that KendraCLI differs from a typical CLI wrapper because it combines:
 
 - multi-surface UX
 - workflow-specific model routing
@@ -572,11 +572,11 @@ flowchart LR
 
 If you need a concise architecture paragraph for the README, website, or a talk:
 
-> OpenDev is a compound AI coding runtime built as a layered Rust workspace. User requests enter through the CLI, TUI, Web UI, or channel adapters, pass through a shared runtime that resolves config, session state, and approvals, then execute inside a ReAct-based agent orchestrator that can call tools, route work to subagents, and bind different workflows to different LLMs. A modular tool platform provides access to local file/shell/git operations, web and MCP tools, and code intelligence via LSP and symbol systems, while persistence layers handle history, memory, snapshots, and resumable sessions.
+> KendraCLI is a compound AI coding runtime built as a layered Rust workspace. User requests enter through the CLI, TUI, Web UI, or channel adapters, pass through a shared runtime that resolves config, session state, and approvals, then execute inside a ReAct-based agent orchestrator that can call tools, route work to subagents, and bind different workflows to different LLMs. A modular tool platform provides access to local file/shell/git operations, web and MCP tools, and code intelligence via LSP and symbol systems, while persistence layers handle history, memory, snapshots, and resumable sessions.
 
 ## Closing View
 
-The most important thing to communicate is that OpenDev is not merely "a Rust CLI for talking to a model".
+The most important thing to communicate is that KendraCLI is not merely "a Rust CLI for talking to a model".
 
 It is:
 
@@ -587,3 +587,7 @@ It is:
 - a modular workspace designed for extension
 
 That is the architectural story worth highlighting in any figure set or design document.
+
+
+
+

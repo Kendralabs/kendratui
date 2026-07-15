@@ -2,7 +2,7 @@
 
 ## Overview
 
-The context engineering subsystem manages the LLM's finite context window throughout a conversation. It is responsible for token counting, staged compaction as usage grows, message pair integrity validation, codebase indexing, entity-based retrieval, and dynamic context assembly before each LLM call. In the crate dependency graph, `opendev-context` sits between the low-level models crate and the higher-level agents/runtime crates: agents and the ReAct executor depend on it, while it depends on `opendev-models` (for shared types) and `serde_json`/`chrono`/`regex` for implementation.
+The context engineering subsystem manages the LLM's finite context window throughout a conversation. It is responsible for token counting, staged compaction as usage grows, message pair integrity validation, codebase indexing, entity-based retrieval, and dynamic context assembly before each LLM call. In the crate dependency graph, `kendra-context` sits between the low-level models crate and the higher-level agents/runtime crates: agents and the ReAct executor depend on it, while it depends on `kendra-models` (for shared types) and `serde_json`/`chrono`/`regex` for implementation.
 
 ## Python Architecture
 
@@ -71,7 +71,7 @@ context_engineering/
 ### Module Structure
 
 ```
-opendev-context/src/
+kendra-context/src/
     lib.rs              # Module declarations, pub use re-exports
     compaction.rs       # ContextCompactor, ArtifactIndex, ArtifactEntry, OptimizationLevel, ApiMessage
     validated_list.rs   # ValidatedMessageList (wraps Vec<ApiMessage>)
@@ -156,7 +156,7 @@ Python's `ValidatedMessageList(list)` subclasses `list` and intercepts mutations
 
 ### 2. LLM Summarization Pushed to Higher Layer
 
-The Python `ContextCompactor` takes an HTTP client and calls `_summarize()` inline. The Rust version deliberately omits this, keeping the `opendev-context` crate free of async runtime and HTTP dependencies. Only `fallback_summary()` (a pure function) is provided. LLM-powered summarization is orchestrated by the agents crate, which already has access to the HTTP client and async runtime. This improves testability (the compactor can be tested without mocking HTTP) and keeps the dependency graph shallow.
+The Python `ContextCompactor` takes an HTTP client and calls `_summarize()` inline. The Rust version deliberately omits this, keeping the `kendra-context` crate free of async runtime and HTTP dependencies. Only `fallback_summary()` (a pure function) is provided. LLM-powered summarization is orchestrated by the agents crate, which already has access to the HTTP client and async runtime. This improves testability (the compactor can be tested without mocking HTTP) and keeps the dependency graph shallow.
 
 ### 3. Heuristic Token Counting Instead of tiktoken
 
@@ -314,24 +314,28 @@ pub struct ArtifactIndex {
 ## References
 
 ### Python
-- `opendev-py/opendev/core/context_engineering/compaction.py` -- ContextCompactor, ArtifactIndex, OptimizationLevel
-- `opendev-py/opendev/core/context_engineering/validated_message_list.py` -- ValidatedMessageList
-- `opendev-py/opendev/core/context_engineering/message_pair_validator.py` -- MessagePairValidator
-- `opendev-py/opendev/core/context_engineering/context_picker/picker.py` -- ContextPicker
-- `opendev-py/opendev/core/context_engineering/context_picker/models.py` -- ContextCategory, ContextReason, ContextPiece, AssembledContext
-- `opendev-py/opendev/core/context_engineering/context_picker/tracer.py` -- ContextTracer
-- `opendev-py/opendev/core/context_engineering/retrieval/indexer.py` -- CodebaseIndexer
-- `opendev-py/opendev/core/context_engineering/retrieval/retriever.py` -- ContextRetriever, EntityExtractor
-- `opendev-py/opendev/core/context_engineering/retrieval/token_monitor.py` -- ContextTokenMonitor
+- `kendra-py/kendra/core/context_engineering/compaction.py` -- ContextCompactor, ArtifactIndex, OptimizationLevel
+- `kendra-py/kendra/core/context_engineering/validated_message_list.py` -- ValidatedMessageList
+- `kendra-py/kendra/core/context_engineering/message_pair_validator.py` -- MessagePairValidator
+- `kendra-py/kendra/core/context_engineering/context_picker/picker.py` -- ContextPicker
+- `kendra-py/kendra/core/context_engineering/context_picker/models.py` -- ContextCategory, ContextReason, ContextPiece, AssembledContext
+- `kendra-py/kendra/core/context_engineering/context_picker/tracer.py` -- ContextTracer
+- `kendra-py/kendra/core/context_engineering/retrieval/indexer.py` -- CodebaseIndexer
+- `kendra-py/kendra/core/context_engineering/retrieval/retriever.py` -- ContextRetriever, EntityExtractor
+- `kendra-py/kendra/core/context_engineering/retrieval/token_monitor.py` -- ContextTokenMonitor
 
 ### Rust
-- `crates/opendev-context/src/lib.rs` -- Module declarations and re-exports
-- `crates/opendev-context/src/compaction.rs` -- ContextCompactor, ArtifactIndex, ArtifactEntry, OptimizationLevel
-- `crates/opendev-context/src/validated_list.rs` -- ValidatedMessageList
-- `crates/opendev-context/src/pair_validator.rs` -- MessagePairValidator, ViolationType, ValidationResult
-- `crates/opendev-context/src/context_picker.rs` -- ContextCategory, ContextReason, ContextPiece, AssembledContext, ContextTracer
-- `crates/opendev-context/src/retrieval/mod.rs` -- Re-exports
-- `crates/opendev-context/src/retrieval/indexer.rs` -- CodebaseIndexer
-- `crates/opendev-context/src/retrieval/retriever.rs` -- ContextRetriever, EntityExtractor, Entities
-- `crates/opendev-context/src/retrieval/token_monitor.rs` -- ContextTokenMonitor
-- `crates/opendev-context/src/worktree.rs` -- WorktreeManager, WorktreeInfo
+- `crates/kendra-context/src/lib.rs` -- Module declarations and re-exports
+- `crates/kendra-context/src/compaction.rs` -- ContextCompactor, ArtifactIndex, ArtifactEntry, OptimizationLevel
+- `crates/kendra-context/src/validated_list.rs` -- ValidatedMessageList
+- `crates/kendra-context/src/pair_validator.rs` -- MessagePairValidator, ViolationType, ValidationResult
+- `crates/kendra-context/src/context_picker.rs` -- ContextCategory, ContextReason, ContextPiece, AssembledContext, ContextTracer
+- `crates/kendra-context/src/retrieval/mod.rs` -- Re-exports
+- `crates/kendra-context/src/retrieval/indexer.rs` -- CodebaseIndexer
+- `crates/kendra-context/src/retrieval/retriever.rs` -- ContextRetriever, EntityExtractor, Entities
+- `crates/kendra-context/src/retrieval/token_monitor.rs` -- ContextTokenMonitor
+- `crates/kendra-context/src/worktree.rs` -- WorktreeManager, WorktreeInfo
+
+
+
+

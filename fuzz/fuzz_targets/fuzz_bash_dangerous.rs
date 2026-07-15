@@ -12,7 +12,7 @@ use libfuzzer_sys::fuzz_target;
 // Note: When the fuzz crate is wired up, this would import the detection
 // function directly. For now this is a placeholder structure.
 // The actual property-based tests live in the crate test modules
-// using proptest (see opendev-tools-impl tests).
+// using proptest (see kendra-tools-impl tests).
 
 fuzz_target!(|data: &str| {
     // Exercise the regex patterns against arbitrary input.

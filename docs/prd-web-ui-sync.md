@@ -24,14 +24,14 @@ inputDocuments:
   - docs/subagent-execution-model.md
 ---
 
-# Product Requirements Document — OpenDev Web UI Synchronization
+# Product Requirements Document — KendraCLI Web UI Synchronization
 
 **Author:** nghibui
 **Date:** 2026-03-27
 
 ## Executive Summary
 
-OpenDev is an open-source AI coding agent with two frontends: a terminal UI (TUI) built with ratatui and a Web UI built with React/Vite/Tailwind. The TUI has been the primary development focus and is feature-rich — subagent tree display, thinking block streaming, bash preview, todo/plan tracking, diff rendering, background task management, and comprehensive status monitoring. The Web UI has a solid foundation (WebSocket protocol with 35+ message types, multi-session support, chat, approval dialogs) but has fallen significantly behind the TUI in feature coverage.
+KendraCLI is an open-source AI coding agent with two frontends: a terminal UI (TUI) built with ratatui and a Web UI built with React/Vite/Tailwind. The TUI has been the primary development focus and is feature-rich — subagent tree display, thinking block streaming, bash preview, todo/plan tracking, diff rendering, background task management, and comprehensive status monitoring. The Web UI has a solid foundation (WebSocket protocol with 35+ message types, multi-session support, chat, approval dialogs) but has fallen significantly behind the TUI in feature coverage.
 
 **Goal:** Bring the Web UI to feature parity with the TUI through a shared frontend interface layer that prevents future drift between the two frontends.
 
@@ -75,7 +75,7 @@ Before any feature work, establish a unified event/state interface that both TUI
 
 **Problem:** TUI receives events via `AgentEventCallback` trait converted to `AppEvent` in `tui_runner.rs`. Web UI receives events via `broadcast::Sender<WsBroadcast>` serialized as JSON over WebSocket. These are two separate translation layers from the same agent core — changes require updates in both places, and they drift.
 
-**Solution:** A `FrontendEvent` enum in a shared Rust module (likely `opendev-models` or new `opendev-frontend` crate) that defines the canonical set of events both UIs consume. One adapter from agent internals to `FrontendEvent`. TUI consumes directly. Web UI serializes to JSON over WebSocket. TypeScript types derived from Rust definitions.
+**Solution:** A `FrontendEvent` enum in a shared Rust module (likely `kendra-models` or new `kendra-frontend` crate) that defines the canonical set of events both UIs consume. One adapter from agent internals to `FrontendEvent`. TUI consumes directly. Web UI serializes to JSON over WebSocket. TypeScript types derived from Rust definitions.
 
 ### Phase 1 — MVP Feature Set
 
@@ -296,20 +296,24 @@ Zustand store extensions:
 - `web-ui/src/types/` — TypeScript interfaces (needs expansion)
 
 ### Backend (Rust)
-- `crates/opendev-web/src/websocket.rs` — WebSocket message handling
-- `crates/opendev-web/src/protocol.rs` — 35+ message type definitions
-- `crates/opendev-web/src/state/mod.rs` — AppState, approval resolution
-- `crates/opendev-web/src/routes/chat.rs` — Query dispatch
+- `crates/kendra-web/src/websocket.rs` — WebSocket message handling
+- `crates/kendra-web/src/protocol.rs` — 35+ message type definitions
+- `crates/kendra-web/src/state/mod.rs` — AppState, approval resolution
+- `crates/kendra-web/src/routes/chat.rs` — Query dispatch
 
 ### TUI Reference (behavior specification)
-- `crates/opendev-tui/src/widgets/conversation/mod.rs` — Conversation rendering
-- `crates/opendev-tui/src/widgets/nested_tool/mod.rs` — Subagent tree display
-- `crates/opendev-tui/src/widgets/todo_panel.rs` — Todo panel
-- `crates/opendev-tui/src/widgets/status_bar.rs` — Status bar
-- `crates/opendev-tui/src/widgets/spinner.rs` — Animated thinking indicators
+- `crates/kendra-tui/src/widgets/conversation/mod.rs` — Conversation rendering
+- `crates/kendra-tui/src/widgets/nested_tool/mod.rs` — Subagent tree display
+- `crates/kendra-tui/src/widgets/todo_panel.rs` — Todo panel
+- `crates/kendra-tui/src/widgets/status_bar.rs` — Status bar
+- `crates/kendra-tui/src/widgets/spinner.rs` — Animated thinking indicators
 
 ### Shared Models
-- `crates/opendev-models/src/` — ChatMessage, ToolCall, Role types
-- `crates/opendev-runtime/src/event_bus/` — RuntimeEvent, EventBus
-- `crates/opendev-agents/src/traits.rs` — AgentEventCallback trait
-- `crates/opendev-tools-impl/src/agents/events.rs` — SubagentEvent enum
+- `crates/kendra-models/src/` — ChatMessage, ToolCall, Role types
+- `crates/kendra-runtime/src/event_bus/` — RuntimeEvent, EventBus
+- `crates/kendra-agents/src/traits.rs` — AgentEventCallback trait
+- `crates/kendra-tools-impl/src/agents/events.rs` — SubagentEvent enum
+
+
+
+

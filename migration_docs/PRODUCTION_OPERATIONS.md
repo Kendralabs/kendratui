@@ -2,18 +2,18 @@
 
 ## Overview
 
-This document covers the production-critical runtime subsystems that keep OpenDev reliable under real-world conditions: interrupt handling, error classification and retry, session persistence with crash recovery, file locking, configuration migration, the snapshot system for per-step undo, and the EventBus for decoupled inter-component communication. Together these subsystems form the operational backbone that sits between the agent logic (`opendev-agents`) and the user-facing frontends (`opendev-tui`, `opendev-web`).
+This document covers the production-critical runtime subsystems that keep KendraCLI reliable under real-world conditions: interrupt handling, error classification and retry, session persistence with crash recovery, file locking, configuration migration, the snapshot system for per-step undo, and the EventBus for decoupled inter-component communication. Together these subsystems form the operational backbone that sits between the agent logic (`kendra-agents`) and the user-facing frontends (`kendra-tui`, `kendra-web`).
 
 In the overall architecture, most of these subsystems live in two crates:
-- **`opendev-runtime`** -- interrupt tokens, error classification, error handling, snapshot manager, event bus
-- **`opendev-history`** -- session manager, file locks, session index, a second snapshot manager for per-step undo
+- **`kendra-runtime`** -- interrupt tokens, error classification, error handling, snapshot manager, event bus
+- **`kendra-history`** -- session manager, file locks, session index, a second snapshot manager for per-step undo
 
 ## Python Architecture
 
 ### Module Structure
 
 ```
-opendev/core/
+KendraCLI/core/
   runtime/
     interrupt_token.py          # InterruptToken (threading.Event + ctypes async exception injection)
     monitoring/
@@ -68,7 +68,7 @@ opendev/core/
 ### Module Structure
 
 ```
-crates/opendev-runtime/src/
+crates/kendra-runtime/src/
   interrupt.rs        # InterruptToken (AtomicBool + CancellationToken)
   errors.rs           # ErrorCategory enum, StructuredError struct, classify_api_error()
   error_handler.rs    # ErrorAction enum, ErrorResult, OperationError, is_transient_error()
@@ -76,7 +76,7 @@ crates/opendev-runtime/src/
   snapshot.rs         # SnapshotManager (shadow git, take/diff/revert/cleanup)
   lib.rs              # Module declarations and re-exports
 
-crates/opendev-history/src/
+crates/kendra-history/src/
   session_manager.rs  # SessionManager (JSON + JSONL split format)
   file_locks.rs       # FileLock (fd-lock RwLock), with_file_lock()
   snapshot.rs         # SnapshotManager (bare shadow git, tree-hash based, track/patch/revert/restore)
@@ -84,7 +84,7 @@ crates/opendev-history/src/
   listing.rs          # SessionListing
   lib.rs              # Module declarations and re-exports
 
-crates/opendev-config/src/
+crates/kendra-config/src/
   loader.rs           # ConfigLoader (hierarchical merge, atomic save, env overrides)
   paths.rs            # Path resolution
 ```
@@ -98,8 +98,8 @@ crates/opendev-config/src/
 - **FileLock** (`file_locks.rs`): Uses `fd-lock::RwLock` for cross-platform exclusive locks. Creates `.lock` sidecar files, retries every 50ms up to timeout. RAII-based: lock released on `Drop`, sidecar file cleaned up.
 - **SessionManager** (`session_manager.rs`): Single struct (no mixin composition). JSON metadata + JSONL transcript split. Atomic writes via temp-file-then-rename. Session index updated on save.
 - **SnapshotManager** (two implementations):
-  - `opendev-runtime::snapshot` -- commit-based: copies files into a shadow git repo and creates commits. Supports `take_snapshot`, `get_diff`, `revert_to_snapshot`.
-  - `opendev-history::snapshot` -- tree-hash-based: uses `--bare` init and `git write-tree` for lightweight snapshots without commits. Supports `track`, `patch`, `revert`, `restore`, `undo_last`.
+  - `kendra-runtime::snapshot` -- commit-based: copies files into a shadow git repo and creates commits. Supports `take_snapshot`, `get_diff`, `revert_to_snapshot`.
+  - `kendra-history::snapshot` -- tree-hash-based: uses `--bare` init and `git write-tree` for lightweight snapshots without commits. Supports `track`, `patch`, `revert`, `restore`, `undo_last`.
 - **ConfigLoader** (`loader.rs`): Hierarchical merge via `serde_json::Value` overlay. Atomic save (write to `.tmp` then rename). Environment variable overrides for provider, model, max_tokens, temperature, verbose, debug.
 
 ### Design Patterns and Python Mapping
@@ -137,7 +137,7 @@ crates/opendev-config/src/
 | `exclusive_session_lock()` (fcntl.flock) | `FileLock` (fd-lock::RwLock) | Context manager to RAII guard | Cross-platform via `fd-lock` crate |
 | `SessionManager` (3 mixins) | `SessionManager` (single struct) | Mixin composition to struct | Separate modules but single type |
 | `PersistenceMixin.add_message()` auto-save | `SessionManager.save_session()` caller-driven | Auto-save moved to caller | No built-in turn-count auto-save; caller decides when to save |
-| `SnapshotManager` (commit-based shadow git) | Two `SnapshotManager` implementations | Split into commit-based and tree-hash-based | `opendev-runtime` has commit-based; `opendev-history` has tree-hash-based |
+| `SnapshotManager` (commit-based shadow git) | Two `SnapshotManager` implementations | Split into commit-based and tree-hash-based | `kendra-runtime` has commit-based; `kendra-history` has tree-hash-based |
 | `ConfigManager` (comment stripping, `{env:VAR}`) | `ConfigLoader` (serde_json merge, env overrides) | Simplified | No JSON comment support; no `{env:VAR}` / `{file:path}` substitution; no Fireworks normalization |
 | `ConfigManager.ensure_directories()` legacy migration | Not ported | Dropped | No old flat sessions directory migration in Rust |
 
@@ -145,7 +145,7 @@ crates/opendev-config/src/
 
 ### Interrupt Handling
 
-**InterruptToken design** (`crates/opendev-runtime/src/interrupt.rs`):
+**InterruptToken design** (`crates/kendra-runtime/src/interrupt.rs`):
 
 The token wraps `Arc<InterruptInner>` containing two cancellation primitives:
 
@@ -169,7 +169,7 @@ tokio::select! {
 
 ### Error Classification & Retry
 
-**Error types** (`crates/opendev-runtime/src/errors.rs`):
+**Error types** (`crates/kendra-runtime/src/errors.rs`):
 
 The Python subclass hierarchy (`ContextOverflowError`, `RateLimitError`, etc.) is flattened into a single `StructuredError` struct with an `ErrorCategory` enum discriminant. Category-specific fields (`token_count`, `token_limit`, `retry_after`) are `Option<T>` instead of subclass-specific fields.
 
@@ -177,7 +177,7 @@ Named constructors (`StructuredError::context_overflow()`, `::rate_limit()`, `::
 
 **Pattern matching** uses `LazyLock<PatternSet>` to pre-compile regex patterns at first access. The same provider-specific patterns are preserved (Anthropic, OpenAI, Google, Azure) with identical classification priority: gateway > overflow > rate_limit > auth (by status code) > auth (by pattern) > generic.
 
-**Error handling** (`crates/opendev-runtime/src/error_handler.rs`):
+**Error handling** (`crates/kendra-runtime/src/error_handler.rs`):
 
 Decoupled from UI. Provides pure data types:
 - `ErrorAction` enum: Retry, Skip, Cancel, Edit
@@ -196,7 +196,7 @@ Decoupled from UI. Provides pure data types:
 
 ### Session Management
 
-**SessionManager** (`crates/opendev-history/src/session_manager.rs`):
+**SessionManager** (`crates/kendra-history/src/session_manager.rs`):
 
 Single struct replacing Python's mixin-based composition. Storage format:
 - `{id}.json` -- session metadata (no messages)
@@ -217,7 +217,7 @@ std::fs::rename(&tmp_json, &json_path)?;
 
 ### File Locking
 
-**FileLock** (`crates/opendev-history/src/file_locks.rs`):
+**FileLock** (`crates/kendra-history/src/file_locks.rs`):
 
 Cross-platform exclusive locking via `fd-lock::RwLock`:
 - Creates a `.lock` sidecar file adjacent to the target file
@@ -236,15 +236,15 @@ Compared to Python's `fcntl.flock()` context manager, the Rust implementation:
 
 Two snapshot implementations exist, serving different use cases:
 
-**Commit-based** (`crates/opendev-runtime/src/snapshot.rs`):
-- Shadow git repo at `~/.opendev/data/snapshot/{project_id}/`
+**Commit-based** (`crates/kendra-runtime/src/snapshot.rs`):
+- Shadow git repo at `~/.kendra/data/snapshot/{project_id}/`
 - Creates actual git commits containing copies of modified files
 - Operations: `take_snapshot()`, `get_diff()`, `revert_to_snapshot()`, `cleanup()`
 - Project ID computed via `DefaultHasher` (16-char hex)
 - Used for tool-level snapshots (before/after a single tool execution)
 
-**Tree-hash-based** (`crates/opendev-history/src/snapshot.rs`):
-- Bare shadow git repo at `~/.opendev/snapshot/{project_id}/`
+**Tree-hash-based** (`crates/kendra-history/src/snapshot.rs`):
+- Bare shadow git repo at `~/.kendra/snapshot/{project_id}/`
 - Uses `git write-tree` to capture tree hashes without creating commits
 - Operations: `track()`, `patch()`, `revert()`, `restore()`, `undo_last()`
 - Maintains an in-memory `Vec<String>` of snapshot hashes for the session
@@ -259,7 +259,7 @@ Both implementations:
 
 ### EventBus
 
-**EventBus** (`crates/opendev-runtime/src/event_bus.rs`):
+**EventBus** (`crates/kendra-runtime/src/event_bus.rs`):
 
 Built on `tokio::sync::broadcast`:
 - `publish()` / `emit()` send events to all subscribers
@@ -305,7 +305,7 @@ Compared to Python's EventBus:
 ### InterruptToken with tokio::select!
 
 ```rust
-use opendev_runtime::InterruptToken;
+use KendraCLI_runtime::InterruptToken;
 
 let token = InterruptToken::new();
 let child = token.clone();
@@ -328,7 +328,7 @@ token.throw_if_requested()?;
 ### Error Classification
 
 ```rust
-use opendev_runtime::{classify_api_error, ErrorCategory};
+use KendraCLI_runtime::{classify_api_error, ErrorCategory};
 
 let err = classify_api_error(
     "This model's maximum context length is 128000 tokens",
@@ -343,7 +343,7 @@ assert!(err.should_compact());
 ### Atomic Session Save
 
 ```rust
-use opendev_history::SessionManager;
+use KendraCLI_history::SessionManager;
 
 let mgr = SessionManager::new(session_dir)?;
 // Writes .tmp file then renames atomically
@@ -353,7 +353,7 @@ mgr.save_session(&session)?;
 ### File Locking
 
 ```rust
-use opendev_history::FileLock;
+use KendraCLI_history::FileLock;
 use std::time::Duration;
 
 let lock = FileLock::acquire(path, Duration::from_secs(5))?;
@@ -364,7 +364,7 @@ lock.release(); // or just let it drop
 ### EventBus
 
 ```rust
-use opendev_runtime::{EventBus, FilteredSubscriber};
+use KendraCLI_runtime::{EventBus, FilteredSubscriber};
 
 let bus = EventBus::new();
 let mut sub = FilteredSubscriber::new(&bus, Some(vec!["tool.complete".into()]));
@@ -396,21 +396,25 @@ if let Some(event) = sub.recv().await {
 
 ## References
 
-- Python interrupt token: `opendev-py/opendev/core/runtime/interrupt_token.py`
-- Python errors: `opendev-py/opendev/core/errors.py`
-- Python error handler: `opendev-py/opendev/core/runtime/monitoring/error_handler.py`
-- Python task monitor: `opendev-py/opendev/core/runtime/monitoring/task_monitor.py`
-- Python session manager: `opendev-py/opendev/core/context_engineering/history/session_manager/`
-- Python file locks: `opendev-py/opendev/core/context_engineering/history/file_locks.py`
-- Python snapshot manager: `opendev-py/opendev/core/snapshot/manager.py`
-- Python event bus: `opendev-py/opendev/core/events/bus.py`
-- Python config manager: `opendev-py/opendev/core/runtime/config.py`
-- Rust interrupt: `crates/opendev-runtime/src/interrupt.rs`
-- Rust errors: `crates/opendev-runtime/src/errors.rs`
-- Rust error handler: `crates/opendev-runtime/src/error_handler.rs`
-- Rust event bus: `crates/opendev-runtime/src/event_bus.rs`
-- Rust snapshot (runtime): `crates/opendev-runtime/src/snapshot.rs`
-- Rust snapshot (history): `crates/opendev-history/src/snapshot.rs`
-- Rust session manager: `crates/opendev-history/src/session_manager.rs`
-- Rust file locks: `crates/opendev-history/src/file_locks.rs`
-- Rust config loader: `crates/opendev-config/src/loader.rs`
+- Python interrupt token: `kendra-py/kendra/core/runtime/interrupt_token.py`
+- Python errors: `kendra-py/kendra/core/errors.py`
+- Python error handler: `kendra-py/kendra/core/runtime/monitoring/error_handler.py`
+- Python task monitor: `kendra-py/kendra/core/runtime/monitoring/task_monitor.py`
+- Python session manager: `kendra-py/kendra/core/context_engineering/history/session_manager/`
+- Python file locks: `kendra-py/kendra/core/context_engineering/history/file_locks.py`
+- Python snapshot manager: `kendra-py/kendra/core/snapshot/manager.py`
+- Python event bus: `kendra-py/kendra/core/events/bus.py`
+- Python config manager: `kendra-py/kendra/core/runtime/config.py`
+- Rust interrupt: `crates/kendra-runtime/src/interrupt.rs`
+- Rust errors: `crates/kendra-runtime/src/errors.rs`
+- Rust error handler: `crates/kendra-runtime/src/error_handler.rs`
+- Rust event bus: `crates/kendra-runtime/src/event_bus.rs`
+- Rust snapshot (runtime): `crates/kendra-runtime/src/snapshot.rs`
+- Rust snapshot (history): `crates/kendra-history/src/snapshot.rs`
+- Rust session manager: `crates/kendra-history/src/session_manager.rs`
+- Rust file locks: `crates/kendra-history/src/file_locks.rs`
+- Rust config loader: `crates/kendra-config/src/loader.rs`
+
+
+
+

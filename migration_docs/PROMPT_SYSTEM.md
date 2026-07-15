@@ -2,16 +2,16 @@
 
 ## Overview
 
-The prompt template system is the subsystem responsible for composing LLM system prompts from modular markdown sections. It lives in `opendev-agents` and is consumed by the ReAct loop (`opendev-agents`), the REPL layer (`opendev-repl`), and indirectly by the TUI and web backends. The system supports priority-ordered section registration, conditional inclusion based on runtime context, two-part cache-aware splitting for Anthropic prompt caching, variable substitution, and a three-tier template resolution chain (embedded compile-time, filesystem, fallback).
+The prompt template system is the subsystem responsible for composing LLM system prompts from modular markdown sections. It lives in `kendra-agents` and is consumed by the ReAct loop (`kendra-agents`), the REPL layer (`kendra-repl`), and indirectly by the TUI and web backends. The system supports priority-ordered section registration, conditional inclusion based on runtime context, two-part cache-aware splitting for Anthropic prompt caching, variable substitution, and a three-tier template resolution chain (embedded compile-time, filesystem, fallback).
 
-In the Python codebase the system spans five modules under `opendev/core/agents/prompts/`. In Rust it is consolidated into four modules under `crates/opendev-agents/src/prompts/`, with 91 markdown templates embedded into the binary at compile time via `include_str!`.
+In the Python codebase the system spans five modules under `KendraCLI/core/agents/prompts/`. In Rust it is consolidated into four modules under `crates/kendra-agents/src/prompts/`, with 91 markdown templates embedded into the binary at compile time via `include_str!`.
 
 ## Python Architecture
 
 ### Module Structure
 
 ```
-opendev/core/agents/prompts/
+KendraCLI/core/agents/prompts/
     __init__.py          # Public API: load_prompt, get_prompt_path, get_reminder
     composition.py       # PromptComposer, PromptSection, factory functions
     loader.py            # load_prompt(), load_tool_description(), save_prompt()
@@ -55,7 +55,7 @@ Python uses two substitution syntaxes:
 ### Module Structure
 
 ```
-crates/opendev-agents/src/prompts/
+crates/kendra-agents/src/prompts/
     mod.rs               # Public re-exports
     composer.rs          # PromptComposer, PromptSection, factory functions, substitute_variables()
     loader.rs            # PromptLoader struct with resolution chain
@@ -63,7 +63,7 @@ crates/opendev-agents/src/prompts/
 ```
 
 ```
-crates/opendev-agents/templates/
+crates/kendra-agents/templates/
     generators/          # 2 templates (agent, skill generators)
     memory/              # 3 templates (sentiment, topic, update instructions)
     subagents/           # 8 templates (ask-user, code-explorer, planner, etc.)
@@ -265,15 +265,19 @@ pub fn substitute_variables(template: &str, variables: &HashMap<String, String>)
 ## References
 
 ### Python Files
-- `opendev-py/opendev/core/agents/prompts/composition.py` -- Composer, sections, factory functions
-- `opendev-py/opendev/core/agents/prompts/loader.py` -- Prompt file loading
-- `opendev-py/opendev/core/agents/prompts/renderer.py` -- Template rendering with `${VAR}` substitution
-- `opendev-py/opendev/core/agents/prompts/variables.py` -- Variable registry
-- `opendev-py/opendev/core/agents/prompts/reminders.py` -- Reminder string loading and nudge injection
+- `kendra-py/kendra/core/agents/prompts/composition.py` -- Composer, sections, factory functions
+- `kendra-py/kendra/core/agents/prompts/loader.py` -- Prompt file loading
+- `kendra-py/kendra/core/agents/prompts/renderer.py` -- Template rendering with `${VAR}` substitution
+- `kendra-py/kendra/core/agents/prompts/variables.py` -- Variable registry
+- `kendra-py/kendra/core/agents/prompts/reminders.py` -- Reminder string loading and nudge injection
 
 ### Rust Files
-- `crates/opendev-agents/src/prompts/mod.rs` -- Public API re-exports
-- `crates/opendev-agents/src/prompts/composer.rs` -- Composer, sections, conditions, variable substitution, factory functions
-- `crates/opendev-agents/src/prompts/loader.rs` -- PromptLoader with resolution chain
-- `crates/opendev-agents/src/prompts/embedded.rs` -- 91 `include_str!` constants and `TEMPLATES` registry
-- `crates/opendev-agents/templates/` -- All markdown template files (system, tools, subagents, memory, generators, reminders)
+- `crates/kendra-agents/src/prompts/mod.rs` -- Public API re-exports
+- `crates/kendra-agents/src/prompts/composer.rs` -- Composer, sections, conditions, variable substitution, factory functions
+- `crates/kendra-agents/src/prompts/loader.rs` -- PromptLoader with resolution chain
+- `crates/kendra-agents/src/prompts/embedded.rs` -- 91 `include_str!` constants and `TEMPLATES` registry
+- `crates/kendra-agents/templates/` -- All markdown template files (system, tools, subagents, memory, generators, reminders)
+
+
+
+

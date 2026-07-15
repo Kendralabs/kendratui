@@ -2,14 +2,14 @@
 
 ## Overview
 
-The MCP (Model Context Protocol) integration enables OpenDev to connect to external tool servers using the standardized JSON-RPC 2.0 protocol. MCP servers expose tools, resources, and prompts that OpenDev can discover and invoke at runtime, extending the agent's capabilities without modifying the core codebase. The integration lives in the `opendev-mcp` crate (Rust) and `opendev/core/context_engineering/mcp/` package (Python), sitting between the tool registry (`opendev-tools-core`) and external MCP server processes.
+The MCP (Model Context Protocol) integration enables KendraCLI to connect to external tool servers using the standardized JSON-RPC 2.0 protocol. MCP servers expose tools, resources, and prompts that KendraCLI can discover and invoke at runtime, extending the agent's capabilities without modifying the core codebase. The integration lives in the `kendra-mcp` crate (Rust) and `KendraCLI/core/context_engineering/mcp/` package (Python), sitting between the tool registry (`kendra-tools-core`) and external MCP server processes.
 
 ## Python Architecture
 
 ### Module Structure
 
 ```
-opendev/core/context_engineering/mcp/
+KendraCLI/core/context_engineering/mcp/
   __init__.py              # Re-exports MCPManager, MCPServerConfig, MCPConfig
   config.py                # Config loading, saving, merging, env var expansion
   handler.py               # McpToolHandler - bridges tool dispatch to MCPManager
@@ -37,7 +37,7 @@ MCPManager(TransportMixin, ConnectionMixin, ServerConfigMixin)
 
 ### Key Abstractions
 
-- **fastmcp.Client**: The Python implementation delegates all protocol work (initialize handshake, tool discovery, tool calls) to the third-party `fastmcp` library. OpenDev's code only manages transport selection, lifecycle, and result extraction.
+- **fastmcp.Client**: The Python implementation delegates all protocol work (initialize handshake, tool discovery, tool calls) to the third-party `fastmcp` library. KendraCLI's code only manages transport selection, lifecycle, and result extraction.
 - **Background event loop**: `MCPManager` runs a dedicated `asyncio` event loop in a daemon thread. All async MCP operations are scheduled via `asyncio.run_coroutine_threadsafe()`, with synchronous wrappers that block on `future.result(timeout=...)`. `call_tool_sync` polls with 100ms intervals to support interrupt checking via `TaskMonitor`.
 - **`_SuppressStderr`**: Context manager that redirects fd 2 to `/dev/null` during connection/disconnection to hide noisy MCP server stderr output.
 
@@ -60,7 +60,7 @@ MCPManager(TransportMixin, ConnectionMixin, ServerConfigMixin)
 ### Module Structure
 
 ```
-crates/opendev-mcp/src/
+crates/kendra-mcp/src/
   lib.rs          # Module declarations and public re-exports
   config.rs       # McpConfig, McpServerConfig, TransportType, load/save/merge/expand
   models.rs       # Protocol types: McpTool, McpToolResult, McpContent, JSON-RPC messages
@@ -287,7 +287,7 @@ JsonRpcRequest {
     params: Some({
         "protocolVersion": "2024-11-05",
         "capabilities": { "roots": { "listChanged": true } },
-        "clientInfo": { "name": "opendev", "version": "0.1.0" }
+        "clientInfo": { "name": "KendraCLI", "version": "0.1.0" }
     }),
 }
 
@@ -333,7 +333,11 @@ def call_tool_sync(self, server_name, tool_name, arguments, task_monitor=None):
 
 ## References
 
-- Rust source: `crates/opendev-mcp/src/` (config.rs, models.rs, transport.rs, manager.rs, error.rs, lib.rs)
-- Python source: `opendev/core/context_engineering/mcp/` (config.py, handler.py, models.py, manager/)
+- Rust source: `crates/kendra-mcp/src/` (config.rs, models.rs, transport.rs, manager.rs, error.rs, lib.rs)
+- Python source: `KendraCLI/core/context_engineering/mcp/` (config.py, handler.py, models.py, manager/)
 - MCP specification: https://modelcontextprotocol.io
 - JSON-RPC 2.0 specification: https://www.jsonrpc.org/specification
+
+
+
+

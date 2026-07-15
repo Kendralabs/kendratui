@@ -88,7 +88,7 @@ swecli run ui
 
 The settings sync works because:
 1. Web UI calls `/api/config` endpoints
-2. Backend uses `ConfigManager` which reads/writes `~/.opendev/settings.json`
+2. Backend uses `ConfigManager` which reads/writes `~/.kendra/settings.json`
 3. Terminal CLI uses same `ConfigManager`
 4. Both UIs share the same config file = automatic sync
 
@@ -117,3 +117,4 @@ Frontend:
 ✅ Smooth animations and transitions
 
 Restart now to see all improvements! 🚀
+

@@ -1,8 +1,8 @@
-# Agent Framework Adaptation: From Claude Code to OpenDev
+# Agent Framework Adaptation: From Claude Code to KendraCLI
 
 ## Purpose
 
-Adapt Anthropic's Claude Code agent orchestration patterns into OpenDev's Rust-based architecture, enabling background agent execution, inter-agent communication, and parallel work isolation — features that transform OpenDev from a single-agent tool into a multi-agent coding platform.
+Adapt Anthropic's Claude Code agent orchestration patterns into KendraCLI's Rust-based architecture, enabling background agent execution, inter-agent communication, and parallel work isolation — features that transform KendraCLI from a single-agent tool into a multi-agent coding platform.
 
 ## Goal
 
@@ -12,9 +12,9 @@ Give users the ability to:
 3. Monitor all agents from a unified task watcher with rich progress display
 4. Isolate agent work in git worktrees to prevent file conflicts
 
-## Gap Analysis: Claude Code vs OpenDev (Before)
+## Gap Analysis: Claude Code vs KendraCLI (Before)
 
-| Capability | Claude Code | OpenDev (Before) |
+| Capability | Claude Code | KendraCLI (Before) |
 |-----------|------------|-----------------|
 | Agent execution | 3 modes: sync, async (background), fork (cache-optimized) | Sync only — parent blocks until subagent completes |
 | Background agents | `run_in_background: true` returns task_id immediately | Not supported |
@@ -31,7 +31,7 @@ Give users the ability to:
 
 ## Why This Adaptation
 
-OpenDev's synchronous-only subagent model creates two problems:
+KendraCLI's synchronous-only subagent model creates two problems:
 
 1. **Blocking**: When the LLM spawns an Explore agent to analyze a large codebase (30-60s), the user stares at a spinner. They can't type, ask questions, or redirect — they just wait. Claude Code solved this with background agents.
 
@@ -39,11 +39,11 @@ OpenDev's synchronous-only subagent model creates two problems:
 
 ## What Was Built
 
-### 1. TaskManager (`opendev-runtime/src/task_manager/`)
+### 1. TaskManager (`kendra-runtime/src/task_manager/`)
 
 **What**: A UI-agnostic task lifecycle state machine replacing the TUI-specific `BackgroundAgentManager` for new features.
 
-**Why**: The existing `BackgroundAgentManager` lives in the TUI crate and can't be used from the REPL, web backend, or tools. TaskManager lives in `opendev-runtime` and is accessible everywhere.
+**Why**: The existing `BackgroundAgentManager` lives in the TUI crate and can't be used from the REPL, web backend, or tools. TaskManager lives in `kendra-runtime` and is accessible everywhere.
 
 **How**: `RwLock<HashMap<String, TaskInfo>>` with atomic state transitions (Pending → Running → Completed/Failed/Killed). Key features learned from Claude Code:
 - **Idempotent transitions**: `kill_task()` on an already-killed task is a no-op (prevents double-kill bugs)
@@ -57,7 +57,7 @@ OpenDev's synchronous-only subagent model creates two problems:
 
 ---
 
-### 2. Sidechain Transcripts (`opendev-history/src/sidechain/`)
+### 2. Sidechain Transcripts (`kendra-history/src/sidechain/`)
 
 **What**: Append-only JSONL writer/reader for agent conversation persistence.
 
@@ -70,7 +70,7 @@ OpenDev's synchronous-only subagent model creates two problems:
   - Removes orphaned tool calls (tool_use without matching tool_result)
   - Skips system prompt, token usage, and state change entries
 
-**Storage**: `~/.opendev/sessions/{session_id}/agents/{agent_id}.jsonl`
+**Storage**: `~/.kendra/sessions/{session_id}/agents/{agent_id}.jsonl`
 
 **Entry types**: `SystemPrompt`, `AssistantMsg`, `ToolResult`, `Tokens`, `StateChange`
 
@@ -120,7 +120,7 @@ LLM calls spawn_subagent(agent_type="Explore", task="...", run_in_background=tru
 
 **What**: Four new fields on the agent specification struct, all with `#[serde(default)]` for backward compatibility.
 
-**Why**: Claude Code agent definitions support permission_mode, isolation, mcpServers, hooks, skills, background, omitClaudeMd. OpenDev's spec was limited to tools/model/temperature.
+**Why**: Claude Code agent definitions support permission_mode, isolation, mcpServers, hooks, skills, background, omitClaudeMd. KendraCLI's spec was limited to tools/model/temperature.
 
 **Fields added**:
 - `permission_mode: AgentPermissionMode` (Inherit/Autonomous/Manual) — controls tool approval behavior
@@ -128,7 +128,7 @@ LLM calls spawn_subagent(agent_type="Explore", task="...", run_in_background=tru
 - `background: bool` — auto-spawn as background agent
 - `omit_instructions: bool` — skip project instruction files (CLAUDE.md) from system prompt
 
-**Backward compatible**: Existing `.opendev/agents/*.md` custom agent definitions parse unchanged because all new fields default to their zero values.
+**Backward compatible**: Existing `.kendra/agents/*.md` custom agent definitions parse unchanged because all new fields default to their zero values.
 
 ---
 
@@ -147,7 +147,7 @@ LLM calls spawn_subagent(agent_type="Explore", task="...", run_in_background=tru
 
 ---
 
-### 6. Mailbox System (`opendev-runtime/src/mailbox/`)
+### 6. Mailbox System (`kendra-runtime/src/mailbox/`)
 
 **What**: File-based inbox per agent with exclusive file locking for concurrent-safe message passing.
 
@@ -167,14 +167,14 @@ LLM calls spawn_subagent(agent_type="Explore", task="...", run_in_background=tru
 
 ---
 
-### 7. TeamManager (`opendev-runtime/src/team_manager/`)
+### 7. TeamManager (`kendra-runtime/src/team_manager/`)
 
 **What**: Creates named teams with a leader and member agents, persisted to disk.
 
 **Why**: Claude Code's `TeamCreateTool` creates teams with `leadAgentId`, members, and a file-based mailbox directory. Teams enable multi-agent collaboration patterns.
 
 **How**:
-- `create_team()`: Creates `~/.opendev/teams/{name}/team.json` + `inboxes/` directory
+- `create_team()`: Creates `~/.kendra/teams/{name}/team.json` + `inboxes/` directory
 - `add_member()`: Registers member with name, agent_type, task_id, status
 - `update_member_status()`: Tracks Idle/Busy/Waiting/Done/Failed
 - `delete_team()`: Removes all team files
@@ -227,7 +227,7 @@ LLM calls spawn_subagent(agent_type="Explore", task="...", run_in_background=tru
 
 **What**: Detail view, enhanced footer, and new keybindings.
 
-**Why**: Claude Code's `BackgroundTasksDialog` has task pills, detail views, restart, and sorting. OpenDev's task watcher had basic grid cells with limited information.
+**Why**: Claude Code's `BackgroundTasksDialog` has task pills, detail views, restart, and sorting. KendraCLI's task watcher had basic grid cells with limited information.
 
 **Changes**:
 
@@ -265,14 +265,14 @@ CreateTeamTool::execute()
 
 ---
 
-### 12. WorktreeManager (`opendev-runtime/src/worktree/`)
+### 12. WorktreeManager (`kendra-runtime/src/worktree/`)
 
 **What**: Creates and manages git worktrees for agent isolation.
 
 **Why**: When multiple agents edit files in parallel, they conflict. Claude Code uses `git worktree add` with symlinks for efficiency. Agents with `isolation: worktree` get their own branch and working directory.
 
 **How**:
-- `create()`: `git worktree add -b opendev/agent-{short_id} {path}` from HEAD
+- `create()`: `git worktree add -b KendraCLI/agent-{short_id} {path}` from HEAD
 - `has_changes()`: `git status --porcelain` in worktree
 - `cleanup()`: If no changes, `git worktree remove --force` + `git branch -D`. If changes exist, preserves worktree for manual review.
 - `list()`: Enumerates existing worktrees in base directory
@@ -307,7 +307,7 @@ CreateTeamTool::execute()
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        opendev-cli                           │
+│                        kendra-cli                           │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
 │  │  TuiRunner   │  │ AgentRuntime │  │  WebExecutor      │  │
 │  │  (bridge)    │  │ (query loop) │  │  (WebSocket)      │  │
@@ -324,7 +324,7 @@ CreateTeamTool::execute()
 └─────────┼───────────────────────────────────────────────────┘
           │
 ┌─────────▼───────────────────────────────────────────────────┐
-│                        opendev-tui                           │
+│                        kendra-tui                           │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
 │  │ TaskWatcher  │  │ StatusBar    │  │  Toast system      │  │
 │  │ (detail,     │  │ (team pill)  │  │  (team/bg toasts)  │  │
@@ -337,7 +337,7 @@ CreateTeamTool::execute()
 └─────────────────────────────────────────────────────────────┘
           │
 ┌─────────▼───────────────────────────────────────────────────┐
-│                      opendev-agents                          │
+│                      kendra-agents                          │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
 │  │ SubAgentSpec │  │ RunnerContext│  │  inject_mailbox_   │  │
 │  │ (+4 fields)  │  │ (+mailbox)   │  │  messages()        │  │
@@ -345,7 +345,7 @@ CreateTeamTool::execute()
 └─────────────────────────────────────────────────────────────┘
           │
 ┌─────────▼───────────────────────────────────────────────────┐
-│                      opendev-runtime                         │
+│                      kendra-runtime                         │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
 │  │ TaskManager  │  │   Mailbox    │  │  TeamManager       │  │
 │  │ (lifecycle)  │  │ (fd-lock IPC)│  │  (team config)     │  │
@@ -357,7 +357,7 @@ CreateTeamTool::execute()
 └─────────────────────────────────────────────────────────────┘
           │
 ┌─────────▼───────────────────────────────────────────────────┐
-│                      opendev-history                         │
+│                      kendra-history                         │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │ SidechainWriter / SidechainReader (JSONL transcripts)│   │
 │  └──────────────────────────────────────────────────────┘   │
@@ -368,60 +368,60 @@ CreateTeamTool::execute()
 
 ### New files (19)
 ```
-crates/opendev-runtime/src/task_manager/mod.rs          (375 lines)
-crates/opendev-runtime/src/task_manager/types.rs        (155 lines)
-crates/opendev-runtime/src/task_manager/tests.rs        (453 lines)
-crates/opendev-runtime/src/mailbox/mod.rs               (200 lines)
-crates/opendev-runtime/src/mailbox/tests.rs             (180 lines)
-crates/opendev-runtime/src/team_manager/mod.rs          (215 lines)
-crates/opendev-runtime/src/team_manager/tests.rs        (130 lines)
-crates/opendev-runtime/src/worktree/mod.rs              (185 lines)
-crates/opendev-runtime/src/worktree/tests.rs            (115 lines)
-crates/opendev-history/src/sidechain/mod.rs             (20 lines)
-crates/opendev-history/src/sidechain/types.rs           (55 lines)
-crates/opendev-history/src/sidechain/writer.rs          (105 lines)
-crates/opendev-history/src/sidechain/reader.rs          (150 lines)
-crates/opendev-history/src/sidechain/tests.rs           (195 lines)
-crates/opendev-tools-impl/src/agents/team_tools.rs      (350 lines)
-crates/opendev-tui/src/app/handle_team.rs               (53 lines)
+crates/kendra-runtime/src/task_manager/mod.rs          (375 lines)
+crates/kendra-runtime/src/task_manager/types.rs        (155 lines)
+crates/kendra-runtime/src/task_manager/tests.rs        (453 lines)
+crates/kendra-runtime/src/mailbox/mod.rs               (200 lines)
+crates/kendra-runtime/src/mailbox/tests.rs             (180 lines)
+crates/kendra-runtime/src/team_manager/mod.rs          (215 lines)
+crates/kendra-runtime/src/team_manager/tests.rs        (130 lines)
+crates/kendra-runtime/src/worktree/mod.rs              (185 lines)
+crates/kendra-runtime/src/worktree/tests.rs            (115 lines)
+crates/kendra-history/src/sidechain/mod.rs             (20 lines)
+crates/kendra-history/src/sidechain/types.rs           (55 lines)
+crates/kendra-history/src/sidechain/writer.rs          (105 lines)
+crates/kendra-history/src/sidechain/reader.rs          (150 lines)
+crates/kendra-history/src/sidechain/tests.rs           (195 lines)
+crates/kendra-tools-impl/src/agents/team_tools.rs      (350 lines)
+crates/kendra-tui/src/app/handle_team.rs               (53 lines)
 docs/agent-framework-refactoring.md                     (2529 lines, design doc)
 docs/agent-framework-adaptation.md                      (this file)
 ```
 
 ### Modified files (16)
 ```
-crates/opendev-runtime/src/lib.rs                       (+modules, +re-exports, +now_ms)
-crates/opendev-runtime/Cargo.toml                       (+fd-lock, +uuid dev-dep)
-crates/opendev-history/src/lib.rs                       (+sidechain module)
-crates/opendev-agents/src/subagents/spec/types.rs       (+4 fields, +2 enums)
-crates/opendev-agents/src/subagents/spec/builder.rs     (+4 builder methods)
-crates/opendev-agents/src/subagents/spec/mod.rs         (+re-exports)
-crates/opendev-agents/src/subagents/mod.rs              (+re-exports)
-crates/opendev-agents/src/subagents/runner/mod.rs       (+mailbox field, +inject helper)
-crates/opendev-agents/src/subagents/runner/standard.rs  (+mailbox drain)
-crates/opendev-agents/src/subagents/runner/simple.rs    (+mailbox drain)
-crates/opendev-agents/src/subagents/manager/spawn.rs    (+mailbox: None)
-crates/opendev-tools-impl/src/agents/events.rs          (+7 SubagentEvent variants, +BackgroundProgressCallback)
-crates/opendev-tools-impl/src/agents/spawn.rs           (+run_in_background, +spawn_background)
-crates/opendev-tools-impl/src/agents/mod.rs             (+team_tools module)
-crates/opendev-tui/src/event/mod.rs                     (+3 team AppEvent variants)
-crates/opendev-tui/src/event/recorder.rs                (+team event serialization)
-crates/opendev-tui/src/app/mod.rs                       (+handle_team module)
-crates/opendev-tui/src/app/state.rs                     (+task_watcher_detail, +sort)
-crates/opendev-tui/src/app/event_dispatch.rs            (+team event routing)
-crates/opendev-tui/src/app/key_handler.rs               (+Enter/r/t keys, +restart, +layered Esc)
-crates/opendev-tui/src/app/handle_tools.rs              (+skip eager display for bg agents)
-crates/opendev-tui/src/app/tick.rs                      (+Ctrl+B hint timing)
-crates/opendev-tui/src/app/render.rs                    (+detail_idx pass-through)
-crates/opendev-tui/src/widgets/background_tasks.rs      (+detail view, +enhanced footer)
-crates/opendev-tui/src/widgets/status_bar.rs            (+team_status pill)
-crates/opendev-tui/src/widgets/nested_tool/state.rs     (+hint fields, +cost)
-crates/opendev-tui/src/widgets/conversation/spinner.rs  (+Ctrl+B hint rendering)
-crates/opendev-cli/src/tui_runner/mod.rs                (+background + team event bridge)
-crates/opendev-cli/src/web_executor.rs                  (+background + team WebSocket events)
-crates/opendev-cli/src/runtime/query.rs                 (+resume_with_messages)
-crates/opendev-agents/templates/system/main/main-subagent-guide.md    (+Background Agents section)
-crates/opendev-agents/templates/system/main/main-available-tools.md   (+run_in_background mention)
+crates/kendra-runtime/src/lib.rs                       (+modules, +re-exports, +now_ms)
+crates/kendra-runtime/Cargo.toml                       (+fd-lock, +uuid dev-dep)
+crates/kendra-history/src/lib.rs                       (+sidechain module)
+crates/kendra-agents/src/subagents/spec/types.rs       (+4 fields, +2 enums)
+crates/kendra-agents/src/subagents/spec/builder.rs     (+4 builder methods)
+crates/kendra-agents/src/subagents/spec/mod.rs         (+re-exports)
+crates/kendra-agents/src/subagents/mod.rs              (+re-exports)
+crates/kendra-agents/src/subagents/runner/mod.rs       (+mailbox field, +inject helper)
+crates/kendra-agents/src/subagents/runner/standard.rs  (+mailbox drain)
+crates/kendra-agents/src/subagents/runner/simple.rs    (+mailbox drain)
+crates/kendra-agents/src/subagents/manager/spawn.rs    (+mailbox: None)
+crates/kendra-tools-impl/src/agents/events.rs          (+7 SubagentEvent variants, +BackgroundProgressCallback)
+crates/kendra-tools-impl/src/agents/spawn.rs           (+run_in_background, +spawn_background)
+crates/kendra-tools-impl/src/agents/mod.rs             (+team_tools module)
+crates/kendra-tui/src/event/mod.rs                     (+3 team AppEvent variants)
+crates/kendra-tui/src/event/recorder.rs                (+team event serialization)
+crates/kendra-tui/src/app/mod.rs                       (+handle_team module)
+crates/kendra-tui/src/app/state.rs                     (+task_watcher_detail, +sort)
+crates/kendra-tui/src/app/event_dispatch.rs            (+team event routing)
+crates/kendra-tui/src/app/key_handler.rs               (+Enter/r/t keys, +restart, +layered Esc)
+crates/kendra-tui/src/app/handle_tools.rs              (+skip eager display for bg agents)
+crates/kendra-tui/src/app/tick.rs                      (+Ctrl+B hint timing)
+crates/kendra-tui/src/app/render.rs                    (+detail_idx pass-through)
+crates/kendra-tui/src/widgets/background_tasks.rs      (+detail view, +enhanced footer)
+crates/kendra-tui/src/widgets/status_bar.rs            (+team_status pill)
+crates/kendra-tui/src/widgets/nested_tool/state.rs     (+hint fields, +cost)
+crates/kendra-tui/src/widgets/conversation/spinner.rs  (+Ctrl+B hint rendering)
+crates/kendra-cli/src/tui_runner/mod.rs                (+background + team event bridge)
+crates/kendra-cli/src/web_executor.rs                  (+background + team WebSocket events)
+crates/kendra-cli/src/runtime/query.rs                 (+resume_with_messages)
+crates/kendra-agents/templates/system/main/main-subagent-guide.md    (+Background Agents section)
+crates/kendra-agents/templates/system/main/main-available-tools.md   (+run_in_background mention)
 ```
 
 ## Test Coverage
@@ -447,7 +447,11 @@ Rather than a risky refactor of all TUI code to use TaskManager directly, the ex
 Messages are drained once before each react loop execution, not during each iteration. This is simpler and sufficient — team members are typically short-lived agents. Real-time mid-iteration polling would require deeper react loop changes.
 
 ### 4. `now_ms()` as crate-level utility
-Multiple modules needed epoch milliseconds. Rather than duplicating the function, it's exported from `opendev_runtime::now_ms()`.
+Multiple modules needed epoch milliseconds. Rather than duplicating the function, it's exported from `KendraCLI_runtime::now_ms()`.
 
 ### 5. Fire-and-forget for non-critical writes
 Sidechain writes, mailbox sends, and team config updates follow Claude Code's pattern: log on failure but never block the agent. The agent's primary task always takes priority over bookkeeping.
+
+
+
+

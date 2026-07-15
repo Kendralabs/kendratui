@@ -70,3 +70,4 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ripgrep -y
       - run: cargo test --workspace
+

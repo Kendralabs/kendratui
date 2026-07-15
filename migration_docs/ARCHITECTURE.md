@@ -3,10 +3,10 @@
 ## Workspace Layout
 
 ```
-opendev-rust/
+kendra-rust/
 ├── Cargo.toml                          # [workspace] root
 ├── crates/
-│   ├── opendev-models/                 # Phase 1 — Data types
+│   ├── kendra-models/                 # Phase 1 — Data types
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -19,20 +19,20 @@ opendev-rust/
 │   │       ├── api.rs                  # API request/response models
 │   │       └── validator.rs            # Message validation rules
 │   │
-│   ├── opendev-config/                 # Phase 1 — Configuration
+│   ├── kendra-config/                 # Phase 1 — Configuration
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── loader.rs               # Hierarchical config merge (project > user > env > defaults)
 │   │       ├── models_dev.rs           # models.dev API cache (24h TTL)
-│   │       └── paths.rs               # ~/.opendev/, session dirs, project encoding
+│   │       └── paths.rs               # ~/.kendra/, session dirs, project encoding
 │   │
-│   ├── opendev-http/                   # Phase 2 — HTTP & Auth
+│   ├── kendra-http/                   # Phase 2 — HTTP & Auth
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── client.rs              # reqwest wrapper with retry + interrupt (CancellationToken)
-│   │       ├── auth.rs                # CredentialStore (~/.opendev/auth.json, mode 0600)
+│   │       ├── auth.rs                # CredentialStore (~/.kendra/auth.json, mode 0600)
 │   │       ├── rotation.rs            # API key rotation across providers
 │   │       ├── adapters/
 │   │       │   ├── mod.rs
@@ -41,7 +41,7 @@ opendev-rust/
 │   │       │   └── openai.rs          # OpenAI-specific (o1/o3 reasoning models)
 │   │       └── models.rs             # HttpResult, RetryConfig
 │   │
-│   ├── opendev-context/                # Phase 3 — Context Engineering
+│   ├── kendra-context/                # Phase 3 — Context Engineering
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -51,18 +51,18 @@ opendev-rust/
 │   │       ├── pair_validator.rs      # Message pair repair
 │   │       └── context_picker.rs      # Dynamic context selection
 │   │
-│   ├── opendev-history/                # Phase 3 — Session Persistence
+│   ├── kendra-history/                # Phase 3 — Session Persistence
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── session_manager.rs     # JSON read/write to ~/.opendev/sessions/
+│   │       ├── session_manager.rs     # JSON read/write to ~/.kendra/sessions/
 │   │       ├── index.rs              # Fast metadata lookups via cached index
 │   │       ├── listing.rs            # Session listing and search
 │   │       ├── file_locks.rs         # Exclusive file locks (fd-lock)
 │   │       ├── undo.rs              # Undo manager
 │   │       └── snapshot.rs          # Session snapshots
 │   │
-│   ├── opendev-memory/                 # Phase 3 — ACE Memory
+│   ├── kendra-memory/                 # Phase 3 — ACE Memory
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -73,7 +73,7 @@ opendev-rust/
 │   │       ├── reflector.rs          # Post-turn reflection
 │   │       └── roles.rs             # Role-based memory access
 │   │
-│   ├── opendev-tools-core/             # Phase 4 — Tool Framework
+│   ├── kendra-tools-core/             # Phase 4 — Tool Framework
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -84,7 +84,7 @@ opendev-rust/
 │   │       ├── policy.rs            # Tool policy (allow/deny patterns)
 │   │       └── parallel.rs          # Parallel execution policy (read-only tools)
 │   │
-│   ├── opendev-tools-impl/             # Phase 4 — Tool Implementations
+│   ├── kendra-tools-impl/             # Phase 4 — Tool Implementations
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -109,7 +109,7 @@ opendev-rust/
 │   │       ├── notebook.rs         # Jupyter notebook tool
 │   │       └── open_browser.rs     # Open browser tool
 │   │
-│   ├── opendev-tools-lsp/              # Phase 4 — LSP Integration
+│   ├── kendra-tools-lsp/              # Phase 4 — LSP Integration
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -127,7 +127,7 @@ opendev-rust/
 │   │           ├── clangd.rs
 │   │           └── ... (34 more)
 │   │
-│   ├── opendev-tools-symbol/           # Phase 4 — Symbol Operations
+│   ├── kendra-tools-symbol/           # Phase 4 — Symbol Operations
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -136,7 +136,7 @@ opendev-rust/
 │   │       ├── rename.rs           # Rename symbol
 │   │       └── replace_body.rs     # Replace symbol body
 │   │
-│   ├── opendev-agents/                 # Phase 5 — Agent System
+│   ├── kendra-agents/                 # Phase 5 — Agent System
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -164,7 +164,7 @@ opendev-rust/
 │   │           ├── mod.rs
 │   │           └── cleaner.rs      # Response cleaning + normalization
 │   │
-│   ├── opendev-mcp/                    # Phase 6 — MCP Client
+│   ├── kendra-mcp/                    # Phase 6 — MCP Client
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -177,7 +177,7 @@ opendev-rust/
 │   │           ├── sse.rs          # SSE transport (reqwest + eventsource)
 │   │           └── http.rs         # HTTP transport
 │   │
-│   ├── opendev-web/                    # Phase 6 — Web Backend
+│   ├── kendra-web/                    # Phase 6 — Web Backend
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -193,13 +193,13 @@ opendev-rust/
 │   │       │   └── mcp.rs          # MCP server management
 │   │       └── callback.rs         # WebUICallback (broadcasts via WebSocket)
 │   │
-│   ├── opendev-channels/               # Phase 6 — Multi-Channel
+│   ├── kendra-channels/               # Phase 6 — Multi-Channel
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       └── router.rs          # Channel router (CLI, Web, Telegram, WhatsApp)
 │   │
-│   ├── opendev-tui/                    # Phase 7 — Terminal UI
+│   ├── kendra-tui/                    # Phase 7 — Terminal UI
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -228,7 +228,7 @@ opendev-rust/
 │   │       │   └── tool.rs         # Generic tool result formatting
 │   │       └── callback.rs         # TUICallback (implements UICallback trait)
 │   │
-│   ├── opendev-repl/                   # Phase 7 — REPL
+│   ├── kendra-repl/                   # Phase 7 — REPL
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -245,12 +245,12 @@ opendev-rust/
 │   │           ├── help.rs         # Help display
 │   │           └── tools.rs        # Tool management
 │   │
-│   ├── opendev-cli/                    # Phase 7 — Binary Entry Point
+│   ├── kendra-cli/                    # Phase 7 — Binary Entry Point
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       └── main.rs            # clap CLI, dispatch to TUI/Web/REPL
 │   │
-│   └── opendev-pyo3/                   # Cross-phase — PyO3 Bridge
+│   └── kendra-pyo3/                   # Cross-phase — PyO3 Bridge
 │       ├── Cargo.toml
 │       └── src/
 │           ├── lib.rs             # #[pymodule] combining all sub-modules
@@ -263,46 +263,46 @@ opendev-rust/
 ## Crate Dependency Graph
 
 ```
-opendev-cli
-├── opendev-tui
-│   ├── opendev-agents
-│   ├── opendev-repl
-│   └── opendev-tools-core
-├── opendev-web
-│   ├── opendev-agents
-│   ├── opendev-mcp
-│   └── opendev-channels
-├── opendev-repl
-│   ├── opendev-agents
-│   └── opendev-tools-core
-├── opendev-agents
-│   ├── opendev-http
-│   ├── opendev-tools-core
-│   ├── opendev-tools-impl
-│   ├── opendev-context
-│   └── opendev-memory
-├── opendev-tools-core
-│   └── opendev-models
-├── opendev-tools-impl
-│   ├── opendev-tools-core
-│   ├── opendev-tools-lsp
-│   ├── opendev-tools-symbol
-│   ├── opendev-http
-│   └── opendev-history
-├── opendev-context
-│   ├── opendev-models
-│   └── opendev-http
-├── opendev-history
-│   └── opendev-models
-├── opendev-memory
-│   ├── opendev-models
-│   └── opendev-http
-├── opendev-http
-│   ├── opendev-models
-│   └── opendev-config
-├── opendev-config
-│   └── opendev-models
-└── opendev-models (leaf — no internal deps)
+kendra-cli
+├── kendra-tui
+│   ├── kendra-agents
+│   ├── kendra-repl
+│   └── kendra-tools-core
+├── kendra-web
+│   ├── kendra-agents
+│   ├── kendra-mcp
+│   └── kendra-channels
+├── kendra-repl
+│   ├── kendra-agents
+│   └── kendra-tools-core
+├── kendra-agents
+│   ├── kendra-http
+│   ├── kendra-tools-core
+│   ├── kendra-tools-impl
+│   ├── kendra-context
+│   └── kendra-memory
+├── kendra-tools-core
+│   └── kendra-models
+├── kendra-tools-impl
+│   ├── kendra-tools-core
+│   ├── kendra-tools-lsp
+│   ├── kendra-tools-symbol
+│   ├── kendra-http
+│   └── kendra-history
+├── kendra-context
+│   ├── kendra-models
+│   └── kendra-http
+├── kendra-history
+│   └── kendra-models
+├── kendra-memory
+│   ├── kendra-models
+│   └── kendra-http
+├── kendra-http
+│   ├── kendra-models
+│   └── kendra-config
+├── kendra-config
+│   └── kendra-models
+└── kendra-models (leaf — no internal deps)
 ```
 
 ## Key Trait Definitions
@@ -345,7 +345,7 @@ pub struct MainAgent {
     pub http_client: AgentHttpClient,      // was HttpClientMixin
     pub llm_caller: LlmCaller,            // was LlmCallsMixin
     pub tool_registry: Arc<ToolRegistry>,  // injected
-    pub config: AgentConfig,               // from opendev-config
+    pub config: AgentConfig,               // from kendra-config
     pub ui_callback: Arc<dyn UICallback>,  // injected
     pub cancel_token: CancellationToken,   // was task_monitor.should_interrupt()
 }
@@ -382,11 +382,11 @@ loop {
 ## Error Handling
 
 - Library crates use `thiserror` for typed errors
-- Application crate (`opendev-cli`) uses `anyhow` for ergonomic error propagation
+- Application crate (`kendra-cli`) uses `anyhow` for ergonomic error propagation
 - All errors implement `std::fmt::Display` for user-friendly messages
 
 ```rust
-// In opendev-http
+// In kendra-http
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
     #[error("request failed after {retries} retries: {source}")]
@@ -404,3 +404,7 @@ Replace Python `logging` with the `tracing` crate:
 - Structured logging with spans
 - Per-crate log filtering via `RUST_LOG` env var
 - JSON output for production, pretty output for development
+
+
+
+

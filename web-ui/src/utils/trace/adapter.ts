@@ -1,12 +1,12 @@
 /**
- * Adapter: transforms OpenDev ChatMessage JSONL records into the TraceEvent shape
+ * Adapter: transforms KendraCLI ChatMessage JSONL records into the TraceEvent shape
  * that the graph algorithms (buildGraph / collapseGraph) expect.
  */
-import type { TraceEvent, ContentBlock, SessionData, OpenDevChatMessage } from '../../types/trace';
+import type { TraceEvent, ContentBlock, SessionData, KendraCLIChatMessage } from '../../types/trace';
 
 function makeUuid(index: number, suffix?: string): string {
   // Deterministic pseudo-uuid from line index for stable graph IDs
-  const base = `opendev-${String(index).padStart(6, '0')}`;
+  const base = `kendra-${String(index).padStart(6, '0')}`;
   return suffix ? `${base}-${suffix}` : base;
 }
 
@@ -21,10 +21,10 @@ function stringifyResult(result: unknown): string {
 }
 
 /**
- * Convert an array of OpenDev ChatMessage records into TraceEvent[] + SessionData.
+ * Convert an array of KendraCLI ChatMessage records into TraceEvent[] + SessionData.
  */
-export function adaptOpenDevMessages(
-  messages: OpenDevChatMessage[],
+export function adaptKendraCLIMessages(
+  messages: KendraCLIChatMessage[],
   sessionId: string,
 ): SessionData {
   const events: TraceEvent[] = [];

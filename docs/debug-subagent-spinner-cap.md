@@ -14,7 +14,7 @@ So this doc now tracks both the original cap issue and the later failed fixes.
 
 ### Attempt 1: Remove cap logic in `spinner.rs`
 
-**File:** `crates/opendev-tui/src/widgets/conversation/spinner.rs`
+**File:** `crates/kendra-tui/src/widgets/conversation/spinner.rs`
 
 Changes made:
 1. Removed `const MAX_SPINNER_SUBAGENTS: usize = 3;`
@@ -23,7 +23,7 @@ Changes made:
 4. Removed the `subagent_idx` increment and `continue` guard inside the `spawn_subagent` branch
 5. Updated doc comment to remove mention of capping
 
-**Result:** Compiles clean, clippy passes, smoke test (`echo "hello" | opendev -p "hello"`) works, but the user reports it still does not fix the visible TUI behavior.
+**Result:** Compiles clean, clippy passes, smoke test (`echo "hello" | KendraCLI -p "hello"`) works, but the user reports it still does not fix the visible TUI behavior.
 
 Why it did not work:
 - The cap was only one symptom.
@@ -140,9 +140,13 @@ Specifically:
 
 ## Key Code Paths
 
-- **Spinner build / grouping:** `crates/opendev-tui/src/widgets/conversation/spinner.rs`
-- **Conversation render path:** `crates/opendev-tui/src/widgets/conversation/mod.rs`
-- **Selection / total-line math:** `crates/opendev-tui/src/app/render.rs`
-- **Cache rebuild / viewport culling:** `crates/opendev-tui/src/app/cache.rs`
-- **Reasoning + tool event order:** `crates/opendev-tui/src/app/event_dispatch.rs`
-- **Event loop drain/render policy:** `crates/opendev-tui/src/app/mod.rs`
+- **Spinner build / grouping:** `crates/kendra-tui/src/widgets/conversation/spinner.rs`
+- **Conversation render path:** `crates/kendra-tui/src/widgets/conversation/mod.rs`
+- **Selection / total-line math:** `crates/kendra-tui/src/app/render.rs`
+- **Cache rebuild / viewport culling:** `crates/kendra-tui/src/app/cache.rs`
+- **Reasoning + tool event order:** `crates/kendra-tui/src/app/event_dispatch.rs`
+- **Event loop drain/render policy:** `crates/kendra-tui/src/app/mod.rs`
+
+
+
+

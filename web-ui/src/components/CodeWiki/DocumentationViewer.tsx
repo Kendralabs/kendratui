@@ -47,14 +47,14 @@ interface DocumentationViewerProps {
 const mockWikiPages: WikiPage[] = [
   {
     id: 'overview',
-    title: 'OpenDev Architecture Overview',
+    title: 'KendraCLI Architecture Overview',
     type: 'overview',
-    description: 'High-level architecture and design principles of OpenDev',
+    description: 'High-level architecture and design principles of KendraCLI',
     lastModified: '2 hours ago',
     importance: 10,
-    content: `# OpenDev Architecture Overview
+    content: `# KendraCLI Architecture Overview
 
-OpenDev (Software Engineering CLI) is an AI-powered command-line tool designed to enhance developer productivity through intelligent code assistance and automation.
+KendraCLI (Software Engineering CLI) is an AI-powered command-line tool designed to enhance developer productivity through intelligent code assistance and automation.
 
 ## Core Components
 
@@ -79,7 +79,7 @@ OpenDev (Software Engineering CLI) is an AI-powered command-line tool designed t
 - **Extensibility**: Plugin-based architecture for custom tools and agents
 - **Security**: Sandboxed execution environment with approval workflows
 - **Performance**: Async execution with intelligent caching and optimization`,
-    relatedFiles: ['opendev/core/agent.py', 'opendev/web/server.py', 'opendev/tools/registry.py'],
+    relatedFiles: ['kendra/core/agent.py', 'kendra/web/server.py', 'kendra/tools/registry.py'],
     relatedPages: ['agent-system', 'web-interface', 'tool-system'],
     tags: ['architecture', 'overview', 'design'],
     diagrams: ['architecture-diagram.svg', 'component-interaction.svg']
@@ -94,7 +94,7 @@ OpenDev (Software Engineering CLI) is an AI-powered command-line tool designed t
     parent: 'overview',
     content: `# Agent System Architecture
 
-The agent system is the core intelligence layer of OpenDev, responsible for understanding user intent and executing complex coding tasks through coordinated tool usage.
+The agent system is the core intelligence layer of KendraCLI, responsible for understanding user intent and executing complex coding tasks through coordinated tool usage.
 
 ## Agent Types
 
@@ -124,7 +124,7 @@ The agent system is the core intelligence layer of OpenDev, responsible for unde
 4. **Tool Execution**: Running tools with user approval when required
 5. **Result Processing**: Analyzing outputs and determining next steps
 6. **Response Generation**: Providing clear, actionable responses`,
-    relatedFiles: ['opendev/core/agent.py', 'opendev/agents/normal.py', 'opendev/agents/debug.py'],
+    relatedFiles: ['kendra/core/agent.py', 'kendra/agents/normal.py', 'kendra/agents/debug.py'],
     relatedPages: ['tool-system', 'approval-workflow'],
     tags: ['agents', 'architecture', 'execution']
   },
@@ -138,7 +138,7 @@ The agent system is the core intelligence layer of OpenDev, responsible for unde
     parent: 'overview',
     content: `# Web Interface Architecture
 
-The web interface provides a modern, responsive UI for OpenDev with real-time communication capabilities and session management.
+The web interface provides a modern, responsive UI for KendraCLI with real-time communication capabilities and session management.
 
 ## Frontend Components
 
@@ -172,7 +172,7 @@ The web interface provides a modern, responsive UI for OpenDev with real-time co
 - **Workspace Isolation**: Separate contexts for different projects
 - **File Change Tracking**: Comprehensive audit trail of modifications
 - **Configuration Management**: Dynamic settings and preferences`,
-    relatedFiles: ['opendev/web/server.py', 'opendev/web/websocket.py', 'opendev/web/state.py'],
+    relatedFiles: ['kendra/web/server.py', 'kendra/web/websocket.py', 'kendra/web/state.py'],
     relatedPages: ['api-reference', 'session-management'],
     tags: ['web', 'websocket', 'ui', 'real-time']
   },
@@ -180,12 +180,12 @@ The web interface provides a modern, responsive UI for OpenDev with real-time co
     id: 'api-reference',
     title: 'API Reference',
     type: 'reference',
-    description: 'Complete API documentation for OpenDev components',
+    description: 'Complete API documentation for KendraCLI components',
     lastModified: '6 hours ago',
     importance: 7,
     content: `# API Reference
 
-Complete API documentation for OpenDev components, including REST endpoints, WebSocket messages, and internal APIs.
+Complete API documentation for KendraCLI components, including REST endpoints, WebSocket messages, and internal APIs.
 
 ## REST API Endpoints
 
@@ -219,7 +219,7 @@ Complete API documentation for OpenDev components, including REST endpoints, Web
 - \`tool_call\` - Tool execution started
 - \`tool_result\` - Tool execution completed
 - \`approval_required\` - User approval needed`,
-    relatedFiles: ['opendev/web/routes/chat.py', 'opendev/web/routes/sessions.py', 'opendev/web/config.py'],
+    relatedFiles: ['kendra/web/routes/chat.py', 'kendra/web/routes/sessions.py', 'kendra/web/config.py'],
     relatedPages: ['web-interface'],
     tags: ['api', 'reference', 'endpoints', 'websocket']
   }
@@ -254,7 +254,7 @@ const mockDocumentation: DocumentationItem[] = [
     type: 'readme',
     path: '/README.md',
     lastModified: '2 hours ago',
-    content: `# OpenDev
+    content: `# KendraCLI
 
 Software Engineering CLI with AI-powered coding assistance.
 

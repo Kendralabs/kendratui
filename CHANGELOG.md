@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Microsandbox runtime detection, auto-start, and install script
-- `opendev-sandbox` crate with microsandbox integration foundation
+- `kendra-sandbox` crate with microsandbox integration foundation
 - Microsandbox runtime bundled in release archives and Homebrew formula
 - Telegram remote session takeover support
 - Per-session LLM debug logging enabled by default with truncated global log file
@@ -90,13 +90,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Spinner race condition with orphaned subagent entries in TUI
 - Double blank lines around headers collapsed in TUI rendering
 - Web UI: scoped "New Session" disable guard to per-workspace
-- `opendev-tools-symbol` dependency now uses workspace inheritance
+- `kendra-tools-symbol` dependency now uses workspace inheritance
 - `floor_char_boundary` used for all string truncation to prevent panics on multi-byte chars
 - Explorer nudge softened to reduce excessive tool calls
 
 ### Removed
 
-- `opendev-docker` crate (replaced by `opendev-sandbox`)
+- `kendra-docker` crate (replaced by `kendra-sandbox`)
 
 ## [0.1.2] - 2026-03-25
 
@@ -164,9 +164,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release automation with cargo-dist for 5 platform targets
 - Shell installer (macOS/Linux), PowerShell installer (Windows), Homebrew tap
 
-[0.1.8]: https://github.com/opendev-to/opendev/releases/tag/v0.1.8
-[0.1.7]: https://github.com/opendev-to/opendev/releases/tag/v0.1.7
-[0.1.6]: https://github.com/opendev-to/opendev/releases/tag/v0.1.6
-[0.1.1]: https://github.com/opendev-to/opendev/releases/tag/v0.1.1
-[0.1.2]: https://github.com/opendev-to/opendev/releases/tag/v0.1.2
-[0.1.0]: https://github.com/opendev-to/opendev/releases/tag/v0.1.0
+[0.1.8]: https://github.com/kendra-to/kendra/releases/tag/v0.1.8
+[0.1.7]: https://github.com/kendra-to/kendra/releases/tag/v0.1.7
+[0.1.6]: https://github.com/kendra-to/kendra/releases/tag/v0.1.6
+[0.1.1]: https://github.com/kendra-to/kendra/releases/tag/v0.1.1
+[0.1.2]: https://github.com/kendra-to/kendra/releases/tag/v0.1.2
+[0.1.0]: https://github.com/kendra-to/kendra/releases/tag/v0.1.0
+

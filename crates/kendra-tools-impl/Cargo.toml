@@ -1,0 +1,40 @@
+[package]
+name = "kendra-tools-impl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tool implementations for KendraCLI: bash, file ops, git, web, memory, and more"
+
+[dependencies]
+kendra-tools-core = { workspace = true }
+kendra-models = { workspace = true }
+kendra-config = { workspace = true }
+kendra-http = { workspace = true }
+kendra-mcp = { workspace = true }
+kendra-history = { workspace = true }
+kendra-context = { workspace = true }
+kendra-agents = { workspace = true }
+kendra-runtime = { workspace = true }
+kendra-tools-lsp = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+regex = { workspace = true }
+uuid = { workspace = true }
+reqwest = { workspace = true }
+base64 = "0.22"
+dirs = "6"
+glob = "0.3"
+libc = { workspace = true }
+open = "5"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+proptest = "1"
+

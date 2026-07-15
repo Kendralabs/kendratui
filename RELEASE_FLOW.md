@@ -1,6 +1,6 @@
 # Release Flow
 
-This document describes the release process for OpenDev, established with v0.1.0 on 2026-03-24.
+This document describes the release process for kendra, established with v0.1.0 on 2026-03-24.
 
 ## Overview
 
@@ -21,7 +21,7 @@ git add Cargo.toml CHANGELOG.md
 git commit -m "Bump to v0.2.0"
 
 # 4. Tag and push
-git tag -a v0.2.0 -m "OpenDev v0.2.0 — <summary>"
+git tag -a v0.2.0 -m "kendra v0.2.0 — <summary>"
 git push origin main
 git push origin v0.2.0
 ```
@@ -42,7 +42,7 @@ plan -> build-local-artifacts -> build-global-artifacts -> host -> publish-homeb
 | **build-local-artifacts** | per-platform matrix | Builds platform-specific binaries and archives for all 5 targets in parallel. |
 | **build-global-artifacts** | ubuntu-22.04 | Builds platform-agnostic installers (shell, PowerShell), checksums, and Homebrew formula from local artifacts. |
 | **host** | ubuntu-22.04 | Uploads all artifacts and creates the GitHub Release with auto-generated title/body from CHANGELOG.md. |
-| **publish-homebrew** | ubuntu-22.04 | Clones `opendev-to/homebrew-tap` on `main`, rewrites the generated formula class to `Opendev`, copies it to `Formula/opendev.rb`, then commits and pushes. |
+| **publish-homebrew** | ubuntu-22.04 | Clones `kendra-to/homebrew-tap` on `main`, rewrites the generated formula class to `kendra`, copies it to `Formula/kendra.rb`, then commits and pushes. |
 | **announce** | ubuntu-22.04 | Final step (placeholder for future announcement integrations). |
 
 ## Target Platforms
@@ -60,30 +60,30 @@ plan -> build-local-artifacts -> build-global-artifacts -> host -> publish-homeb
 Per release, the pipeline produces:
 
 - **Binary archives** (one per platform):
-  - `opendev-cli-{target}.tar.xz` (macOS/Linux)
-  - `opendev-cli-{target}.zip` (Windows)
+  - `kendra-cli-{target}.tar.xz` (macOS/Linux)
+  - `kendra-cli-{target}.zip` (Windows)
 - **Installers**:
-  - `opendev-cli-installer.sh` (shell, macOS/Linux)
-  - `opendev-cli-installer.ps1` (PowerShell, Windows)
-- **Homebrew formula**: `opendev.rb` (pushed to tap repo)
+  - `kendra-cli-installer.sh` (shell, macOS/Linux)
+  - `kendra-cli-installer.ps1` (PowerShell, Windows)
+- **Homebrew formula**: `kendra.rb` (pushed to tap repo)
 - **Checksums**: SHA256 for all artifacts
 
 ## Installation Methods
 
 **Homebrew** (macOS):
 ```bash
-brew install opendev-to/tap/opendev
+brew install kendra-to/tap/kendra
 ```
 
 **Shell installer** (macOS/Linux):
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/opendev-to/opendev/releases/latest/download/opendev-cli-installer.sh | sh
+  https://github.com/kendra-to/kendra/releases/latest/download/kendra-cli-installer.sh | sh
 ```
 
 **PowerShell** (Windows):
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/opendev-to/opendev/releases/latest/download/opendev-cli-installer.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/kendra-to/kendra/releases/latest/download/kendra-cli-installer.ps1 | iex"
 ```
 
 Binaries install to `~/.cargo/bin/` (`CARGO_HOME`).
@@ -132,7 +132,7 @@ The Homebrew formula also includes microsandbox as a `resource` block, installed
 | Secret | Purpose |
 |--------|---------|
 | `GITHUB_TOKEN` | Default token for release creation and artifact upload |
-| `HOMEBREW_TAP_TOKEN` | PAT with write access to `opendev-to/homebrew-tap` |
+| `HOMEBREW_TAP_TOKEN` | PAT with write access to `kendra-to/homebrew-tap` |
 
 ## PR Behavior
 
@@ -150,3 +150,4 @@ The project uses [Semantic Versioning](https://semver.org/). All 21 workspace cr
 | `649cf43` | Fix README installer URLs to point to GitHub Releases |
 | `7385c33` | Add Homebrew tap publishing job and correct artifact URLs |
 | `v0.1.0` tag on `02a7d57` | First release (2026-03-24) |
+

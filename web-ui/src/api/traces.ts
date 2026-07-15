@@ -1,4 +1,4 @@
-import type { OpenDevChatMessage, TraceSessionInfo } from '../types/trace';
+import type { KendraCLIChatMessage, TraceSessionInfo } from '../types/trace';
 
 const API_BASE = '/api';
 
@@ -17,7 +17,7 @@ export async function fetchTraceSessions(project: string): Promise<TraceSessionI
 export async function fetchTraceSession(
   project: string,
   sessionId: string,
-): Promise<OpenDevChatMessage[]> {
+): Promise<KendraCLIChatMessage[]> {
   const response = await fetch(
     `${API_BASE}/traces/projects/${encodeURIComponent(project)}/sessions/${encodeURIComponent(sessionId)}`,
   );

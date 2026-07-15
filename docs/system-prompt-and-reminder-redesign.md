@@ -1,13 +1,13 @@
 # System Prompt & Reminder Architecture Redesign
 
-> Adapting OpenDev's prompt engineering from Claude Code's patterns.
+> Adapting KendraCLI's prompt engineering from Claude Code's patterns.
 > Commit: `9c6bd24` on `main` (2026-03-31)
 
 ## Table of Contents
 
 - [Background: Why This Redesign](#background-why-this-redesign)
 - [What Claude Code Does](#what-claude-code-does)
-- [What OpenDev Had Before](#what-opendev-had-before)
+- [What KendraCLI Had Before](#what-kendra-had-before)
 - [Gap Analysis](#gap-analysis)
 - [What Was Changed](#what-was-changed)
   - [Phase 1: Critical Bug Fix](#phase-1-critical-bug-fix)
@@ -24,9 +24,9 @@
 
 ## Background: Why This Redesign
 
-OpenDev's system prompt architecture was modeled independently of Claude Code. After a deep side-by-side comparison of both codebases, we found that while OpenDev had solid **infrastructure** (modular composer, conditional loading, two-part caching, message classification), the **content quality** of its prompts had significant gaps, and the **reminder system** was fundamentally different in philosophy.
+KendraCLI's system prompt architecture was modeled independently of Claude Code. After a deep side-by-side comparison of both codebases, we found that while KendraCLI had solid **infrastructure** (modular composer, conditional loading, two-part caching, message classification), the **content quality** of its prompts had significant gaps, and the **reminder system** was fundamentally different in philosophy.
 
-The goal was to align OpenDev's prompt engineering with Claude Code's battle-tested patterns — not to copy it verbatim, but to adopt the design principles that make Claude Code's prompts effective.
+The goal was to align KendraCLI's prompt engineering with Claude Code's battle-tested patterns — not to copy it verbatim, but to adopt the design principles that make Claude Code's prompts effective.
 
 ---
 
@@ -75,13 +75,13 @@ Claude Code tells the model: "Tags contain information from the system. They **b
 
 ---
 
-## What OpenDev Had Before
+## What KendraCLI Had Before
 
 ### System Prompt
 
-OpenDev's system prompt was built by `PromptComposer` — a modular, priority-ordered, condition-gated composition system with two-part caching support. The infrastructure was solid:
+KendraCLI's system prompt was built by `PromptComposer` — a modular, priority-ordered, condition-gated composition system with two-part caching support. The infrastructure was solid:
 
-- 22 template sections in `crates/opendev-agents/templates/system/main/`
+- 22 template sections in `crates/kendra-agents/templates/system/main/`
 - Priority ordering (10-95) controlling inclusion order
 - Conditional loading via `ctx_bool()`, `ctx_eq()`, `ctx_in()`, `ctx_present()`
 - Embedded templates via `include_str!()` at compile time
@@ -89,7 +89,7 @@ OpenDev's system prompt was built by `PromptComposer` — a modular, priority-or
 
 **But the content had problems:**
 
-1. **Core identity was 2 sentences**: "You are OpenDev, an AI software engineering assistant with full access to all tools. You are at senior level of software engineer." No explanation of how the system works.
+1. **Core identity was 2 sentences**: "You are KendraCLI, an AI software engineering assistant with full access to all tools. You are at senior level of software engineer." No explanation of how the system works.
 
 2. **No output efficiency section**: Only "Keep responses to 3 lines or fewer when practical" in tone-and-style.
 
@@ -107,7 +107,7 @@ OpenDev's system prompt was built by `PromptComposer` — a modular, priority-or
 
 ### Reminder System
 
-OpenDev had `reminders.rs` with:
+KendraCLI had `reminders.rs` with:
 - `MessageClass` enum (Directive, Nudge, Internal) — good design, matching Claude Code's concept
 - Template-based reminders in `reminders.md` — ~15 sections parsed by `--- section_name ---` delimiters
 - `inject_system_message()`, `append_nudge()`, `append_directive()` — injection helpers
@@ -123,7 +123,7 @@ OpenDev had `reminders.rs` with:
 
 ## Gap Analysis
 
-| Area | Claude Code | OpenDev (Before) | Severity |
+| Area | Claude Code | KendraCLI (Before) | Severity |
 |------|------------|-------------------|----------|
 | Identity + system operations | Detailed (hooks, permissions, context compression) | 2 sentences | Critical |
 | Environment context | Full (OS, shell, git, model name) | Collected but model name missing | Medium |
@@ -143,7 +143,7 @@ OpenDev had `reminders.rs` with:
 
 ### Phase 1: Critical Bug Fix
 
-**File**: `crates/opendev-cli/src/runtime/tools.rs`
+**File**: `crates/kendra-cli/src/runtime/tools.rs`
 
 Fixed the context key mismatch that caused 5 conditional prompt sections to be dead code:
 
@@ -185,13 +185,13 @@ Aligned template content with Claude Code's quality and specificity.
 
 **Before** (2 sentences):
 ```
-You are OpenDev, an AI software engineering assistant with full access to all tools.
+You are KendraCLI, an AI software engineering assistant with full access to all tools.
 You are at senior level of software engineer. [...]
 ```
 
 **After** (identity + system section):
 ```
-You are OpenDev, an AI software engineering assistant.
+You are KendraCLI, an AI software engineering assistant.
 
 # System
 
@@ -288,7 +288,7 @@ Three changes to the reminder system:
 
 #### 4.2: ProactiveReminderScheduler
 
-**File**: `crates/opendev-agents/src/prompts/reminders.rs`
+**File**: `crates/kendra-agents/src/prompts/reminders.rs`
 
 Added a turn-count-based reminder scheduler:
 
@@ -324,7 +324,7 @@ pub struct ProactiveReminderScheduler {
 | `todo_proactive_reminder` | 10 turns since last todo tool | 10 turns | write_todos, update_todo, complete_todo, list_todos |
 | `task_proactive_reminder` | 10 turns since last successful tool | 10 turns | Any successful tool execution |
 
-**Why**: Claude Code's attachment system fires reminders based on turn count. Before this change, OpenDev's reminders were 100% reactive (only on failures). The scheduler enables periodic "hey, you haven't used todos in a while" nudges, matching Claude Code's `TODO_REMINDER_CONFIG`.
+**Why**: Claude Code's attachment system fires reminders based on turn count. Before this change, KendraCLI's reminders were 100% reactive (only on failures). The scheduler enables periodic "hey, you haven't used todos in a while" nudges, matching Claude Code's `TODO_REMINDER_CONFIG`.
 
 #### 4.3: Proactive Reminder Templates
 
@@ -344,7 +344,7 @@ update the user on status.
 
 ### Phase 5: Environment Enrichment
 
-**File**: `crates/opendev-context/src/environment/mod.rs`
+**File**: `crates/kendra-context/src/environment/mod.rs`
 
 Added `model_name: Option<String>` field to `EnvironmentContext`. Set from `config.model` in `build_system_prompt()`. Rendered in the environment block:
 
@@ -370,7 +370,7 @@ Post-implementation `/simplify` review caught 3 bugs:
 
 3. **Unbounded reminder (P1)**: `task_proactive_reminder` had no reset trigger — it would fire every 10 turns forever. Fixed by resetting on any successful tool execution.
 
-4. **Shared helper**: Extracted `is_system_injected_content()` into `opendev_models::message` to replace 3 duplicated prefix checks across `runners.rs`, `chat.rs`, and `summary.rs`.
+4. **Shared helper**: Extracted `is_system_injected_content()` into `KendraCLI_models::message` to replace 3 duplicated prefix checks across `runners.rs`, `chat.rs`, and `summary.rs`.
 
 ---
 
@@ -479,7 +479,7 @@ The changes above address **system prompt content quality** and add **basic proa
 
 ### Claude Code's Attachment System (Not Yet Implemented)
 
-Claude Code has a **per-turn data collection pipeline** that gathers ~40 types of live runtime state and injects them as `<system-reminder>` messages. OpenDev does not have this.
+Claude Code has a **per-turn data collection pipeline** that gathers ~40 types of live runtime state and injects them as `<system-reminder>` messages. KendraCLI does not have this.
 
 Key missing capabilities:
 
@@ -514,32 +514,32 @@ The `ProactiveReminderScheduler` provides the frequency control piece. The `inje
 
 | File | Change |
 |------|--------|
-| `crates/opendev-cli/src/runtime/tools.rs` | Fixed context keys, added model_name |
-| `crates/opendev-agents/src/prompts/composer/factories.rs` | Removed 2 sections, added output_efficiency, changed priorities |
-| `crates/opendev-agents/src/prompts/embedded.rs` | Removed 2 templates, added 1, updated count |
-| `crates/opendev-agents/src/prompts/reminders.rs` | `[SYSTEM]` → `<system-reminder>`, added ProactiveReminderScheduler |
-| `crates/opendev-agents/src/react_loop/loop_state.rs` | Added proactive_reminders field |
-| `crates/opendev-agents/src/react_loop/execution.rs` | Added tick/fire integration |
-| `crates/opendev-agents/src/react_loop/phases/tool_dispatch.rs` | Added reset logic, fixed double-wrap |
-| `crates/opendev-agents/src/response/cleaner.rs` | Added system-reminder regex |
-| `crates/opendev-cli/src/runners.rs` | Updated system message detection |
-| `crates/opendev-web/src/routes/chat.rs` | Updated system message detection |
-| `crates/opendev-context/src/compaction/compactor/summary.rs` | Updated system message detection |
-| `crates/opendev-context/src/environment/mod.rs` | Added model_name field |
-| `crates/opendev-models/src/message.rs` | Added is_system_injected_content() |
+| `crates/kendra-cli/src/runtime/tools.rs` | Fixed context keys, added model_name |
+| `crates/kendra-agents/src/prompts/composer/factories.rs` | Removed 2 sections, added output_efficiency, changed priorities |
+| `crates/kendra-agents/src/prompts/embedded.rs` | Removed 2 templates, added 1, updated count |
+| `crates/kendra-agents/src/prompts/reminders.rs` | `[SYSTEM]` → `<system-reminder>`, added ProactiveReminderScheduler |
+| `crates/kendra-agents/src/react_loop/loop_state.rs` | Added proactive_reminders field |
+| `crates/kendra-agents/src/react_loop/execution.rs` | Added tick/fire integration |
+| `crates/kendra-agents/src/react_loop/phases/tool_dispatch.rs` | Added reset logic, fixed double-wrap |
+| `crates/kendra-agents/src/response/cleaner.rs` | Added system-reminder regex |
+| `crates/kendra-cli/src/runners.rs` | Updated system message detection |
+| `crates/kendra-web/src/routes/chat.rs` | Updated system message detection |
+| `crates/kendra-context/src/compaction/compactor/summary.rs` | Updated system message detection |
+| `crates/kendra-context/src/environment/mod.rs` | Added model_name field |
+| `crates/kendra-models/src/message.rs` | Added is_system_injected_content() |
 
 ### New Files
 
 | File | Purpose |
 |------|---------|
-| `crates/opendev-agents/templates/system/main/main-output-efficiency.md` | Output conciseness section |
+| `crates/kendra-agents/templates/system/main/main-output-efficiency.md` | Output conciseness section |
 
 ### Deleted Files
 
 | File | Reason |
 |------|--------|
-| `crates/opendev-agents/templates/system/main/main-available-tools.md` | Merged into main-tool-selection.md |
-| `crates/opendev-agents/templates/system/main/main-read-before-edit.md` | Merged into main-code-quality.md |
+| `crates/kendra-agents/templates/system/main/main-available-tools.md` | Merged into main-tool-selection.md |
+| `crates/kendra-agents/templates/system/main/main-read-before-edit.md` | Merged into main-code-quality.md |
 
 ### Template Files Modified (Content Only)
 
@@ -554,3 +554,7 @@ The `ProactiveReminderScheduler` provides the frequency control piece. The `inje
 | `templates/system/main/main-tool-selection.md` | Merged tool categories from available-tools |
 | `templates/system/main/main-subagent-guide.md` | Removed duplicate "General Guidance" heading |
 | `templates/reminders.md` | Added todo_proactive_reminder, task_proactive_reminder |
+
+
+
+

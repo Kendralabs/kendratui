@@ -1,8 +1,8 @@
-# OpenDev: Python to Rust Migration
+# KendraCLI: Python to Rust Migration
 
 ## Overview
 
-This directory contains the complete strategy and documentation for migrating the OpenDev AI coding assistant from Python (~120K LOC) to Rust. The React/Vite frontend (~15K LOC TypeScript) remains unchanged.
+This directory contains the complete strategy and documentation for migrating the KendraCLI AI coding assistant from Python (~120K LOC) to Rust. The React/Vite frontend (~15K LOC TypeScript) remains unchanged.
 
 ## Documents
 
@@ -50,3 +50,7 @@ This directory contains the complete strategy and documentation for migrating th
 - **7 phases ordered by dependency depth**: Models → HTTP → Context → Tools → Agents → Web → TUI
 - **React frontend unchanged**: The Rust web backend (axum) must match the existing FastAPI REST/WebSocket API exactly
 - **Session compatibility**: Rust must read/write the same JSON session format as Python during the transition period
+
+
+
+

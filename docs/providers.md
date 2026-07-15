@@ -1,17 +1,17 @@
 # Provider Setup Guide
 
-OpenDev supports 9 LLM providers out of the box. This guide covers authentication, provider configuration, and workflow model binding.
+KendraCLI supports 9 LLM providers out of the box. This guide covers authentication, provider configuration, and workflow model binding.
 
 ## Getting Started
 
-The fastest way to start is to export an API key and run OpenDev:
+The fastest way to start is to export an API key and run KendraCLI:
 
 ```bash
 export OPENAI_API_KEY="sk-..."
-opendev
+KendraCLI
 ```
 
-OpenDev will auto-detect the key and use OpenAI as your provider. You can swap to any supported provider by exporting the corresponding key instead:
+KendraCLI will auto-detect the key and use OpenAI as your provider. You can swap to any supported provider by exporting the corresponding key instead:
 
 ```bash
 # Anthropic
@@ -24,16 +24,16 @@ export FIREWORKS_API_KEY="fw_..."
 Alternatively, run the interactive setup wizard to configure providers, models, and workflow bindings in one step:
 
 ```bash
-opendev config setup
+KendraCLI config setup
 ```
 
 ## Authentication Precedence
 
-OpenDev resolves API keys in this order:
+KendraCLI resolves API keys in this order:
 
 - **Environment variable** (highest priority) -- e.g. `OPENAI_API_KEY`
-- **Stored credential** in `~/.opendev/auth.json` -- written by `opendev config setup` with `0600` permissions
-- **Interactive prompt** -- if no key is found, OpenDev prompts you during setup
+- **Stored credential** in `~/.kendra/auth.json` -- written by `KendraCLI config setup` with `0600` permissions
+- **Interactive prompt** -- if no key is found, KendraCLI prompts you during setup
 
 Environment variables always win. This lets you override stored credentials per-shell or in CI without touching config files.
 
@@ -64,7 +64,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 - Env var: `FIREWORKS_API_KEY`
 - Provider ID: `fireworks`
 - Popular models: `accounts/fireworks/models/kimi-k2-instruct-0905`
-- Note: Fireworks model IDs use the `accounts/fireworks/models/` prefix. OpenDev auto-normalizes short names (e.g. `kimi-k2-instruct-0905` becomes the full path).
+- Note: Fireworks model IDs use the `accounts/fireworks/models/` prefix. KendraCLI auto-normalizes short names (e.g. `kimi-k2-instruct-0905` becomes the full path).
 
 ```bash
 export FIREWORKS_API_KEY="fw_..."
@@ -83,9 +83,9 @@ All of these follow the same pattern -- export the env var and set the provider 
 
 ## Custom OpenAI-Compatible Endpoints
 
-OpenDev also supports custom OpenAI-compatible `chat/completions` endpoints through `api_base_url`.
+KendraCLI also supports custom OpenAI-compatible `chat/completions` endpoints through `api_base_url`.
 
-Use a custom provider name and point `api_base_url` at the provider's base compatibility URL. OpenDev will append `/chat/completions` automatically unless the URL already ends with it.
+Use a custom provider name and point `api_base_url` at the provider's base compatibility URL. KendraCLI will append `/chat/completions` automatically unless the URL already ends with it.
 
 Today, custom providers use `OPENAI_API_KEY` as the env-var fallback. That means you can map another provider token into `OPENAI_API_KEY` for the current shell.
 
@@ -105,7 +105,7 @@ Run it with:
 
 ```bash
 export OPENAI_API_KEY="$CF_AIG_TOKEN"
-opendev -p "What is Cloudflare? Reply in one sentence."
+KendraCLI -p "What is Cloudflare? Reply in one sentence."
 ```
 
 Effective request URL:
@@ -116,13 +116,13 @@ https://gateway.ai.cloudflare.com/v1/def31e2cf1530789c604bdaa2abbfcf1/openai-pro
 
 ### Notes
 
-- Use a custom `model_provider` value such as `cloudflare` so OpenDev takes the generic OpenAI-compatible path.
+- Use a custom `model_provider` value such as `cloudflare` so KendraCLI takes the generic OpenAI-compatible path.
 - For custom providers, `api_base_url` should be the compatibility base URL, not the full `/chat/completions` path unless you want to set it explicitly.
 - Environment variables now override stored `api_key` values from config, which makes shell-scoped testing of custom endpoints work correctly.
 
 ## Workflow Model Binding
 
-OpenDev is a compound AI system. Instead of one model doing everything, it has workflow slots, each independently bound to a model and provider:
+KendraCLI is a compound AI system. Instead of one model doing everything, it has workflow slots, each independently bound to a model and provider:
 
 - **Normal** (`model` + `model_provider`) -- The primary execution model. Handles coding tasks, tool calls, and general conversation. This is the only required slot.
 - **Thinking** (`model_thinking` + `model_thinking_provider`) -- Used for complex reasoning in plan mode and deep analysis. Falls back to Normal if not set.
@@ -162,12 +162,12 @@ This requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `FIREWORKS_API_KEY` to 
 
 ## Configuration Files
 
-OpenDev uses a hierarchical config system. Settings are JSON files with optional `//` and `/* */` comments.
+KendraCLI uses a hierarchical config system. Settings are JSON files with optional `//` and `/* */` comments.
 
 ### Config Hierarchy (highest priority first)
 
-- **Project config**: `.opendev/settings.json` in your project root
-- **Global config**: `~/.opendev/settings.json`
+- **Project config**: `.kendra/settings.json` in your project root
+- **Global config**: `~/.kendra/settings.json`
 - **Defaults**: Built-in default values
 
 Project config overrides global config, which overrides defaults. The exception is `instructions` -- instructions from all levels are concatenated, not overridden.
@@ -191,6 +191,10 @@ Example:
 
 ### Credential Storage
 
-API keys are stored separately from config in `~/.opendev/auth.json` (mode `0600`). Keys set via `opendev config setup` go here. Environment variables always take precedence over stored keys.
+API keys are stored separately from config in `~/.kendra/auth.json` (mode `0600`). Keys set via `KendraCLI config setup` go here. Environment variables always take precedence over stored keys.
 
 Never put API keys in `settings.json` -- the config system intentionally strips `api_key` fields from config files for security.
+
+
+
+

@@ -1,17 +1,17 @@
 #!/bin/bash
-# OpenDev installer — installs the opendev binary + microsandbox runtime.
+# KendraCLI installer — installs the kendra binary + microsandbox runtime.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/opendev-to/opendev/main/scripts/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/kendra-to/kendra/main/scripts/install.sh | bash
 #
 # This script:
-# 1. Installs the opendev binary via cargo-dist's installer
+# 1. Installs the kendra binary via cargo-dist's installer
 # 2. Downloads and installs the microsandbox runtime for sandbox execution
 
 set -euo pipefail
 
 MSB_VERSION="${MSB_VERSION:-0.3.3}"
-OPENDEV_REPO="opendev-to/opendev"
+KENDRA_REPO="kendra-to/kendra"
 MSB_REPO="nicholasgasior/microsandbox"
 
 # ── Colors ──
@@ -26,13 +26,13 @@ ok()    { echo -e "${GREEN}[ok]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[warn]${NC} $*"; }
 error() { echo -e "${RED}[error]${NC} $*" >&2; }
 
-# ── Step 1: Install OpenDev binary ──
+# ── Step 1: Install KendraCLI binary ──
 
-info "Installing OpenDev..."
+info "Installing KendraCLI..."
 curl --proto '=https' --tlsv1.2 -LsSf \
-  "https://github.com/${OPENDEV_REPO}/releases/latest/download/opendev-cli-installer.sh" | sh
+  "https://github.com/${KENDRA_REPO}/releases/latest/download/kendra-cli-installer.sh" | sh
 
-ok "OpenDev binary installed"
+ok "KendraCLI binary installed"
 
 # ── Step 2: Detect platform for microsandbox ──
 
@@ -51,19 +51,19 @@ case "${OS}-${ARCH}" in
     ;;
   darwin-x86_64)
     warn "Microsandbox does not support Intel Mac. Sandbox features will be disabled."
-    warn "OpenDev is installed and functional — only sandbox_exec tool is unavailable."
+    warn "KendraCLI is installed and functional — only sandbox_exec tool is unavailable."
     exit 0
     ;;
   *)
     warn "Microsandbox is not available for ${OS}-${ARCH}. Sandbox features will be disabled."
-    warn "OpenDev is installed and functional — only sandbox_exec tool is unavailable."
+    warn "KendraCLI is installed and functional — only sandbox_exec tool is unavailable."
     exit 0
     ;;
 esac
 
 # ── Step 3: Download and install microsandbox runtime ──
 
-MSB_DIR="${HOME}/.opendev/runtime/msb"
+MSB_DIR="${HOME}/.kendra/runtime/msb"
 MSB_URL="https://github.com/${MSB_REPO}/releases/download/v${MSB_VERSION}/microsandbox-${MSB_PLATFORM}.tar.gz"
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
@@ -85,8 +85,8 @@ ok "Microsandbox runtime installed to ${MSB_DIR}"
 # ── Done ──
 
 echo ""
-ok "OpenDev installed successfully with sandbox runtime!"
+ok "KendraCLI installed successfully with sandbox runtime!"
 echo ""
-info "Run 'opendev' to start."
+info "Run 'kendra' to start."
 info "Sandbox features are available — enable with:"
-info "  Add '\"sandbox\": { \"enabled\": true }' to your .opendev/config.json"
+info "  Add '\"sandbox\": { \"enabled\": true }' to your .kendra/config.json"

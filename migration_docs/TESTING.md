@@ -30,14 +30,14 @@ fn test_role_serialization() {
 ```
 
 ### Compatibility Tests
-- Load every JSON file in `~/.opendev/sessions/` with both Python and Rust
+- Load every JSON file in `~/.kendra/sessions/` with both Python and Rust
 - Assert identical field values after parsing
 - Test edge cases: empty sessions, sessions with nested tool calls, sessions with thinking traces
 
 ### PyO3 Tests
 ```python
 # Python test calling Rust
-from opendev_rust.models import ChatMessage, Role
+from KendraCLI_rust.models import ChatMessage, Role
 msg = ChatMessage(role=Role.USER, content="hello")
 assert msg.role == Role.USER
 json_str = msg.to_json()
@@ -47,7 +47,7 @@ assert msg2.content == "hello"
 
 ### Verification Command
 ```bash
-cd opendev-rust && cargo test -p opendev-models -p opendev-config
+cd kendra-rust && cargo test -p kendra-models -p kendra-config
 # Then from Python:
 cd .. && uv run pytest tests/test_session_model.py tests/test_message_validator.py tests/test_validated_message_list.py
 ```
@@ -98,8 +98,8 @@ async fn test_live_openai_call() {
 
 ### Verification Command
 ```bash
-cargo test -p opendev-http
-cargo test -p opendev-http -- --ignored  # live API test (needs OPENAI_API_KEY)
+cargo test -p kendra-http
+cargo test -p kendra-http -- --ignored  # live API test (needs OPENAI_API_KEY)
 ```
 
 ---
@@ -125,7 +125,7 @@ cargo test -p opendev-http -- --ignored  # live API test (needs OPENAI_API_KEY)
 
 ### Verification Command
 ```bash
-cargo test -p opendev-context -p opendev-history -p opendev-memory
+cargo test -p kendra-context -p kendra-history -p kendra-memory
 # Python compatibility:
 uv run pytest tests/test_context_compaction.py tests/test_staged_compaction.py tests/test_file_locks.py
 ```
@@ -170,7 +170,7 @@ async fn test_bash_timeout() {
 
 ### Verification Command
 ```bash
-cargo test -p opendev-tools-core -p opendev-tools-impl -p opendev-tools-lsp -p opendev-tools-symbol
+cargo test -p kendra-tools-core -p kendra-tools-impl -p kendra-tools-lsp -p kendra-tools-symbol
 # Python compatibility:
 uv run pytest tests/test_tool_registry.py tests/test_tool_system_overhaul.py tests/test_lsp_symbol.py
 ```
@@ -217,8 +217,8 @@ async fn test_react_loop_max_iterations() {
 
 ### Verification Command
 ```bash
-cargo test -p opendev-agents
-cargo test -p opendev-agents -- --ignored  # live API test
+cargo test -p kendra-agents
+cargo test -p kendra-agents -- --ignored  # live API test
 ```
 
 ---
@@ -265,7 +265,7 @@ async fn test_websocket_connection() {
 ### React Frontend Test
 ```bash
 # Start Rust backend
-cd opendev-rust && cargo run -p opendev-web &
+cd kendra-rust && cargo run -p kendra-web &
 # Start React frontend in dev mode
 cd web-ui && npm run dev &
 # Run Playwright tests against the frontend
@@ -284,7 +284,7 @@ async fn test_mcp_stdio_transport() {
 
 ### Verification Command
 ```bash
-cargo test -p opendev-web -p opendev-mcp -p opendev-channels
+cargo test -p kendra-web -p kendra-mcp -p kendra-channels
 ```
 
 ---
@@ -309,26 +309,26 @@ fn test_conversation_widget_render() {
 ```rust
 #[test]
 fn test_cli_default_tui() {
-    let args = Cli::parse_from(["opendev"]);
+    let args = Cli::parse_from(["KendraCLI"]);
     assert!(args.command.is_none()); // default = TUI mode
 }
 
 #[test]
 fn test_cli_prompt_mode() {
-    let args = Cli::parse_from(["opendev", "-p", "hello world"]);
+    let args = Cli::parse_from(["KendraCLI", "-p", "hello world"]);
     assert_eq!(args.prompt, Some("hello world".to_string()));
 }
 
 #[test]
 fn test_cli_web_ui() {
-    let args = Cli::parse_from(["opendev", "run", "ui"]);
+    let args = Cli::parse_from(["KendraCLI", "run", "ui"]);
     assert!(matches!(args.command, Some(Command::Run(RunCommand::Ui))));
 }
 ```
 
 ### Manual QA Checklist
 After all automated tests pass, manually verify:
-- [ ] Start TUI: `cargo run -p opendev-cli`
+- [ ] Start TUI: `cargo run -p kendra-cli`
 - [ ] Type a query, verify LLM response streams correctly
 - [ ] Verify tool calls display (bash, file read, etc.)
 - [ ] Verify autocomplete works (/ commands, @ files)
@@ -336,15 +336,15 @@ After all automated tests pass, manually verify:
 - [ ] Verify Escape interrupts
 - [ ] Verify `/mode` command
 - [ ] Verify session resume (`--continue`)
-- [ ] Start web UI: `cargo run -p opendev-cli -- run ui`
+- [ ] Start web UI: `cargo run -p kendra-cli -- run ui`
 - [ ] Verify React frontend loads and works
 - [ ] Verify WebSocket real-time updates
 
 ### Verification Command
 ```bash
-cargo test -p opendev-tui -p opendev-repl -p opendev-cli
+cargo test -p kendra-tui -p kendra-repl -p kendra-cli
 # Full binary test:
-cargo run -p opendev-cli -- -p "what is 2+2"
+cargo run -p kendra-cli -- -p "what is 2+2"
 ```
 
 ---
@@ -366,7 +366,7 @@ cargo run -p opendev-cli -- -p "what is 2+2"
 # Run Python compatibility tests
 - uv run pytest tests/
 # Build release binary
-- cargo build --release -p opendev-cli
+- cargo build --release -p kendra-cli
 ```
 
 ## Coverage
@@ -378,4 +378,8 @@ cargo llvm-cov --all --html
 # Open target/llvm-cov/html/index.html
 ```
 
-Target: >80% coverage for all crates except `opendev-tui` (widget rendering is hard to test; target >60%).
+Target: >80% coverage for all crates except `kendra-tui` (widget rendering is hard to test; target >60%).
+
+
+
+

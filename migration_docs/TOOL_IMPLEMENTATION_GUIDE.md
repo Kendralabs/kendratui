@@ -2,16 +2,16 @@
 
 ## Overview
 
-The tool system is the execution backbone of OpenDev's ReAct loop. It translates LLM-generated tool calls into concrete actions — reading files, running commands, spawning subagents, and more. The system spans two crates (`opendev-tools-core` for the framework and `opendev-tools-impl` for the 27 tool implementations) and provides parameter normalization, result sanitization, group-based access control, and parallel execution scheduling.
+The tool system is the execution backbone of KendraCLI's ReAct loop. It translates LLM-generated tool calls into concrete actions — reading files, running commands, spawning subagents, and more. The system spans two crates (`kendra-tools-core` for the framework and `kendra-tools-impl` for the 27 tool implementations) and provides parameter normalization, result sanitization, group-based access control, and parallel execution scheduling.
 
-In the dependency graph, `opendev-tools-core` is a leaf crate with no OpenDev dependencies. `opendev-tools-impl` depends on `opendev-tools-core` and implements every tool against the `BaseTool` trait. The agent crate (`opendev-agents`) owns the `ToolRegistry` instance, registers tools at startup, and calls `registry.execute()` inside the ReAct loop.
+In the dependency graph, `kendra-tools-core` is a leaf crate with no KendraCLI dependencies. `kendra-tools-impl` depends on `kendra-tools-core` and implements every tool against the `BaseTool` trait. The agent crate (`kendra-agents`) owns the `ToolRegistry` instance, registers tools at startup, and calls `registry.execute()` inside the ReAct loop.
 
 ## Python Architecture
 
 ### Module Structure
 
 ```
-opendev/core/context_engineering/tools/
+KendraCLI/core/context_engineering/tools/
   registry.py             # ToolRegistry — central dispatch hub
   param_normalizer.py     # normalize_params() — key/path/whitespace fixing
   result_sanitizer.py     # ToolResultSanitizer — truncation before context entry
@@ -67,7 +67,7 @@ opendev/core/context_engineering/tools/
 ### Module Structure
 
 ```
-crates/opendev-tools-core/src/
+crates/kendra-tools-core/src/
   lib.rs          # Re-exports
   traits.rs       # BaseTool trait, ToolResult, ToolContext, ToolError
   registry.rs     # ToolRegistry (HashMap<String, Arc<dyn BaseTool>>)
@@ -76,7 +76,7 @@ crates/opendev-tools-core/src/
   policy.rs       # ToolPolicy — group/profile permission system
   parallel.rs     # ParallelPolicy — read/write/other partitioning
 
-crates/opendev-tools-impl/src/
+crates/kendra-tools-impl/src/
   lib.rs          # Module declarations + re-exports of all tool structs
   file_read.rs    # FileReadTool
   file_write.rs   # FileWriteTool
@@ -162,16 +162,16 @@ crates/opendev-tools-impl/src/
 | `read_file` | `file_read.rs` | Read file contents with line ranges, binary detection | group:read |
 | `list_files` | `file_list.rs` | List directory contents with glob patterns | group:read |
 | `search` | `file_search.rs` | Regex/text search across files (ripgrep-based) | group:read |
-| `find_symbol` | (opendev-tools-symbol) | AST-based symbol lookup | group:read |
-| `find_referencing_symbols` | (opendev-tools-symbol) | Find references to a symbol | group:read |
+| `find_symbol` | (kendra-tools-symbol) | AST-based symbol lookup | group:read |
+| `find_referencing_symbols` | (kendra-tools-symbol) | Find references to a symbol | group:read |
 | `read_pdf` | `pdf.rs` | Extract text and metadata from PDF files | group:read |
 | `analyze_image` | `vlm.rs` | Vision LM image analysis | group:read |
 | `write_file` | `file_write.rs` | Create or overwrite files | group:write |
 | `edit_file` | `file_edit.rs` | Surgical string replacement in files | group:write |
-| `insert_before_symbol` | (opendev-tools-symbol) | Insert code before an AST symbol | group:write |
-| `insert_after_symbol` | (opendev-tools-symbol) | Insert code after an AST symbol | group:write |
-| `replace_symbol_body` | (opendev-tools-symbol) | Replace an AST symbol's body | group:write |
-| `rename_symbol` | (opendev-tools-symbol) | Rename an AST symbol across files | group:write |
+| `insert_before_symbol` | (kendra-tools-symbol) | Insert code before an AST symbol | group:write |
+| `insert_after_symbol` | (kendra-tools-symbol) | Insert code after an AST symbol | group:write |
+| `replace_symbol_body` | (kendra-tools-symbol) | Replace an AST symbol's body | group:write |
+| `rename_symbol` | (kendra-tools-symbol) | Rename an AST symbol across files | group:write |
 | `notebook_edit` | `notebook_edit.rs` | Edit Jupyter notebook cells | group:write |
 | `apply_patch` | `patch.rs` | Apply unified diff patches | group:write |
 | `run_command` | `bash.rs` | Execute shell commands with timeout | group:process |
@@ -200,8 +200,8 @@ crates/opendev-tools-impl/src/
 | `complete_todo` | `todo.rs` | Mark a todo as complete | group:meta |
 | `list_todos` | `todo.rs` | List current todos | group:meta |
 | `clear_todos` | `todo.rs` | Clear all todos | group:meta |
-| `search_tools` | (opendev-tools-core) | Discover MCP tools by keyword | group:meta |
-| `invoke_skill` | (opendev-agents) | Load a skill into conversation context | group:meta |
+| `search_tools` | (kendra-tools-core) | Discover MCP tools by keyword | group:meta |
+| `invoke_skill` | (kendra-agents) | Load a skill into conversation context | group:meta |
 | `batch_tool` | `batch.rs` | Execute multiple tools in parallel/serial | group:meta |
 | `list_agents` | `agents.rs` | List available subagent types | group:meta |
 | `send_message` | `message.rs` | Send a message to another channel | group:messaging |
@@ -212,13 +212,13 @@ crates/opendev-tools-impl/src/
 
 ### Step 1: Create the Tool Module
 
-Create a new file in `crates/opendev-tools-impl/src/`, e.g., `my_tool.rs`:
+Create a new file in `crates/kendra-tools-impl/src/`, e.g., `my_tool.rs`:
 
 ```rust
 //! My custom tool — does something useful.
 
 use std::collections::HashMap;
-use opendev_tools_core::{BaseTool, ToolContext, ToolResult};
+use KendraCLI_tools_core::{BaseTool, ToolContext, ToolResult};
 
 /// Tool for doing something useful.
 #[derive(Debug)]
@@ -268,7 +268,7 @@ impl BaseTool for MyTool {
 
 ### Step 2: Register the Module
 
-In `crates/opendev-tools-impl/src/lib.rs`, add:
+In `crates/kendra-tools-impl/src/lib.rs`, add:
 
 ```rust
 pub mod my_tool;
@@ -277,7 +277,7 @@ pub use my_tool::MyTool;
 
 ### Step 3: Add to Tool Group
 
-In `crates/opendev-tools-core/src/policy.rs`, add the tool to the appropriate group:
+In `crates/kendra-tools-core/src/policy.rs`, add the tool to the appropriate group:
 
 ```rust
 groups.insert(
@@ -291,11 +291,11 @@ groups.insert(
 
 ### Step 4: Add to Parallel Policy (if applicable)
 
-If the tool is read-only, add it to `read_only_tools()` in `crates/opendev-tools-core/src/parallel.rs`. If it modifies state, add it to `write_tools()`.
+If the tool is read-only, add it to `read_only_tools()` in `crates/kendra-tools-core/src/parallel.rs`. If it modifies state, add it to `write_tools()`.
 
 ### Step 5: Add Sanitization Rule (if needed)
 
-If the tool can produce large output, add a truncation rule in `crates/opendev-tools-core/src/sanitizer.rs`:
+If the tool can produce large output, add a truncation rule in `crates/kendra-tools-core/src/sanitizer.rs`:
 
 ```rust
 rules.insert("my_tool".into(), TruncationRule::head(10000));
@@ -303,7 +303,7 @@ rules.insert("my_tool".into(), TruncationRule::head(10000));
 
 ### Step 6: Add Normalization Mappings (if needed)
 
-If the LLM might send camelCase parameter names, add mappings in `crates/opendev-tools-core/src/normalizer.rs`:
+If the LLM might send camelCase parameter names, add mappings in `crates/kendra-tools-core/src/normalizer.rs`:
 
 ```rust
 "myTarget" => Some("my_target"),
@@ -335,7 +335,7 @@ Add unit tests in the tool module itself and integration tests if the tool inter
 
 **Python:** `ToolRegistry` was 960 lines with inline handler routing, hook management, MCP discovery, subagent session saving, batch execution, skill loading, and todo management.
 
-**Rust:** `ToolRegistry` is 106 lines. It does exactly two things: store tools and dispatch execution. Everything else — hooks, MCP discovery, subagent management — lives in the calling code (`opendev-agents`) or in the tools themselves (`BatchTool`, `SpawnSubagentTool`).
+**Rust:** `ToolRegistry` is 106 lines. It does exactly two things: store tools and dispatch execution. Everything else — hooks, MCP discovery, subagent management — lives in the calling code (`kendra-agents`) or in the tools themselves (`BatchTool`, `SpawnSubagentTool`).
 
 ### Index-Based Parallel Partitioning
 
@@ -435,32 +435,36 @@ let result = sanitizer.sanitize("run_command", true, Some(&long_text), None);
 
 ## Remaining Gaps
 
-1. **Hook integration in registry:** Python's `ToolRegistry.execute_tool()` ran PreToolUse/PostToolUse hooks inline. In Rust, hook execution is handled by the caller (`opendev-agents`), not the registry itself. This is a deliberate design choice, but it means the calling code must remember to run hooks.
+1. **Hook integration in registry:** Python's `ToolRegistry.execute_tool()` ran PreToolUse/PostToolUse hooks inline. In Rust, hook execution is handled by the caller (`kendra-agents`), not the registry itself. This is a deliberate design choice, but it means the calling code must remember to run hooks.
 
-2. **MCP tool discovery:** Python's `ToolRegistry` tracked discovered MCP tools and lazily expanded their schemas. In Rust, MCP tool management is handled by `opendev-mcp` crate separately from the tool registry.
+2. **MCP tool discovery:** Python's `ToolRegistry` tracked discovered MCP tools and lazily expanded their schemas. In Rust, MCP tool management is handled by `kendra-mcp` crate separately from the tool registry.
 
 3. **FileTimeTracker:** Python had stale-read detection (`FileTimeTracker`) embedded in the registry. The Rust equivalent would need to live in the calling code or as a middleware wrapper.
 
-4. **Skill loading:** Python's `invoke_skill` tool was handled inside the registry. In Rust, skill management is in `opendev-agents`.
+4. **Skill loading:** Python's `invoke_skill` tool was handled inside the registry. In Rust, skill management is in `kendra-agents`.
 
 ## References
 
 ### Python Source Files
-- `opendev/core/context_engineering/tools/implementations/base.py` — BaseTool ABC
-- `opendev/core/context_engineering/tools/registry.py` — ToolRegistry (960 LOC)
-- `opendev/core/context_engineering/tools/param_normalizer.py` — Parameter normalization
-- `opendev/core/context_engineering/tools/result_sanitizer.py` — Result sanitization
-- `opendev/core/context_engineering/tools/parallel_policy.py` — Parallel execution policy
-- `opendev/core/context_engineering/tools/tool_policy.py` — Group/profile access control
-- `opendev/core/context_engineering/tools/implementations/` — 26 tool implementation files
-- `opendev/core/context_engineering/tools/handlers/` — 19 handler files
+- `KendraCLI/core/context_engineering/tools/implementations/base.py` — BaseTool ABC
+- `KendraCLI/core/context_engineering/tools/registry.py` — ToolRegistry (960 LOC)
+- `KendraCLI/core/context_engineering/tools/param_normalizer.py` — Parameter normalization
+- `KendraCLI/core/context_engineering/tools/result_sanitizer.py` — Result sanitization
+- `KendraCLI/core/context_engineering/tools/parallel_policy.py` — Parallel execution policy
+- `KendraCLI/core/context_engineering/tools/tool_policy.py` — Group/profile access control
+- `KendraCLI/core/context_engineering/tools/implementations/` — 26 tool implementation files
+- `KendraCLI/core/context_engineering/tools/handlers/` — 19 handler files
 
 ### Rust Source Files
-- `crates/opendev-tools-core/src/traits.rs` — BaseTool trait, ToolResult, ToolContext, ToolError
-- `crates/opendev-tools-core/src/registry.rs` — ToolRegistry
-- `crates/opendev-tools-core/src/normalizer.rs` — Parameter normalization
-- `crates/opendev-tools-core/src/sanitizer.rs` — ToolResultSanitizer
-- `crates/opendev-tools-core/src/policy.rs` — ToolPolicy (groups and profiles)
-- `crates/opendev-tools-core/src/parallel.rs` — ParallelPolicy
-- `crates/opendev-tools-impl/src/lib.rs` — Module declarations and re-exports
-- `crates/opendev-tools-impl/src/*.rs` — 27 tool implementation modules
+- `crates/kendra-tools-core/src/traits.rs` — BaseTool trait, ToolResult, ToolContext, ToolError
+- `crates/kendra-tools-core/src/registry.rs` — ToolRegistry
+- `crates/kendra-tools-core/src/normalizer.rs` — Parameter normalization
+- `crates/kendra-tools-core/src/sanitizer.rs` — ToolResultSanitizer
+- `crates/kendra-tools-core/src/policy.rs` — ToolPolicy (groups and profiles)
+- `crates/kendra-tools-core/src/parallel.rs` — ParallelPolicy
+- `crates/kendra-tools-impl/src/lib.rs` — Module declarations and re-exports
+- `crates/kendra-tools-impl/src/*.rs` — 27 tool implementation modules
+
+
+
+
