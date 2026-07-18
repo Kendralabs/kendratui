@@ -26,6 +26,7 @@ pub use schema_adapter::adapt_for_provider;
 /// - `sk-` -> `"openai"`
 /// - `gsk_` -> `"groq"`
 /// - `AIza` -> `"gemini"`
+/// - `nvapi-` -> `"nvidia"`
 ///
 /// Returns `None` if the key format is not recognized.
 pub fn detect_provider_from_key(api_key: &str) -> Option<&'static str> {
@@ -38,6 +39,8 @@ pub fn detect_provider_from_key(api_key: &str) -> Option<&'static str> {
         Some("groq")
     } else if api_key.starts_with("AIza") {
         Some("gemini")
+    } else if api_key.starts_with("nvapi-") {
+        Some("nvidia")
     } else {
         None
     }

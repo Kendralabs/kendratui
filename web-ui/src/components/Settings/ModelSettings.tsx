@@ -58,9 +58,19 @@ export function ModelSettings() {
       setProviders(providersData);
       setConfig(configData);
 
+      const getDefaultModel = (providerId: string, modelId: string | null | undefined) => {
+        const provider = providersData.find(p => p.id === providerId);
+        if (provider) {
+          if (modelId && provider.models.includes(modelId)) return modelId;
+          return provider.models[0] || '';
+        }
+        return modelId || '';
+      };
+
       // Normal model
-      setNormalProvider(configData.model_provider);
-      setNormalModel(configData.model);
+      const initialNormalProvider = configData.model_provider || (providersData[0]?.id || '');
+      setNormalProvider(initialNormalProvider);
+      setNormalModel(getDefaultModel(initialNormalProvider, configData.model));
 
       // Thinking model
       setThinkingProvider(configData.model_thinking_provider || '');
