@@ -15,7 +15,7 @@ pub mod welcome_panel;
 
 pub use background_tasks::TaskWatcherPanel;
 pub use conversation::ConversationWidget;
-pub use input::InputWidget;
+pub use input::{InputWidget, count_display_lines};
 pub use nested_tool::{NestedToolWidget, SubagentDisplayState};
 pub use progress::TaskProgress;
 pub use spinner::SpinnerState;

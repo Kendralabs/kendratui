@@ -159,3 +159,28 @@ fn test_model_picker_empty_cache() {
     unsafe { std::env::remove_var("kendra_DISABLE_REMOTE_MODELS") };
     assert!(entries.is_empty());
 }
+
+#[test]
+fn test_verbose_command() {
+    let cmds = BuiltinCommands::new();
+    let mut state = ReplState::default();
+
+    // Default state: verbose = false, debug_logging = true
+    assert!(!state.verbose);
+    assert!(state.debug_logging);
+
+    // Test low verbosity
+    cmds.dispatch("/verbose", "low", &mut state);
+    assert!(state.verbose);
+    assert!(!state.debug_logging);
+
+    // Test high verbosity
+    cmds.dispatch("/verbose", "high", &mut state);
+    assert!(state.verbose);
+    assert!(state.debug_logging);
+
+    // Test turning it off
+    cmds.dispatch("/verbose", "off", &mut state);
+    assert!(!state.verbose);
+    assert!(!state.debug_logging);
+}

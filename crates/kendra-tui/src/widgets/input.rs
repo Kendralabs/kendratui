@@ -7,7 +7,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Paragraph, Widget},
 };
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::formatters::style_tokens;
 
@@ -165,43 +165,116 @@ impl Widget for InputWidget<'_> {
             ];
             Paragraph::new(Line::from(content)).render(text_area, buf);
         } else {
-            // Split buffer into lines and render each with proper prefix
-            let input_lines: Vec<&str> = self.buffer.split('\n').collect();
+            let avail_width = (text_area.width as usize).saturating_sub(2).max(1);
+            struct PhysicalLineInfo {
+                text: String,
+                cursor_idx: Option<usize>,
+            }
+            let mut physical_lines: Vec<PhysicalLineInfo> = Vec::new();
 
-            // Compute which line and column the cursor is on
-            let mut cursor_line = 0;
+            let logical_lines: Vec<&str> = self.buffer.split('\n').collect();
+
+            // Compute which logical line and column the cursor is on
+            let mut cursor_logical_line = 0;
             let mut cursor_col = 0;
             let mut pos = 0;
-            for (i, line) in input_lines.iter().enumerate() {
+            for (i, line) in logical_lines.iter().enumerate() {
                 if self.cursor <= pos + line.len() {
-                    cursor_line = i;
+                    cursor_logical_line = i;
                     cursor_col = self.cursor - pos;
                     break;
                 }
                 pos += line.len() + 1; // +1 for '\n'
-                if i == input_lines.len() - 1 {
-                    cursor_line = i;
+                if i == logical_lines.len() - 1 {
+                    cursor_logical_line = i;
                     cursor_col = line.len();
+                }
+            }
+
+            for (i, logical_line) in logical_lines.iter().enumerate() {
+                let is_cursor_line = i == cursor_logical_line;
+
+                let mut current_text = String::new();
+                let mut current_width = 0;
+                let mut current_cursor = None;
+
+                if logical_line.is_empty() {
+                    physical_lines.push(PhysicalLineInfo {
+                        text: String::new(),
+                        cursor_idx: if is_cursor_line { Some(0) } else { None },
+                    });
+                } else {
+                    let mut char_indices: Vec<(usize, char)> =
+                        logical_line.char_indices().collect();
+                    char_indices.push((logical_line.len(), '\0'));
+
+                    for (byte_idx, ch) in char_indices {
+                        let is_cursor_at_char = is_cursor_line && byte_idx == cursor_col;
+                        if is_cursor_at_char {
+                            current_cursor = Some(current_text.len());
+                        }
+
+                        if ch == '\0' {
+                            break;
+                        }
+
+                        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(1);
+                        if current_width + ch_width > avail_width && !current_text.is_empty() {
+                            physical_lines.push(PhysicalLineInfo {
+                                text: std::mem::take(&mut current_text),
+                                cursor_idx: current_cursor.take(),
+                            });
+                            current_width = 0;
+
+                            if is_cursor_at_char {
+                                current_cursor = Some(0);
+                            }
+                        }
+
+                        current_text.push(ch);
+                        current_width += ch_width;
+                    }
+
+                    physical_lines.push(PhysicalLineInfo {
+                        text: current_text,
+                        cursor_idx: current_cursor,
+                    });
                 }
             }
 
             let prefix_style = Style::default().fg(accent).add_modifier(Modifier::BOLD);
             let cursor_style = Style::default().fg(Color::Black).bg(Color::White);
 
-            for (i, line_text) in input_lines.iter().enumerate() {
-                if i as u16 >= text_height {
+            // Find the index of the physical line containing the cursor
+            let mut cursor_phys_line_idx = 0;
+            for (i, phys_line) in physical_lines.iter().enumerate() {
+                if phys_line.cursor_idx.is_some() {
+                    cursor_phys_line_idx = i;
                     break;
                 }
-                let row = text_area.y + i as u16;
-                let pfx = if i == 0 { "> " } else { "  " };
+            }
 
-                if i == cursor_line {
-                    let before = &line_text[..cursor_col];
-                    let (cursor_char, after) = if cursor_col < line_text.len() {
-                        // Find the end of the current char (next char boundary)
-                        let ch = line_text[cursor_col..].chars().next().unwrap();
-                        let end = cursor_col + ch.len_utf8();
-                        (&line_text[cursor_col..end], &line_text[end..])
+            // Calculate scrolling window (start_line) to ensure the cursor line is visible
+            let start_line = if physical_lines.len() <= text_height as usize {
+                0
+            } else if cursor_phys_line_idx >= text_height as usize {
+                cursor_phys_line_idx - text_height as usize + 1
+            } else {
+                0
+            };
+
+            let visible_lines = &physical_lines[start_line..(start_line + text_height as usize).min(physical_lines.len())];
+
+            for (i, phys_line) in visible_lines.iter().enumerate() {
+                let row = text_area.y + i as u16;
+                let pfx = if start_line + i == 0 { "> " } else { "  " };
+
+                if let Some(cursor_idx) = phys_line.cursor_idx {
+                    let before = &phys_line.text[..cursor_idx];
+                    let (cursor_char, after) = if cursor_idx < phys_line.text.len() {
+                        let ch = phys_line.text[cursor_idx..].chars().next().unwrap();
+                        let end = cursor_idx + ch.len_utf8();
+                        (&phys_line.text[cursor_idx..end], &phys_line.text[end..])
                     } else {
                         (" ", "")
                     };
@@ -215,13 +288,34 @@ impl Widget for InputWidget<'_> {
                 } else {
                     let spans = Line::from(vec![
                         Span::styled(pfx, prefix_style),
-                        Span::raw(line_text.to_string()),
+                        Span::raw(phys_line.text.to_string()),
                     ]);
                     buf.set_line(text_area.x, row, &spans, text_area.width);
                 }
             }
         }
     }
+}
+
+/// Calculate the number of wrapped/display lines that the user input buffer will occupy.
+pub fn count_display_lines(buffer: &str, width: u16) -> usize {
+    let avail_width = (width as usize).saturating_sub(2).max(1);
+    let mut display_lines = 0;
+    for line in buffer.split('\n') {
+        let mut current_width = 0;
+        let mut line_count = 1;
+        for ch in line.chars() {
+            let ch_width = UnicodeWidthChar::width(ch).unwrap_or(1);
+            if current_width + ch_width > avail_width && current_width > 0 {
+                line_count += 1;
+                current_width = ch_width;
+            } else {
+                current_width += ch_width;
+            }
+        }
+        display_lines += line_count;
+    }
+    display_lines
 }
 
 #[cfg(test)]

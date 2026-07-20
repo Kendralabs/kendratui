@@ -56,6 +56,10 @@ pub struct ReplState {
     pub compact_requested: bool,
     /// Prompt set by /init command; REPL loop consumes and processes it.
     pub init_prompt: Option<String>,
+    /// Verbose output enabled.
+    pub verbose: bool,
+    /// Debug logging enabled.
+    pub debug_logging: bool,
 }
 
 impl Default for ReplState {
@@ -72,6 +76,8 @@ impl Default for ReplState {
             messages_cleared: false,
             compact_requested: false,
             init_prompt: None,
+            verbose: false,
+            debug_logging: true,
         }
     }
 }

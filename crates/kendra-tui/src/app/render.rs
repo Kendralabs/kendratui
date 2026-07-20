@@ -71,7 +71,10 @@ impl App {
                     layout::Constraint::Min(5),              // conversation
                     layout::Constraint::Length(todo_height), // todo panel
                     layout::Constraint::Length({
-                        let input_lines = self.state.input_buffer.matches('\n').count() + 1;
+                        let input_lines = crate::widgets::count_display_lines(
+                            &self.state.input_buffer,
+                            self.state.terminal_width,
+                        );
                         (input_lines as u16 + 1).min(8) // +1 for separator, cap at 8
                     }), // input
                     layout::Constraint::Length(2),           // status bar

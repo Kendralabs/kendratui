@@ -52,7 +52,10 @@ impl App {
             self.state.todo_items.len(),
             self.state.todo_expanded,
         );
-        let input_lines = self.state.input_buffer.matches('\n').count() + 1;
+        let input_lines = crate::widgets::count_display_lines(
+            &self.state.input_buffer,
+            self.state.terminal_width,
+        );
         let input_height = (input_lines as u16 + 1).min(8);
         let conv_height = self
             .state

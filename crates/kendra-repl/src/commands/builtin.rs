@@ -89,6 +89,10 @@ impl BuiltinCommands {
                 self.handle_sound();
                 CommandOutcome::Handled
             }
+            "/verbose" => {
+                self.handle_verbose(args, state);
+                CommandOutcome::Handled
+            }
             _ => CommandOutcome::Unknown,
         }
     }
@@ -110,6 +114,7 @@ impl BuiltinCommands {
         println!("  /session-models         Session model management");
         println!("  /sound                  Play test notification sound");
         println!("  /init                   Initialize codebase context");
+        println!("  /verbose [off|low|high] Show or set verbosity level");
     }
 
     fn handle_clear(&self, state: &mut ReplState) {
@@ -406,6 +411,68 @@ impl BuiltinCommands {
         let prompt = kendra_agents::prompts::embedded::build_init_prompt(args);
         state.init_prompt = Some(prompt);
         println!("Generating AGENTS.md...");
+    }
+
+    fn handle_verbose(&self, args: &str, state: &mut ReplState) {
+        let arg = args.trim().to_lowercase();
+        if arg.is_empty() {
+            let current = if !state.verbose && !state.debug_logging {
+                "off"
+            } else if state.verbose && !state.debug_logging {
+                "low"
+            } else {
+                "high"
+            };
+            println!(
+                "Current verbosity level: {} (verbose={}, debug_logging={})",
+                current, state.verbose, state.debug_logging
+            );
+            println!("Usage: /verbose [off|low|high]");
+            return;
+        }
+
+        let (verbose, debug_logging) = match arg.as_str() {
+            "off" | "none" | "0" => (false, false),
+            "low" | "1" => (true, false),
+            "high" | "all" | "on" | "2" => (true, true),
+            _ => {
+                println!("Invalid verbosity level: {}", arg);
+                println!("Valid levels: off, low, high");
+                return;
+            }
+        };
+
+        state.verbose = verbose;
+        state.debug_logging = debug_logging;
+
+        println!(
+            "Verbosity level set to {} (verbose={}, debug_logging={})",
+            arg, verbose, debug_logging
+        );
+
+        // Persist to settings.json
+        let paths = kendra_config::Paths::new(None);
+        let settings_path = paths.global_settings();
+        if settings_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&settings_path) {
+                if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(obj) = json.as_object_mut() {
+                        obj.insert("verbose".to_string(), serde_json::Value::Bool(verbose));
+                        obj.insert(
+                            "debug_logging".to_string(),
+                            serde_json::Value::Bool(debug_logging),
+                        );
+                        if let Ok(updated_content) = serde_json::to_string_pretty(&json) {
+                            if let Err(e) = std::fs::write(&settings_path, updated_content) {
+                                tracing::warn!("Failed to write to settings file: {}", e);
+                            } else {
+                                println!("Saved to settings file: {:?}", settings_path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -389,7 +389,9 @@ impl AppConfig {
             .ok()
             .map(std::path::PathBuf::from)
             .or_else(|| {
-                std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".kendra"))
+                std::env::var("HOME")
+                    .ok()
+                    .map(|h| std::path::PathBuf::from(h).join(".kendra"))
             })
             .map(|dir| dir.join("auth.json"))
             .and_then(|path| std::fs::read_to_string(path).ok())
@@ -400,10 +402,8 @@ impl AppConfig {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
             });
-        if let Some(key) = auth_key {
-            if !key.is_empty() {
-                return Ok(key);
-            }
+        if let Some(key) = auth_key && !key.is_empty() {
+            return Ok(key);
         }
 
         // Last resort: try OPENAI_API_KEY for unknown providers
