@@ -223,7 +223,7 @@ impl BaseTool for WebFetchTool {
             return ToolResult {
                 success: false,
                 output: Some(body),
-                error: Some(format!("HTTP {status}")),
+                error: Some(kendra_http::format_http_error(status)),
                 metadata,
                 duration_ms: None,
                 llm_suffix: None,

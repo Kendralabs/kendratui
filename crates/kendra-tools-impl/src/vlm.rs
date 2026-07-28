@@ -235,7 +235,7 @@ impl BaseTool for VlmTool {
         };
 
         if status != 200 {
-            return ToolResult::fail(format!("HTTP {status}: {body}"));
+            return ToolResult::fail(format!("{} - {}", kendra_http::format_http_error(status), body));
         }
 
         // Parse response

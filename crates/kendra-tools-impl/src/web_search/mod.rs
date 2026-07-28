@@ -117,7 +117,7 @@ impl BaseTool for WebSearchTool {
         };
 
         if !response.status().is_success() {
-            return ToolResult::fail(format!("DuckDuckGo returned HTTP {}", response.status()));
+            return ToolResult::fail(format!("DuckDuckGo returned {}", kendra_http::format_http_error(response.status().as_u16())));
         }
 
         let body = match response.text().await {
